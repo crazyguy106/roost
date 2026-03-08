@@ -1,0 +1,2 @@
+# Roost — Telegram bot interface
+python-telegram-bot>=21.0

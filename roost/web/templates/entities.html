@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Entities — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Entities</h1>
+</div>
+
+<form class="join w-full mb-5" method="POST" action="/entities/add">
+    <input class="input input-bordered join-item flex-1" type="text" name="name" placeholder="New entity name (company/org)" required>
+    <button class="btn btn-primary join-item" type="submit">Add</button>
+</form>
+
+{% if entities %}
+    {% for e in entities %}
+    <div class="card flex items-center justify-between">
+        <div>
+            <strong><a href="/entities/{{ e.id }}" class="text-current hover:underline">{{ e.name }}</a></strong>
+            <div class="text-xs opacity-60 mt-1">
+                {{ e.project_count }} project{{ 's' if e.project_count != 1 }} &middot;
+                {{ e.contact_count }} contact{{ 's' if e.contact_count != 1 }}
+            </div>
+            {% if e.description %}
+            <div class="text-sm mt-1">{{ e.description }}</div>
+            {% endif %}
+        </div>
+        <div class="flex gap-1">
+            <a href="/entities/{{ e.id }}" class="btn btn-primary btn-sm">View</a>
+            <form method="POST" action="/entities/{{ e.id }}/delete">
+                <button class="btn btn-error btn-sm" onclick="return confirm('Delete entity and unlink all projects?')">Del</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty">No entities yet. Add one above.</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ label }} — Roost</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav>
+        <span class="brand">Roost — Shared View</span>
+        <span style="font-size: 0.85rem; color: var(--text-dim);">Read-only</span>
+    </nav>
+    <div class="container">
+        <div class="page-header">
+            <h1>{{ label }}</h1>
+        </div>
+
+        {% if progress %}
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.total }}</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.done }}</div>
+                <div class="stat-label">Done</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.pct }}%</div>
+                <div class="stat-label">Complete</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if triage %}
+        {% if triage.overdue %}
+        <h2 style="color: var(--red); font-size: 1rem; margin-bottom: 8px;">Overdue ({{ triage.overdue|length }})</h2>
+        {% for t in triage.overdue[:10] %}
+        <div class="task-item" style="border-left: 3px solid var(--red);">
+            <div class="task-body">
+                <div class="task-title">#{{ t.id }} {{ t.title }}</div>
+                <div class="task-meta">
+                    <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                    {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if triage.in_progress %}
+        <h2 style="font-size: 1rem; margin: 16px 0 8px;">In Progress ({{ triage.in_progress|length }})</h2>
+        {% for t in triage.in_progress[:10] %}
+        <div class="task-item">
+            <div class="task-body">
+                <div class="task-title">#{{ t.id }} {{ t.title }}</div>
+                <div class="task-meta">
+                    <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                    {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endif %}
+
+        {% if tasks %}
+        <h2 style="font-size: 1rem; margin: 16px 0 8px;">Active Tasks ({{ tasks|length }})</h2>
+        {% for t in tasks[:20] %}
+        <div class="task-item">
+            <div class="task-body">
+                <div class="task-title">#{{ t.id }} {{ t.title }}</div>
+                <div class="task-meta">
+                    <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                    <span>{{ t.status.value | replace('_', ' ') }}</span>
+                    {% if t.deadline %}<span>due {{ t.deadline }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</body>
+</html>

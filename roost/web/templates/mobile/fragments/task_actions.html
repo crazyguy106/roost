@@ -1,0 +1,35 @@
+<div id="taskActions" style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
+    {% if task.status.value != 'in_progress' %}
+    <button class="m-btn m-btn-sm m-btn-primary"
+            hx-post="/m/tasks/{{ task.id }}/start"
+            hx-target="#taskActions"
+            hx-swap="outerHTML">Start Working</button>
+    {% endif %}
+    {% if task.status.value != 'done' %}
+    <button class="m-btn m-btn-sm m-btn-primary" style="background: var(--green); color: #000;"
+            hx-post="/m/tasks/{{ task.id }}/complete"
+            hx-swap="none">Complete</button>
+    {% endif %}
+    {% if task.focus_date %}
+    <button class="m-btn m-btn-sm m-btn-ghost"
+            hx-post="/m/tasks/{{ task.id }}/unfocus"
+            hx-target="#taskActions"
+            hx-swap="outerHTML">Unfocus</button>
+    {% else %}
+    <button class="m-btn m-btn-sm m-btn-ghost"
+            hx-post="/m/tasks/{{ task.id }}/focus"
+            hx-target="#taskActions"
+            hx-swap="outerHTML">Focus</button>
+    {% endif %}
+    {% if task.someday %}
+    <button class="m-btn m-btn-sm m-btn-ghost"
+            hx-post="/m/tasks/{{ task.id }}/unshelve"
+            hx-target="#taskActions"
+            hx-swap="outerHTML">Unshelve</button>
+    {% else %}
+    <button class="m-btn m-btn-sm m-btn-ghost"
+            hx-post="/m/tasks/{{ task.id }}/shelve"
+            hx-target="#taskActions"
+            hx-swap="outerHTML">Shelve</button>
+    {% endif %}
+</div>

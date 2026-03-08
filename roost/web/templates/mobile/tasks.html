@@ -1,0 +1,72 @@
+{% extends "mobile/base.html" %}
+{% block title %}Tasks — Roost{% endblock %}
+{% block topbar_title %}Tasks{% endblock %}
+{% block topbar_right %}
+<a href="/m/tasks/new" class="m-topbar-btn">+ New</a>
+{% endblock %}
+
+{% block content %}
+<!-- Search -->
+<form method="GET" action="/m/tasks">
+    <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Search tasks..."
+           class="m-search" {% if search_query %}autofocus{% endif %}>
+    {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+</form>
+
+<!-- Status filter pills -->
+<div class="m-filter-row">
+    <a href="/m/tasks" class="m-filter-chip {% if not current_status %}active{% endif %}">All</a>
+    <a href="/m/tasks?status=todo" class="m-filter-chip {% if current_status == 'todo' %}active{% endif %}">To Do</a>
+    <a href="/m/tasks?status=in_progress" class="m-filter-chip {% if current_status == 'in_progress' %}active{% endif %}">In Progress</a>
+    <a href="/m/tasks?status=done" class="m-filter-chip {% if current_status == 'done' %}active{% endif %}">Done</a>
+    <a href="/m/tasks?status=blocked" class="m-filter-chip {% if current_status == 'blocked' %}active{% endif %}">Blocked</a>
+</div>
+
+<!-- Task list -->
+<div id="taskList">
+{% if tasks %}
+    {% for t in tasks %}
+    <div class="m-task-card{% if t.status.value == 'done' %} done{% endif %}" {% if t.status.value != 'done' %}data-task-id="{{ t.id }}"{% endif %}>
+        {% if t.status.value != 'done' %}
+        <div class="m-swipe-bg complete">Done</div>
+        <div class="m-swipe-inner">
+        {% endif %}
+            <a href="/m/tasks/{{ t.id }}">
+                <div class="m-task-title">{{ t.title }}</div>
+                <div class="m-task-meta">
+                    <span class="m-badge m-badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                    {% if not current_status %}
+                    <span class="m-badge m-badge-{{ t.status.value }}">{{ t.status.value | replace('_', ' ') }}</span>
+                    {% endif %}
+                    {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                    {% if t.deadline %}<span {% if t.deadline | is_overdue %}style="color: var(--red);"{% endif %}>{{ t.deadline | short_date }}</span>{% endif %}
+                </div>
+            </a>
+        {% if t.status.value != 'done' %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if has_more %}
+    <div style="text-align: center; padding: 12px;">
+        <a href="/m/tasks?{% if current_status %}status={{ current_status }}&{% endif %}{% if search_query %}q={{ search_query }}&{% endif %}page={{ current_page + 1 }}"
+           class="m-btn m-btn-sm m-btn-ghost">Load more</a>
+    </div>
+    {% endif %}
+{% else %}
+    <div style="text-align: center; padding: 24px; color: var(--text-dim);">No tasks match your filter.</div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MobileUI.initSwipe('#taskList', function(taskId, card) {
+    htmx.ajax('POST', '/m/tasks/' + taskId + '/complete', {swap:'none'}).then(function() {
+        setTimeout(function() { card.style.display = 'none'; }, 300);
+    });
+});
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" style="font-size:18px">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Roost">
+    <meta name="theme-color" content="#1d232a">
+    <title>{% block title %}Roost{% endblock %}</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <link href="/static/vendor/daisyui.css" rel="stylesheet" type="text/css">
+    <link href="/static/vendor/daisyui-themes.css" rel="stylesheet" type="text/css">
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v=6">
+    <link rel="stylesheet" href="/static/mobile.css?v=6">
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="m-shell">
+    <!-- Topbar -->
+    <div class="m-topbar">
+        <div class="m-topbar-left">
+            {% block topbar_left %}{% endblock %}
+        </div>
+        <div class="m-topbar-title">{% block topbar_title %}{{ page_title or 'Roost' }}{% endblock %}</div>
+        <div class="m-topbar-right">
+            {% block topbar_right %}
+            <a href="/m/docs" class="m-topbar-btn" title="Docs">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            </a>
+            <a href="/m/settings" class="m-topbar-btn" title="Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </a>
+            {% endblock %}
+        </div>
+    </div>
+
+    <!-- Offline banner -->
+    <div class="m-offline" id="mOffline">Offline — changes will sync when connected</div>
+
+    <!-- Pull to refresh indicator -->
+    <div class="m-ptr-indicator">Pull to refresh</div>
+
+    <!-- Scrollable content -->
+    <div class="m-content" id="mContent">
+        {% block content %}{% endblock %}
+
+        <!-- Desktop link -->
+        <a href="{{ desktop_url or '/' }}?desktop=1" class="m-desktop-link">Switch to desktop view</a>
+    </div>
+
+    <!-- Bottom tabs -->
+    <div class="m-tabs">
+        <a href="/m/" class="m-tab {% if active_tab == 'home' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Home</span>
+        </a>
+        <a href="/m/tasks" class="m-tab {% if active_tab == 'tasks' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Tasks</span>
+        </a>
+        <a href="/m/projects" class="m-tab {% if active_tab == 'projects' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Projects</span>
+        </a>
+        <a href="/m/calendar" class="m-tab {% if active_tab == 'calendar' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Calendar</span>
+        </a>
+        <a href="/m/contacts" class="m-tab {% if active_tab == 'people' %}active{% endif %}">
+            <svg viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>People</span>
+        </a>
+    </div>
+
+    <!-- Toast container -->
+    <div class="m-toast-container" id="mToastContainer"></div>
+</div>
+
+<script src="/static/mobile.js"></script>
+{% block scripts %}{% endblock %}
+
+<!-- Service worker -->
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' });
+}
+</script>
+</body>
+</html>

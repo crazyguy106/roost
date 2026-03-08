@@ -1,0 +1,717 @@
+/* Roost Mobile — Shell layout, touch UX, safe areas */
+
+/* ── Reset for mobile shell ──────────────────────────────────── */
+html:has(.m-shell) {
+    font-size: 18px;   /* Bump base for mobile — 1rem = 18px instead of 16px */
+}
+
+.m-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* ── Topbar ──────────────────────────────────────────────────── */
+.m-topbar {
+    flex: 0 0 auto;
+    height: 44px;
+    padding-top: env(safe-area-inset-top, 0px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 12px;
+    padding-right: 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    z-index: 50;
+}
+.m-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 48px;
+}
+.m-topbar-title {
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    flex: 1;
+}
+.m-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 48px;
+    justify-content: flex-end;
+}
+.m-topbar-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+.m-topbar-btn:hover { background: rgba(108, 140, 255, 0.1); }
+.m-back-btn {
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 4px;
+}
+
+/* ── Offline banner ──────────────────────────────────────────── */
+.m-offline {
+    display: none;
+    background: var(--red);
+    color: #fff;
+    text-align: center;
+    font-size: 0.75rem;
+    padding: 4px;
+    font-weight: 500;
+}
+.m-offline.show { display: block; }
+
+/* ── Scrollable content ──────────────────────────────────────── */
+.m-content {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 12px);
+}
+
+/* ── Bottom tabs ─────────────────────────────────────────────── */
+.m-tabs {
+    flex: 0 0 auto;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 50;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+.m-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.m-tab svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+}
+.m-tab.active {
+    color: var(--accent);
+}
+.m-tab:active {
+    transform: scale(0.95);
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.m-toast-container {
+    position: fixed;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+}
+.m-toast {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    pointer-events: auto;
+    animation: mToastIn 0.2s ease-out;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.m-toast.success { background: #166534; color: #bbf7d0; }
+.m-toast.error { background: #991b1b; color: #fecaca; }
+.m-toast.info { background: #1e3a5f; color: #bfdbfe; }
+.m-toast.removing {
+    animation: mToastOut 0.2s ease-in forwards;
+}
+@keyframes mToastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes mToastOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(10px); }
+}
+
+/* ── Stats strip (dashboard) ─────────────────────────────────── */
+.m-stats {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+}
+.m-stats::-webkit-scrollbar { display: none; }
+.m-stat-pill {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 16px;
+    text-align: center;
+    min-width: 80px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s;
+}
+.m-stat-pill:active { border-color: var(--accent); }
+.m-stat-val {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+.m-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* ── Section headers ─────────────────────────────────────────── */
+.m-section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+/* ── Task card ───────────────────────────────────────────────── */
+.m-task-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    transition: transform 0.15s;
+}
+.m-task-card a {
+    color: var(--text);
+    text-decoration: none;
+    display: block;
+}
+.m-task-title {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+.m-task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    align-items: center;
+}
+.m-task-card.done {
+    opacity: 0.5;
+}
+
+/* Swipe reveal */
+.m-swipe-bg {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 0 8px 8px 0;
+    z-index: 0;
+}
+.m-swipe-bg.complete {
+    background: #166534;
+    color: #bbf7d0;
+}
+.m-task-card .m-swipe-inner {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    margin: -10px -12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+}
+
+/* ── Status pills / filter chips ─────────────────────────────── */
+.m-filter-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+    scrollbar-width: none;
+}
+.m-filter-row::-webkit-scrollbar { display: none; }
+.m-filter-chip {
+    flex: 0 0 auto;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.m-filter-chip.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* ── Search bar ──────────────────────────────────────────────── */
+.m-search {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+    outline: none;
+}
+.m-search:focus { border-color: var(--accent); }
+.m-search::placeholder { color: var(--text-dim); }
+
+/* ── Project card ────────────────────────────────────────────── */
+.m-project-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+.m-project-card a {
+    color: var(--text);
+    text-decoration: none;
+}
+.m-project-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+.m-project-meta {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+/* ── Contact card ────────────────────────────────────────────── */
+.m-contact-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+.m-contact-card a {
+    color: var(--text);
+    text-decoration: none;
+}
+.m-contact-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+.m-contact-email {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+/* ── Group header ────────────────────────────────────────────── */
+.m-group-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 12px 0 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+/* ── Detail page info rows ───────────────────────────────────── */
+.m-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.m-info-label {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+}
+.m-info-value {
+    text-align: right;
+}
+
+/* ── Form elements ───────────────────────────────────────────── */
+.m-form-group {
+    margin-bottom: 12px;
+}
+.m-form-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+.m-form-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+.m-form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.m-form-select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b8fa3' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+}
+.m-form-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 80px;
+}
+.m-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+}
+.m-btn-primary {
+    background: var(--accent);
+    color: #fff;
+}
+.m-btn-primary:active { opacity: 0.8; }
+.m-btn-sm {
+    display: inline-block;
+    width: auto;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+}
+.m-btn-ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+}
+.m-btn-error {
+    background: var(--red);
+    color: #fff;
+}
+
+/* ── Badge (inline) ──────────────────────────────────────────── */
+.m-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.m-badge-todo { background: var(--border); color: var(--text-dim); }
+.m-badge-in_progress { background: rgba(250, 204, 21, 0.15); color: var(--yellow); }
+.m-badge-done { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.m-badge-blocked { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+.m-badge-urgent { background: var(--red); color: #fff; }
+.m-badge-high { background: var(--orange); color: #000; }
+.m-badge-medium { background: var(--border); color: var(--text); }
+.m-badge-low { background: var(--border); color: var(--text-dim); }
+
+/* ── Calendar (mobile mini) ──────────────────────────────────── */
+.m-cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.m-cal-nav-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+}
+.m-cal-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+.m-cal-dow {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    margin-bottom: 2px;
+}
+.m-cal-dow span {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    padding: 4px 0;
+    text-transform: uppercase;
+}
+.m-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+}
+.m-cal-cell {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    font-size: 0.8rem;
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+}
+.m-cal-cell.other { opacity: 0.3; }
+.m-cal-cell.today {
+    background: rgba(108, 140, 255, 0.15);
+    font-weight: 700;
+    color: var(--accent);
+}
+.m-cal-cell.selected {
+    background: var(--accent);
+    color: #fff;
+}
+.m-cal-cell.has-events::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.m-cal-cell.has-deadlines::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--yellow);
+}
+.m-cal-cell.has-events.has-deadlines::after {
+    width: 10px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--yellow));
+}
+
+/* ── Agenda list ─────────────────────────────────────────────── */
+.m-agenda-date {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    padding: 8px 0 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    z-index: 5;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+}
+.m-agenda-item {
+    padding: 8px 10px;
+    background: var(--surface);
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 0.82rem;
+}
+.m-agenda-item-time {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+.m-agenda-item-title {
+    font-weight: 500;
+}
+.m-agenda-item.deadline {
+    border-left: 3px solid var(--yellow);
+}
+.m-agenda-item.event {
+    border-left: 3px solid var(--accent);
+}
+
+/* ── Streak + Spoons bar ─────────────────────────────────────── */
+.m-wellness-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+.m-wellness-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.75rem;
+}
+.m-wellness-val {
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+/* ── Progress bar ────────────────────────────────────────────── */
+.m-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 6px 0;
+}
+.m-progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+/* ── Communication timeline ──────────────────────────────────── */
+.m-comm-item {
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--surface);
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 0.82rem;
+}
+.m-comm-badge {
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    align-self: flex-start;
+}
+.m-comm-body {
+    flex: 1;
+    min-width: 0;
+}
+.m-comm-date {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+}
+
+/* ── Pull to refresh indicator ───────────────────────────────── */
+.m-ptr-indicator {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    display: none;
+}
+.m-ptr-indicator.visible { display: block; }
+
+/* ── Desktop link ────────────────────────────────────────────── */
+.m-desktop-link {
+    display: block;
+    text-align: center;
+    padding: 16px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    margin-top: 20px;
+}
+
+/* ── PWA standalone ──────────────────────────────────────────── */
+@media (display-mode: standalone) {
+    .m-topbar {
+        padding-top: env(safe-area-inset-top, 0px);
+        height: calc(44px + env(safe-area-inset-top, 0px));
+    }
+}

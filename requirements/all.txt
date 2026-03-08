@@ -1,0 +1,7 @@
+# Roost — All dependencies
+-r base.txt
+-r google.txt
+-r microsoft.txt
+-r ai.txt
+-r telegram.txt
+-r notion.txt

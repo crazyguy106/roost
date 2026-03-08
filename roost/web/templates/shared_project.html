@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.name }} — Shared — Roost</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav>
+        <span class="brand">Roost — Shared View</span>
+        <span style="font-size: 0.85rem; color: var(--text-dim);">Read-only</span>
+    </nav>
+    <div class="container">
+        <div class="page-header">
+            <h1>{{ project.name }}</h1>
+        </div>
+
+        {% if project.description %}
+        <p style="color: var(--text-dim); margin-bottom: 16px;">{{ project.description }}</p>
+        {% endif %}
+
+        {% if progress %}
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.total }}</div>
+                <div class="stat-label">Total</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.done }}</div>
+                <div class="stat-label">Done</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ progress.pct }}%</div>
+                <div class="stat-label">Complete</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if tasks %}
+        <h2 style="font-size: 1rem; margin-bottom: 8px;">Active Tasks ({{ tasks|length }})</h2>
+        {% for t in tasks[:30] %}
+        <div class="task-item">
+            <div class="task-body">
+                <div class="task-title">#{{ t.id }} {{ t.title }}</div>
+                <div class="task-meta">
+                    <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                    <span>{{ t.status.value | replace('_', ' ') }}</span>
+                    {% if t.deadline %}<span>due {{ t.deadline }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty">All tasks done!</div>
+        {% endif %}
+    </div>
+</body>
+</html>

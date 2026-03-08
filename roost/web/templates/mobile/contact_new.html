@@ -1,0 +1,28 @@
+{% extends "mobile/base.html" %}
+{% block title %}New Contact — Roost{% endblock %}
+{% block topbar_title %}New Contact{% endblock %}
+{% block topbar_left %}
+<a href="/m/contacts" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+
+{% block content %}
+<form hx-post="/m/contacts/create" hx-swap="none">
+    <div class="m-form-group">
+        <label class="m-form-label">Name</label>
+        <input type="text" name="name" class="m-form-input" required autofocus>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Email</label>
+        <input type="email" name="email" class="m-form-input">
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Phone</label>
+        <input type="tel" name="phone" class="m-form-input">
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Notes</label>
+        <textarea name="notes" class="m-form-textarea"></textarea>
+    </div>
+    <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Create Contact</button>
+</form>
+{% endblock %}

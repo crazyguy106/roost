@@ -1,0 +1,71 @@
+{% extends "mobile/base.html" %}
+{% block title %}Edit {{ contact.name }} — Roost{% endblock %}
+{% block topbar_title %}Edit Contact{% endblock %}
+{% block topbar_left %}
+<a href="/m/contacts/{{ contact.id }}" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+
+{% block content %}
+<form hx-post="/m/contacts/{{ contact.id }}/edit" hx-swap="none">
+    <div class="m-form-group">
+        <label class="m-form-label">Name</label>
+        <input type="text" name="name" value="{{ contact.name }}" class="m-form-input" required>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Notes</label>
+        <textarea name="notes" class="m-form-textarea">{{ contact.notes or '' }}</textarea>
+    </div>
+    <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Save Changes</button>
+</form>
+
+<!-- Contact Identifiers -->
+<div style="margin-top: 20px;">
+    <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 8px;">Contact Details</div>
+    {% for ident in contact.identifiers %}
+    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px;">
+        <div>
+            <span style="font-size: 0.75rem; text-transform: uppercase; opacity: 0.6;">{{ ident.type }}</span>
+            {% if ident.label %}<span style="font-size: 0.7rem; opacity: 0.5;"> ({{ ident.label }})</span>{% endif %}
+            {% if ident.is_primary %}<span style="font-size: 0.65rem; color: var(--accent); margin-left: 4px;">primary</span>{% endif %}
+            <div style="font-size: 0.85rem;">{{ ident.value }}</div>
+        </div>
+        <button class="m-btn m-btn-error m-btn-sm" style="font-size: 0.7rem; padding: 2px 8px;"
+                hx-post="/m/contacts/{{ contact.id }}/remove-identifier/{{ ident.id }}"
+                hx-swap="none"
+                onclick="return confirm('Remove?')">&#x2715;</button>
+    </div>
+    {% endfor %}
+    {% if not contact.identifiers %}
+    <div style="font-size: 0.82rem; color: var(--text-dim); padding: 8px;">No contact details yet.</div>
+    {% endif %}
+
+    <!-- Add identifier -->
+    <div style="background: var(--surface); border-radius: 8px; padding: 10px 12px; margin-top: 8px;">
+        <div style="font-size: 0.8rem; font-weight: 500; margin-bottom: 6px;">Add Detail</div>
+        <form hx-post="/m/contacts/{{ contact.id }}/add-identifier" hx-swap="none">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <select name="ident_type" class="m-form-input" style="flex: 0 0 auto; width: 110px;" required>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="microsoft">Microsoft</option>
+                    <option value="google">Google</option>
+                    <option value="notion">Notion</option>
+                </select>
+                <input type="text" name="ident_value" placeholder="Value" class="m-form-input" style="flex: 1; min-width: 120px;" required>
+                <input type="text" name="ident_label" placeholder="Label" class="m-form-input" style="flex: 0 0 auto; width: 80px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
+                    <input type="checkbox" name="ident_primary" value="1"> Primary
+                </label>
+                <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="margin-left: auto;">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<a href="/m/contacts/{{ contact.id }}" class="m-btn m-btn-ghost" style="margin-top: 12px; display: block; text-align: center; text-decoration: none;">Back</a>
+{% endblock %}

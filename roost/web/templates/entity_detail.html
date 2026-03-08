@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ entity.name }} — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">{{ entity.name }}</h1>
+    <span class="badge badge-medium">{{ entity.status }}</span>
+</div>
+
+<!-- Stats -->
+<div class="stats shadow w-full mb-5">
+    <div class="stat">
+        <div class="stat-title">Projects</div>
+        <div class="stat-value">{{ projects|length }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">People</div>
+        <div class="stat-value">{{ people|length }}</div>
+    </div>
+</div>
+
+<!-- Edit Form -->
+<div class="card mb-5">
+    <h2 class="text-base font-semibold mb-3">Edit Entity</h2>
+    <form method="POST" action="/entities/{{ entity.id }}/edit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="mb-4">
+                <label class="label text-sm">Name</label>
+                <input class="input input-bordered w-full" type="text" name="name" value="{{ entity.name }}" required>
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Status</label>
+                <select class="select select-bordered w-full" name="status">
+                    <option value="active" {% if entity.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if entity.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                    <option value="archived" {% if entity.status == 'archived' %}selected{% endif %}>Archived</option>
+                </select>
+            </div>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Description</label>
+            <textarea class="textarea textarea-bordered w-full" name="description">{{ entity.description or '' }}</textarea>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Notes</label>
+            <textarea class="textarea textarea-bordered w-full" name="notes">{{ entity.notes or '' }}</textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Save Changes</button>
+    </form>
+</div>
+
+<!-- Projects -->
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">Projects ({{ projects|length }})</h2>
+</div>
+{% if projects %}
+    {% for p in projects %}
+    <div class="card flex items-center justify-between">
+        <div>
+            {% if p.project_type == 'programme' %}📁{% elif p.project_type == 'initiative' %}🚀{% else %}📋{% endif %}
+            <strong><a href="/projects/{{ p.id }}" class="text-current hover:underline">{{ p.name }}</a></strong>
+            {% if p.project_type != 'project' %}
+            <span class="badge badge-medium ml-1">{{ p.project_type }}</span>
+            {% endif %}
+            {% if p.status == 'paused' %}<span class="badge badge-warning ml-1">paused</span>{% endif %}
+            <div class="text-xs opacity-60">
+                {{ p.task_count }} task{{ 's' if p.task_count != 1 }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty py-3">No projects linked to this entity.</div>
+{% endif %}
+
+<!-- Add Project -->
+<form class="flex gap-2 items-end flex-wrap mb-3 mt-2" method="POST" action="/entities/{{ entity.id }}/add-project">
+    <div class="mb-4">
+        <label class="label text-sm">Project Name</label>
+        <input class="input input-bordered w-full" type="text" name="name" placeholder="New project name" required>
+    </div>
+    <div class="mb-4">
+        <label class="label text-sm">Type</label>
+        <select class="select select-bordered w-full" name="project_type">
+            <option value="project">Project</option>
+            <option value="programme">Programme</option>
+            <option value="initiative">Initiative</option>
+        </select>
+    </div>
+    <div class="mb-4">
+        <button class="btn btn-primary btn-sm" type="submit">Add Project</button>
+    </div>
+</form>
+
+<!-- People -->
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">People ({{ people|length }})</h2>
+</div>
+{% if people %}
+    {% for ce in people %}
+    <div class="card flex items-center justify-between">
+        <div>
+            <strong><a href="/contacts/{{ ce.contact_id }}" class="text-current hover:underline">{{ ce.contact_name }}</a></strong>
+            {% if ce.title %}
+            <span class="opacity-60 ml-2">{{ ce.title }}</span>
+            {% endif %}
+            {% if ce.is_primary %}
+            <span class="badge badge-primary ml-1">primary</span>
+            {% endif %}
+        </div>
+        <form method="POST" action="/entities/{{ entity.id }}/remove-person/{{ ce.id }}">
+            <button class="btn btn-error btn-sm" onclick="return confirm('Remove this person?')">Remove</button>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty py-3">No people affiliated with this entity.</div>
+{% endif %}
+
+<!-- Add Person -->
+<form class="flex gap-2 items-end flex-wrap mb-3 mt-2" method="POST" action="/entities/{{ entity.id }}/add-person">
+    <div class="mb-4">
+        <label class="label text-sm">Person</label>
+        <select class="select select-bordered w-full" name="contact_id" required>
+            <option value="">Select person...</option>
+            {% for c in all_contacts %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-4">
+        <label class="label text-sm">Title / Role</label>
+        <input class="input input-bordered w-full" type="text" name="title" placeholder="e.g. CEO, Advisor">
+    </div>
+    <div class="mb-4">
+        <label class="label text-sm">&nbsp;</label>
+        <label class="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-sm" name="is_primary" value="1"> Primary
+        </label>
+    </div>
+    <div class="mb-4">
+        <button class="btn btn-primary btn-sm" type="submit">Add Person</button>
+    </div>
+</form>
+
+<div class="mt-6">
+    <a href="/entities" class="text-sm hover:underline">&larr; Back to entities</a>
+</div>
+{% endblock %}

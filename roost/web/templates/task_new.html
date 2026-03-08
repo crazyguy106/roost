@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}New Task — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">New Task</h1>
+</div>
+
+<form method="POST" action="/tasks/add">
+    <div class="card">
+        <div class="mb-4">
+            <label class="label text-sm">Title</label>
+            <input type="text" name="title" placeholder="What needs to be done?" required autofocus class="input input-bordered w-full">
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Description</label>
+            <textarea name="description" placeholder="Details (optional)" class="textarea textarea-bordered w-full"></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="mb-4">
+                <label class="label text-sm">Priority</label>
+                <select name="priority" class="select select-bordered w-full">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Deadline</label>
+                <input type="date" name="deadline" class="input input-bordered w-full">
+            </div>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Project</label>
+            <select name="project_id" class="select select-bordered w-full">
+                <option value="">None</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn btn-primary w-full" type="submit">Create Task</button>
+    </div>
+</form>
+{% endblock %}

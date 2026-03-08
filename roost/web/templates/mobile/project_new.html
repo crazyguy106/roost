@@ -1,0 +1,43 @@
+{% extends "mobile/base.html" %}
+{% block title %}New Project — Roost{% endblock %}
+{% block topbar_title %}New Project{% endblock %}
+{% block topbar_left %}
+<a href="/m/projects" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+
+{% block content %}
+<form hx-post="/m/projects/create" hx-swap="none">
+    <div class="m-form-group">
+        <label class="m-form-label">Name</label>
+        <input type="text" name="name" class="m-form-input" required autofocus>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Description</label>
+        <textarea name="description" class="m-form-textarea"></textarea>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div class="m-form-group">
+            <label class="m-form-label">Type</label>
+            <select name="project_type" class="m-form-select">
+                <option value="project">Project</option>
+                <option value="programme">Programme</option>
+                <option value="initiative">Initiative</option>
+            </select>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Entity</label>
+            <select name="entity_id" class="m-form-select">
+                <option value="">None</option>
+                {% for e in entities %}
+                <option value="{{ e.id }}">{{ e.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Category</label>
+        <input type="text" name="category" class="m-form-input" placeholder="e.g. consulting, training">
+    </div>
+    <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Create Project</button>
+</form>
+{% endblock %}

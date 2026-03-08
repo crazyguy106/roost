@@ -1,0 +1,121 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ entity.name }} — Roost{% endblock %}
+{% block topbar_title %}{{ entity.name }}{% endblock %}
+{% block topbar_left %}
+<a href="/m/entities" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<button class="m-topbar-btn" id="editToggle">Edit</button>
+{% endblock %}
+
+{% block content %}
+<!-- View mode -->
+<div id="viewMode">
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+        {% if entity.status == 'active' %}
+        <span class="m-badge" style="background: rgba(74,222,128,0.15); color: var(--green);">active</span>
+        {% else %}
+        <span class="m-badge" style="background: rgba(250,204,21,0.15); color: var(--yellow);">{{ entity.status }}</span>
+        {% endif %}
+    </div>
+
+    {% if entity.description %}
+    <div style="margin-bottom: 12px; padding: 10px 12px; background: var(--surface); border-radius: 8px; font-size: 0.85rem;">{{ entity.description }}</div>
+    {% endif %}
+
+    {% if entity.notes %}
+    <div style="margin-bottom: 12px; font-size: 0.82rem; color: var(--text-dim);">{{ entity.notes }}</div>
+    {% endif %}
+
+    <!-- Projects -->
+    <div class="m-section-title">Projects ({{ projects|length }})</div>
+    {% if projects %}
+        {% for p in projects %}
+        <div class="m-project-card">
+            <a href="/m/projects/{{ p.id }}">
+                <div class="m-project-name">{{ p.name }}</div>
+                <div class="m-project-meta">
+                    {{ p.task_count }} task{{ 's' if p.task_count != 1 }}
+                    {% if p.status == 'paused' %}
+                    <span class="m-badge" style="background: rgba(250,204,21,0.15); color: var(--yellow); margin-left: 4px;">paused</span>
+                    {% endif %}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 12px; color: var(--text-dim);">No projects.</div>
+    {% endif %}
+
+    <!-- People -->
+    <div class="m-section-title">People ({{ people|length }})</div>
+    {% if people %}
+        {% for ce in people %}
+        <div class="m-contact-card">
+            <a href="/m/contacts/{{ ce.contact_id }}">
+                <div class="m-contact-name">{{ ce.contact_name }}</div>
+                {% if ce.title %}
+                <div class="m-contact-email">{{ ce.title }}</div>
+                {% endif %}
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 12px; color: var(--text-dim);">No people.</div>
+    {% endif %}
+</div>
+
+<!-- Edit mode (hidden by default) -->
+<div id="editMode" style="display: none;">
+    <form hx-post="/m/entities/{{ entity.id }}/edit" hx-swap="none">
+        <div class="m-form-group">
+            <label class="m-form-label">Name</label>
+            <input type="text" name="name" value="{{ entity.name }}" class="m-form-input" required>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Description</label>
+            <textarea name="description" class="m-form-textarea">{{ entity.description or '' }}</textarea>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Status</label>
+            <select name="status" class="m-form-select">
+                {% for s in ['active', 'inactive', 'archived'] %}
+                <option value="{{ s }}" {% if entity.status == s %}selected{% endif %}>{{ s | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Notes</label>
+            <textarea name="notes" class="m-form-textarea">{{ entity.notes or '' }}</textarea>
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Save Changes</button>
+        <button type="button" class="m-btn m-btn-ghost" id="cancelBtn" style="margin-top: 6px;">Cancel</button>
+    </form>
+    <button class="m-btn m-btn-error m-btn-sm" style="margin-top: 24px;"
+            hx-post="/m/entities/{{ entity.id }}/delete"
+            hx-swap="none"
+            onclick="return confirm('Delete this entity?')">Delete Entity</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var viewMode = document.getElementById('viewMode');
+    var editMode = document.getElementById('editMode');
+    var toggle = document.getElementById('editToggle');
+    var editing = false;
+
+    toggle.addEventListener('click', function() {
+        editing = !editing;
+        viewMode.style.display = editing ? 'none' : 'block';
+        editMode.style.display = editing ? 'block' : 'none';
+        toggle.textContent = editing ? 'Cancel' : 'Edit';
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        toggle.click();
+    });
+})();
+</script>
+{% endblock %}

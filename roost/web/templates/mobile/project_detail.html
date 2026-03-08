@@ -1,0 +1,170 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ project.name }} — Roost{% endblock %}
+{% block topbar_title %}{{ project.name }}{% endblock %}
+{% block topbar_left %}
+<a href="/m/projects" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<button class="m-topbar-btn" id="editToggle">Edit</button>
+{% endblock %}
+
+{% block content %}
+<!-- View mode -->
+<div id="viewMode">
+    <!-- Project info -->
+    <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+        <span class="m-badge m-badge-medium">{{ project.project_type }}</span>
+        {% if project.status == 'paused' %}
+        <span class="m-badge" style="background: rgba(250,204,21,0.15); color: var(--yellow);">paused</span>
+        {% elif project.status == 'active' %}
+        <span class="m-badge" style="background: rgba(74,222,128,0.15); color: var(--green);">active</span>
+        {% elif project.status == 'archived' %}
+        <span class="m-badge" style="background: var(--border); color: var(--text-dim);">archived</span>
+        {% endif %}
+    </div>
+
+    {% if project.entity_name %}
+    <div class="m-info-row">
+        <span class="m-info-label">Entity</span>
+        <a href="/m/entities/{{ project.entity_id }}" style="color: var(--accent); font-size: 0.85rem;">{{ project.entity_name }}</a>
+    </div>
+    {% endif %}
+
+    {% if project.description %}
+    <div style="margin: 12px 0; padding: 10px 12px; background: var(--surface); border-radius: 8px; font-size: 0.85rem;">{{ project.description }}</div>
+    {% endif %}
+
+    <!-- Action buttons -->
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        {% if project.status == 'active' %}
+        <button class="m-btn m-btn-ghost m-btn-sm" style="flex: 1;"
+                hx-post="/m/projects/{{ project.id }}/pause"
+                hx-swap="none">Pause</button>
+        {% elif project.status == 'paused' %}
+        <button class="m-btn m-btn-primary m-btn-sm" style="flex: 1;"
+                hx-post="/m/projects/{{ project.id }}/resume"
+                hx-swap="none">Resume</button>
+        {% endif %}
+    </div>
+
+    <!-- Task stats -->
+    <div class="m-stats" style="margin-top: 12px;">
+        <div class="m-stat-pill" style="flex: 1;">
+            <div class="m-stat-val" style="font-size: 1rem;">{{ progress.todo or 0 }}</div>
+            <div class="m-stat-label">To Do</div>
+        </div>
+        <div class="m-stat-pill" style="flex: 1;">
+            <div class="m-stat-val" style="font-size: 1rem; color: var(--yellow);">{{ progress.in_progress or 0 }}</div>
+            <div class="m-stat-label">In Progress</div>
+        </div>
+        <div class="m-stat-pill" style="flex: 1;">
+            <div class="m-stat-val" style="font-size: 1rem; color: var(--green);">{{ progress.done or 0 }}</div>
+            <div class="m-stat-label">Done</div>
+        </div>
+        <div class="m-stat-pill" style="flex: 1;">
+            <div class="m-stat-val" style="font-size: 1rem; color: var(--red);">{{ progress.blocked or 0 }}</div>
+            <div class="m-stat-label">Blocked</div>
+        </div>
+    </div>
+
+    <!-- Progress bar -->
+    {% set total = (progress.todo or 0) + (progress.in_progress or 0) + (progress.done or 0) + (progress.blocked or 0) %}
+    {% if total > 0 %}
+    {% set pct = ((progress.done or 0) * 100 / total) | int %}
+    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 12px; color: var(--text-dim);">
+        <span>Progress</span>
+        <span>{{ pct }}%</span>
+    </div>
+    <div class="m-progress-bar">
+        <div class="m-progress-fill" style="width: {{ pct }}%;"></div>
+    </div>
+    {% endif %}
+
+    <!-- Team -->
+    {% include "mobile/fragments/project_team.html" %}
+
+    <!-- Recent tasks -->
+    <div class="m-section-title" style="margin-top: 16px;">Recent Tasks</div>
+    {% if recent_tasks %}
+        {% for t in recent_tasks %}
+        <div class="m-task-card{% if t.status.value == 'done' %} done{% endif %}">
+            <a href="/m/tasks/{{ t.id }}">
+                <div class="m-task-title">{{ t.title }}</div>
+                <div class="m-task-meta">
+                    <span class="m-badge m-badge-{{ t.status.value }}">{{ t.status.value | replace('_', ' ') }}</span>
+                    <span class="m-badge m-badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                    {% if t.deadline %}<span>{{ t.deadline | short_date }}</span>{% endif %}
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 16px; color: var(--text-dim);">No tasks yet.</div>
+    {% endif %}
+</div>
+
+<!-- Edit mode (hidden by default) -->
+<div id="editMode" style="display: none;">
+    <form hx-post="/m/projects/{{ project.id }}/edit" hx-swap="none">
+        <div class="m-form-group">
+            <label class="m-form-label">Name</label>
+            <input type="text" name="name" value="{{ project.name }}" class="m-form-input" required>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Description</label>
+            <textarea name="description" class="m-form-textarea">{{ project.description or '' }}</textarea>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="m-form-group">
+                <label class="m-form-label">Type</label>
+                <select name="project_type" class="m-form-select">
+                    {% for pt in ['project', 'programme', 'initiative'] %}
+                    <option value="{{ pt }}" {% if project.project_type == pt %}selected{% endif %}>{{ pt | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Entity</label>
+                <select name="entity_id" class="m-form-select">
+                    <option value="">None</option>
+                    {% for e in entities %}
+                    <option value="{{ e.id }}" {% if project.entity_id == e.id %}selected{% endif %}>{{ e.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Category</label>
+            <input type="text" name="category" value="{{ project.category or '' }}" class="m-form-input">
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Save Changes</button>
+        <button type="button" class="m-btn m-btn-ghost" id="cancelBtn" style="margin-top: 6px;">Cancel</button>
+    </form>
+    <button class="m-btn m-btn-error m-btn-sm" style="margin-top: 24px;"
+            hx-post="/m/projects/{{ project.id }}/delete"
+            hx-swap="none"
+            onclick="return confirm('Delete this project?')">Delete Project</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var viewMode = document.getElementById('viewMode');
+    var editMode = document.getElementById('editMode');
+    var toggle = document.getElementById('editToggle');
+    var editing = false;
+
+    toggle.addEventListener('click', function() {
+        editing = !editing;
+        viewMode.style.display = editing ? 'none' : 'block';
+        editMode.style.display = editing ? 'block' : 'none';
+        toggle.textContent = editing ? 'Cancel' : 'Edit';
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        toggle.click();
+    });
+})();
+</script>
+{% endblock %}

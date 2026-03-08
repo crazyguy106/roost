@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Calendar — Roost{% endblock %}
+{% block content %}
+
+<!-- Calendar Header -->
+<div class="cal-header">
+    <div class="cal-header-left">
+        <button class="cal-nav-btn" id="calPrev" title="Previous">&lsaquo;</button>
+        <span class="cal-title" id="calTitle">{{ month_name }} {{ year }}</span>
+        <button class="cal-nav-btn" id="calNext" title="Next">&rsaquo;</button>
+        <button class="cal-today-btn" id="calToday">Today</button>
+    </div>
+    <div class="flex items-center gap-2">
+        <div class="cal-view-toggle">
+            <button class="cal-view-btn active" data-view="month">Month</button>
+            <button class="cal-view-btn" data-view="week">Week</button>
+        </div>
+        <a href="/api/calendar/export" class="btn btn-primary btn-sm">Export .ics</a>
+    </div>
+</div>
+
+<!-- Month View -->
+<div class="cal-month-container active" id="calMonthContainer">
+    <div class="cal-dow-row">
+        <div class="cal-dow">Mon</div>
+        <div class="cal-dow">Tue</div>
+        <div class="cal-dow">Wed</div>
+        <div class="cal-dow">Thu</div>
+        <div class="cal-dow">Fri</div>
+        <div class="cal-dow">Sat</div>
+        <div class="cal-dow">Sun</div>
+    </div>
+    <div class="cal-grid" id="calGrid">
+        {% for d in grid_dates %}
+        {% set is_today = (d == today) %}
+        {% set is_other = (d[:7] != '%04d-%02d'|format(year, month)) %}
+        {% set evts = events_by_date.get(d, []) %}
+        {% set dls = deadlines_by_date.get(d, []) %}
+        {% set total = evts|length + dls|length %}
+        <div class="cal-cell{% if is_today %} cal-cell--today{% endif %}{% if is_other %} cal-cell--other{% endif %}"
+             data-date="{{ d }}">
+            <div class="cal-day-num">{{ d[8:]|int }}</div>
+            <div class="cal-dots">
+                {% for e in evts[:3] %}<span class="cal-dot cal-dot--event"></span>{% endfor %}
+                {% for dl in dls[:3 - evts[:3]|length] %}<span class="cal-dot cal-dot--deadline"></span>{% endfor %}
+                {% if total > 3 %}<span class="cal-dot--more">+{{ total - 3 }}</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Week View -->
+<div class="cal-week-container" id="calWeekContainer"></div>
+
+<!-- Day Detail Panel -->
+<div class="cal-detail" id="calDetail">
+    <div class="cal-detail-inner">
+        <div class="cal-detail-header">
+            <span class="cal-detail-title" id="calDetailTitle"></span>
+            <button class="cal-detail-close" id="calDetailClose">&times;</button>
+        </div>
+        <div id="calDetailBody"></div>
+    </div>
+</div>
+
+{% if not calendar_configured %}
+<div class="text-center py-4 text-sm opacity-50">
+    Calendar API not configured — showing task deadlines only.
+    <a href="/auth/gmail" class="link link-primary">Authorize Gmail + Calendar</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.__calState = {
+    year: {{ year }},
+    month: {{ month }},
+    today: "{{ today }}",
+    events: {{ events_by_date | tojson }},
+    deadlines: {{ deadlines_by_date | tojson }},
+};
+</script>
+<script src="/static/calendar.js"></script>
+{% endblock %}

@@ -1,0 +1,3 @@
+# Roost — Microsoft Graph integration (Email, Calendar, OneDrive, Teams, SharePoint)
+msal>=1.28.0
+cryptography>=42.0.0

@@ -1,0 +1,231 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ page_title or 'Docs' }} — Roost{% endblock %}
+{% block topbar_title %}{{ page_title or 'Docs' }}{% endblock %}
+
+{% block topbar_left %}
+{% if parent_path is not none %}
+<a href="/m/docs{% if parent_path %}?path={{ parent_path }}{% endif %}" class="m-topbar-btn" title="Back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M15 19l-7-7 7-7"/></svg>
+</a>
+{% endif %}
+{% endblock %}
+
+{% block topbar_right %}
+{% if view_mode == 'view' and can_edit %}
+<button id="btnEdit" class="m-topbar-btn" title="Edit" onclick="enterEditMode()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+</button>
+{% endif %}
+{% if view_mode == 'view' %}
+<a href="/m/settings" class="m-topbar-btn" title="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% if view_mode == 'browse' %}
+<!-- ============ BROWSE MODE ============ -->
+<div class="px-4 pt-3 pb-6">
+
+    <!-- Breadcrumbs -->
+    {% if breadcrumbs %}
+    <div class="text-sm breadcrumbs mb-2 opacity-70">
+        <ul>
+            <li><a href="/m/docs">Docs</a></li>
+            {% for crumb in breadcrumbs %}
+            {% if loop.last %}
+            <li>{{ crumb.name }}</li>
+            {% else %}
+            <li><a href="/m/docs?path={{ crumb.path }}">{{ crumb.name }}</a></li>
+            {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Search filter -->
+    <div class="mb-3">
+        <input type="text" id="filterInput" placeholder="Filter files..." class="input input-bordered input-sm w-full" oninput="filterEntries(this.value)">
+    </div>
+
+    <!-- Directory listing -->
+    <div id="entryList">
+    {% if entries %}
+        {% for entry in entries %}
+        <a href="{{ entry.url }}" class="entry-item flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 active:bg-base-300 transition-colors" data-name="{{ entry.name|lower }}">
+            {% if entry.is_dir %}
+            <!-- Folder icon -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="text-warning shrink-0"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            {% else %}
+            <!-- File icon -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" class="text-info shrink-0"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            {% endif %}
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">{{ entry.name }}</div>
+                {% if entry.size %}
+                <div class="text-xs opacity-50">{{ entry.size }}</div>
+                {% endif %}
+            </div>
+            {% if entry.is_dir %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" class="opacity-40 shrink-0"><path d="M9 18l6-6-6-6"/></svg>
+            {% endif %}
+        </a>
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-8 opacity-50 text-sm">No files or directories found.</div>
+    {% endif %}
+    </div>
+</div>
+
+{% elif view_mode == 'view' %}
+<!-- ============ VIEW MODE ============ -->
+<div id="viewContainer" class="px-4 pt-3 pb-6">
+    <!-- Rendered markdown -->
+    <article id="mdRendered" class="prose prose-invert max-w-none"></article>
+</div>
+
+<!-- Edit container (hidden by default) -->
+<div id="editContainer" class="px-4 pt-3 pb-6" style="display: none;">
+    <div class="flex gap-2 mb-3">
+        <button class="btn btn-sm btn-primary flex-1" onclick="saveEdit()">Save</button>
+        <button class="btn btn-sm btn-ghost flex-1" onclick="cancelEdit()">Cancel</button>
+        <button class="btn btn-sm btn-outline" onclick="togglePreview()">Preview</button>
+    </div>
+    <textarea id="mdEditor" class="textarea textarea-bordered w-full font-mono text-sm leading-relaxed" style="min-height: calc(100vh - 200px); resize: vertical;"></textarea>
+    <div id="mdPreview" class="prose prose-invert prose-sm max-w-none mt-3" style="display: none;"></div>
+</div>
+
+{% endif %}
+
+<style>
+    /* Mobile reading: 16px base (from prose, not prose-sm), ~1.125 type scale.
+       Hierarchy via weight + spacing + border, not big size jumps.
+       Line length naturally ~40 chars on phone screens. */
+    .prose { font-size: 1rem !important; line-height: 1.6; }
+    .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { line-height: 1.25; margin-bottom: 0.4em; }
+    .prose h1 { font-size: 1.45rem !important; font-weight: 700; margin-top: 1.8em; padding-bottom: 6px; border-bottom: 2px solid oklch(0.35 0 0); }
+    .prose h2 { font-size: 1.25rem !important; font-weight: 700; margin-top: 1.5em; padding-bottom: 4px; border-bottom: 1px solid oklch(0.3 0 0); }
+    .prose h3 { font-size: 1.1rem !important; font-weight: 600; margin-top: 1.3em; }
+    .prose h4 { font-size: 1rem !important; font-weight: 600; margin-top: 1.2em; }
+    .prose h5 { font-size: 0.875rem !important; font-weight: 600; margin-top: 1em; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.75; }
+    .prose h6 { font-size: 0.8rem !important; font-weight: 600; margin-top: 1em; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.6; }
+    .prose p { margin-top: 0.75em; margin-bottom: 0.75em; }
+    .prose li { margin-top: 0.2em; margin-bottom: 0.2em; }
+    .prose pre { font-size: 0.8rem !important; }
+    .prose table { font-size: 0.85rem; }
+    .prose img { max-width: 100%; height: auto; border-radius: 8px; margin: 0.5em 0; }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+{% if view_mode == 'view' %}
+<script src="/static/vendor/marked.min.js"></script>
+<script>
+(function() {
+    const rawContent = {{ content|tojson }};
+    const filePath = {{ file_path|tojson }};
+
+    // Directory of current file for resolving relative paths
+    const fileDir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : '';
+
+    function resolveMediaSrc(container) {
+        container.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/docs/file')) return;
+            let resolved = src.replace(/^\.\//, '');
+            if (fileDir) resolved = fileDir + '/' + resolved;
+            const parts = resolved.split('/');
+            const clean = [];
+            for (const p of parts) {
+                if (p === '..') clean.pop();
+                else if (p && p !== '.') clean.push(p);
+            }
+            img.src = '/docs/file?path=' + encodeURIComponent(clean.join('/'));
+            img.style.maxWidth = '100%';
+            img.style.borderRadius = '8px';
+            img.style.margin = '0.5em 0';
+        });
+    }
+
+    // Configure marked
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+    });
+
+    // Render markdown
+    document.getElementById('mdRendered').innerHTML = marked.parse(rawContent);
+    resolveMediaSrc(document.getElementById('mdRendered'));
+
+    // Make links open in new tab
+    document.querySelectorAll('#mdRendered a').forEach(a => {
+        if (a.href && !a.href.startsWith(location.origin)) {
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener');
+        }
+    });
+
+    // Edit mode functions
+    window.enterEditMode = function() {
+        document.getElementById('viewContainer').style.display = 'none';
+        document.getElementById('editContainer').style.display = '';
+        document.getElementById('btnEdit').style.display = 'none';
+        document.getElementById('mdEditor').value = rawContent;
+        document.getElementById('mdPreview').style.display = 'none';
+    };
+
+    window.cancelEdit = function() {
+        document.getElementById('editContainer').style.display = 'none';
+        document.getElementById('viewContainer').style.display = '';
+        document.getElementById('btnEdit').style.display = '';
+    };
+
+    window.togglePreview = function() {
+        const preview = document.getElementById('mdPreview');
+        const editor = document.getElementById('mdEditor');
+        if (preview.style.display === 'none') {
+            preview.innerHTML = marked.parse(editor.value);
+            resolveMediaSrc(preview);
+            preview.style.display = '';
+        } else {
+            preview.style.display = 'none';
+        }
+    };
+
+    window.saveEdit = function() {
+        const content = document.getElementById('mdEditor').value;
+        const form = new FormData();
+        form.append('path', filePath);
+        form.append('content', content);
+        fetch('/m/docs/save', { method: 'POST', body: form })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Save failed: ' + data.error);
+                } else {
+                    // Re-render with new content
+                    document.getElementById('mdRendered').innerHTML = marked.parse(content);
+                    resolveMediaSrc(document.getElementById('mdRendered'));
+                    cancelEdit();
+                }
+            })
+            .catch(e => alert('Save failed: ' + e));
+    };
+})();
+</script>
+{% endif %}
+
+{% if view_mode == 'browse' %}
+<script>
+function filterEntries(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll('.entry-item').forEach(el => {
+        el.style.display = el.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

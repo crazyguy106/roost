@@ -1,0 +1,49 @@
+<div id="viewMode">
+    <div style="margin-bottom: 12px;">
+        <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">{{ task.title }}</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+            <span class="m-badge m-badge-{{ task.status.value }}">{{ task.status.value | replace('_', ' ') | title }}</span>
+            <span class="m-badge m-badge-{{ task.priority.value }}">{{ task.priority.value | title }}</span>
+            {% if task.deadline %}
+            <span class="m-badge" style="{% if task.deadline | is_overdue %}background: rgba(248,113,113,0.15); color: var(--red);{% else %}background: var(--border); color: var(--text);{% endif %}">
+                Due {{ task.deadline | short_date }}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if task.project_name %}
+    <div class="m-info-row">
+        <span class="m-info-label">Project</span>
+        <a href="/m/projects/{{ task.project_id }}" style="color: var(--accent); font-size: 0.85rem;">{{ task.project_name }}</a>
+    </div>
+    {% endif %}
+
+    {% if task.description %}
+    <div style="margin-top: 12px; padding: 10px 12px; background: var(--surface); border-radius: 8px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word;">{{ task.description }}</div>
+    {% endif %}
+
+    {% if task.context_note %}
+    <div class="m-info-row">
+        <span class="m-info-label">Context</span>
+        <span class="m-info-value" style="font-size: 0.8rem;">{{ task.context_note }}</span>
+    </div>
+    {% endif %}
+
+    <div class="m-info-row">
+        <span class="m-info-label">Energy</span>
+        <span class="m-info-value">{{ (task.energy_level or 'medium') | title }}</span>
+    </div>
+    <div class="m-info-row">
+        <span class="m-info-label">Effort</span>
+        <span class="m-info-value">{{ (task.effort_estimate or 'moderate') | title }}</span>
+    </div>
+
+    {% if can_edit %}
+    {% include "mobile/fragments/task_actions.html" %}
+    {% endif %}
+
+    <div style="margin-top: 16px; font-size: 0.7rem; color: var(--text-dim);">
+        Created: {{ task.created_at }} &middot; Updated: {{ task.updated_at }}
+    </div>
+</div>

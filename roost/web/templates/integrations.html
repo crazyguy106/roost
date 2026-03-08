@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Integrations — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Integrations</h1>
+</div>
+
+<!-- Gmail -->
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">
+        {% if gmail.available %}✅{% else %}⬜{% endif %} Gmail + Calendar Write
+    </h2>
+    {% if gmail.available %}
+    <div class="text-sm opacity-60 mb-3 flex flex-wrap gap-x-4">
+        <span>Send from: {{ gmail.send_from }}</span>
+        <span>Scopes: gmail.modify, calendar.events</span>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+        <form method="POST" action="/integrations/gmail/digest">
+            <button class="btn btn-primary btn-sm" type="submit">Send Digest</button>
+        </form>
+        <form method="POST" action="/integrations/gmail/sync-calendar">
+            <button class="btn btn-primary btn-sm" type="submit">Sync Deadlines to Calendar</button>
+        </form>
+        <form method="POST" action="/integrations/gmail/poll">
+            <button class="btn btn-primary btn-sm" type="submit">Poll Inbox</button>
+        </form>
+    </div>
+    {% elif gmail.has_token %}
+    <p class="opacity-50">Token stored but <code>GMAIL_ENABLED=false</code> in .env.</p>
+    {% else %}
+    <p class="opacity-50">Not connected. <a href="/auth/gmail" class="link link-primary">Authorize Gmail</a></p>
+    {% endif %}
+</div>
+
+{% if gmail_result %}
+<div class="card border-primary">
+    <div class="text-sm">{{ gmail_result }}</div>
+</div>
+{% endif %}
+
+<!-- Notion -->
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">
+        {% if notion.available %}✅{% else %}⬜{% endif %} Notion Mirror
+    </h2>
+    {% if notion.available %}
+    <div class="text-sm opacity-60 mb-2 flex flex-wrap gap-x-4">
+        <span>Pending: {{ notion.pending }}</span>
+        <span>Failed: {{ notion.failed }}</span>
+    </div>
+    {% if notion.sync_states %}
+    <div class="text-sm opacity-50 mb-3">
+        {% for s in notion.sync_states %}
+        <div>{{ s.table_name }}: last synced {{ s.last_synced_at or 'never' }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="flex gap-2 flex-wrap">
+        <form method="POST" action="/integrations/notion/sync">
+            <button class="btn btn-primary btn-sm" type="submit">Push Now</button>
+        </form>
+        <form method="POST" action="/integrations/notion/export">
+            <button class="btn btn-primary btn-sm" type="submit">Bulk Export</button>
+        </form>
+    </div>
+    {% else %}
+    <p class="opacity-50">Not configured. Set <code>NOTION_API_TOKEN</code> and <code>NOTION_SYNC_ENABLED=true</code> in .env.</p>
+    {% endif %}
+</div>
+
+{% if notion_result %}
+<div class="card border-primary">
+    <div class="text-sm">{{ notion_result }}</div>
+</div>
+{% endif %}
+
+<!-- Calendar -->
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">
+        {% if calendar.configured %}✅{% else %}⬜{% endif %} Google Calendar (OAuth API)
+    </h2>
+    {% if calendar.configured %}
+    <p class="text-sm opacity-50">Reading all calendars via OAuth API. View on <a href="/calendar" class="link link-primary">Calendar page</a>.</p>
+    {% else %}
+    <p class="opacity-50">Authorize at <a href="/auth/gmail" class="link link-primary">/auth/gmail</a> and set <code>GMAIL_ENABLED=true</code>.</p>
+    {% endif %}
+</div>
+
+<!-- Dropbox + Otter -->
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">
+        {% if dropbox.available %}✅{% else %}⬜{% endif %} Dropbox + Otter.ai
+    </h2>
+    {% if dropbox.available %}
+    <div class="text-sm opacity-60 mb-2 flex flex-wrap gap-x-4">
+        <span>Folder: {{ dropbox.folder }}</span>
+        <span>Pending transcripts: {{ dropbox.pending }}</span>
+    </div>
+    <p class="text-sm opacity-50">Voice notes auto-upload to Otter via Dropbox. Poller checks every {{ dropbox.poll_interval }}s.</p>
+    {% else %}
+    <p class="opacity-50">Not configured. Set <code>DROPBOX_APP_KEY</code> in .env and run headless OAuth.</p>
+    {% endif %}
+</div>
+
+<!-- Voice / faster-whisper -->
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">
+        ✅ Voice Transcription (faster-whisper)
+    </h2>
+    <div class="text-sm opacity-60 flex flex-wrap gap-x-4">
+        <span>Model: base (INT8, CPU)</span>
+        <span>Auto-unload: 5 min idle</span>
+        <span>Status: {{ voice.status }}</span>
+    </div>
+</div>
+
+{% endblock %}

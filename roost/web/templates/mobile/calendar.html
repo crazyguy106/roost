@@ -1,0 +1,91 @@
+{% extends "mobile/base.html" %}
+{% block title %}Calendar — Roost{% endblock %}
+{% block topbar_title %}{{ month_name }} {{ year }}{% endblock %}
+{% block topbar_left %}
+<a href="/m/calendar?year={{ prev_y }}&month={{ prev_m }}" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<a href="/m/calendar?year={{ next_y }}&month={{ next_m }}" class="m-topbar-btn" style="font-size: 1.2rem;">&rsaquo;</a>
+{% endblock %}
+
+{% block content %}
+<!-- Mini month grid -->
+<div class="m-cal-dow">
+    <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+</div>
+<div class="m-cal-grid" id="calGrid">
+    {% for d in grid_dates %}
+    {% set is_today = (d == today) %}
+    {% set is_other = (d[:7] != '%04d-%02d'|format(year, month)) %}
+    {% set has_evts = d in events_by_date %}
+    {% set has_dls = d in deadlines_by_date %}
+    <div class="m-cal-cell{% if is_today %} today{% endif %}{% if is_other %} other{% endif %}{% if has_evts %} has-events{% endif %}{% if has_dls %} has-deadlines{% endif %}"
+         data-date="{{ d }}" onclick="selectDay('{{ d }}')">
+        {{ d[8:]|int }}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Agenda list -->
+<div id="agendaList" style="margin-top: 12px;">
+    {% for d in grid_dates %}
+    {% if d in events_by_date or d in deadlines_by_date %}
+    {% if d[:7] == '%04d-%02d'|format(year, month) %}
+    <div class="m-agenda-date" id="day-{{ d }}">
+        {% set day_dt = d %}
+        {{ d }}
+        {% if d == today %}<span style="color: var(--accent);"> (Today)</span>{% endif %}
+    </div>
+    {% for e in events_by_date.get(d, []) %}
+    <div class="m-agenda-item event">
+        <div class="m-agenda-item-title">{{ e.summary }}</div>
+        <div class="m-agenda-item-time">
+            {% if e.all_day %}All day{% else %}{{ e.start[11:16] }}{% if e.end %} — {{ e.end[11:16] }}{% endif %}{% endif %}
+            {% if e.calendar %}<span style="margin-left: 6px; opacity: 0.6;">{{ e.calendar }}</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% for dl in deadlines_by_date.get(d, []) %}
+    <div class="m-agenda-item deadline">
+        <a href="/m/tasks/{{ dl.id }}" style="color: var(--text); text-decoration: none;">
+            <div class="m-agenda-item-title">{{ dl.title }}</div>
+            <div class="m-agenda-item-time">
+                <span class="m-badge m-badge-{{ dl.priority }}">{{ dl.priority }}</span>
+                Deadline
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+    {% endfor %}
+</div>
+
+{% if not calendar_configured %}
+<div style="text-align: center; padding: 16px; font-size: 0.75rem; color: var(--text-dim);">
+    Calendar API not configured — showing task deadlines only.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function selectDay(d) {
+    // Remove old selection
+    document.querySelectorAll('.m-cal-cell.selected').forEach(function(c) {
+        c.classList.remove('selected');
+    });
+    // Add new selection
+    var cell = document.querySelector('.m-cal-cell[data-date="' + d + '"]');
+    if (cell) cell.classList.add('selected');
+    // Scroll to agenda
+    var target = document.getElementById('day-' + d);
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Auto-select today
+{% if today[:7] == '%04d-%02d'|format(year, month) %}
+selectDay('{{ today }}');
+{% endif %}
+</script>
+{% endblock %}

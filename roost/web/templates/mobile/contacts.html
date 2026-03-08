@@ -1,0 +1,45 @@
+{% extends "mobile/base.html" %}
+{% block title %}People — Roost{% endblock %}
+{% block topbar_title %}People{% endblock %}
+{% block topbar_right %}
+<a href="/m/entities" class="m-topbar-btn" title="Entities">Orgs</a>
+<a href="/m/contacts/new" class="m-topbar-btn" title="New Contact">+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Search -->
+<form method="GET" action="/m/contacts">
+    <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Search contacts..."
+           class="m-search" {% if search_query %}autofocus{% endif %}>
+</form>
+
+{% if grouped_contacts %}
+    {% for group_name, group_contacts in grouped_contacts %}
+    <div class="m-group-header">
+        {{ group_name }}
+        <span style="opacity: 0.6;">({{ group_contacts|length }})</span>
+    </div>
+    {% for c in group_contacts %}
+    <div class="m-contact-card">
+        <a href="/m/contacts/{{ c.id }}">
+            <div class="m-contact-name">{{ c.name }}</div>
+            {% if c.email %}
+            <div class="m-contact-email">{{ c.email }}</div>
+            {% endif %}
+            {% if c.phone %}
+            <div class="m-contact-email">{{ c.phone }}</div>
+            {% endif %}
+        </a>
+    </div>
+    {% endfor %}
+    {% endfor %}
+{% else %}
+    <div style="text-align: center; padding: 24px; color: var(--text-dim);">No contacts found.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

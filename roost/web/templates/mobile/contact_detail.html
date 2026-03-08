@@ -1,0 +1,58 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ contact.name }} — Roost{% endblock %}
+{% block topbar_title %}{{ contact.name }}{% endblock %}
+{% block topbar_left %}
+<a href="/m/contacts" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<a href="/m/contacts/{{ contact.id }}/edit" class="m-topbar-btn">Edit</a>
+{% endblock %}
+
+{% block content %}
+<!-- Contact info -->
+<div style="background: var(--surface); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+    <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">{{ contact.name }}</div>
+    {% for ident in contact.identifiers %}
+    <div class="m-info-row">
+        <span class="m-info-label">{{ ident.type }}{% if ident.label %} ({{ ident.label }}){% endif %}{% if ident.is_primary %} *{% endif %}</span>
+        {% if ident.type == 'email' %}
+            <a href="mailto:{{ ident.value }}" style="color: var(--accent); font-size: 0.85rem;">{{ ident.value }}</a>
+        {% elif ident.type == 'phone' %}
+            <a href="tel:{{ ident.value }}" style="color: var(--accent); font-size: 0.85rem;">{{ ident.value }}</a>
+        {% elif ident.type == 'linkedin' %}
+            <a href="{{ ident.value }}" target="_blank" style="color: var(--accent); font-size: 0.85rem;">{{ ident.value }}</a>
+        {% else %}
+            <span style="font-size: 0.85rem;">{{ ident.value }}</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if not contact.identifiers and not contact.notes %}
+    <div style="font-size: 0.82rem; color: var(--text-dim);">No contact details yet.</div>
+    {% endif %}
+    {% if contact.notes %}
+    <div style="margin-top: 8px; font-size: 0.82rem; color: var(--text-dim);">{{ contact.notes }}</div>
+    {% endif %}
+</div>
+
+<!-- Sync buttons -->
+<div style="display: flex; gap: 8px; margin-bottom: 12px;">
+    <button class="m-btn m-btn-ghost m-btn-sm" style="flex: 1;"
+            hx-post="/m/contacts/{{ contact.id }}/sync-emails"
+            hx-swap="none">Sync Emails</button>
+    <button class="m-btn m-btn-ghost m-btn-sm" style="flex: 1;"
+            hx-post="/m/contacts/{{ contact.id }}/sync-meetings"
+            hx-swap="none">Sync Meetings</button>
+</div>
+
+<!-- Affiliations (HTMX fragment) -->
+{% include "mobile/fragments/contact_affiliations.html" %}
+
+<!-- Communications (HTMX fragment) -->
+{% include "mobile/fragments/contact_comms.html" %}
+
+<!-- Delete -->
+<button class="m-btn m-btn-error m-btn-sm" style="margin-top: 24px;"
+        hx-post="/m/contacts/{{ contact.id }}/delete"
+        hx-swap="none"
+        onclick="return confirm('Delete this contact?')">Delete Contact</button>
+{% endblock %}

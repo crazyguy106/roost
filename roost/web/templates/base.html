@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}Roost{% endblock %}</title>
+    <!-- PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1d232a">
+    <meta name="apple-mobile-web-app-title" content="Roost">
+    <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <!-- DaisyUI 5 + Tailwind 4 (self-hosted for instant first load) -->
+    <link href="/static/vendor/daisyui.css" rel="stylesheet" type="text/css" />
+    <link href="/static/vendor/daisyui-themes.css" rel="stylesheet" type="text/css" />
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <!-- Custom overrides (calendar, email, task-items) -->
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+    /* ── Sidebar layout ─────────────────────────────────────────── */
+    :root {
+        --sidebar-width: 240px;
+        --sidebar-collapsed: 64px;
+    }
+
+    /* Sidebar base */
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: var(--sidebar-width);
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+        overflow-y: auto;
+        transition: width 0.2s ease, transform 0.2s ease;
+    }
+
+    /* Sidebar header (logo area) */
+    .sidebar-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 16px 12px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        min-height: 56px;
+    }
+    .sidebar-header .sidebar-logo {
+        width: 28px;
+        height: 28px;
+        background: var(--accent);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-weight: 700;
+        font-size: 14px;
+        color: #fff;
+    }
+    .sidebar-header .sidebar-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+    /* Nav groups */
+    .sidebar-nav {
+        flex: 1;
+        padding: 8px 0;
+        overflow-y: auto;
+    }
+    .nav-group {
+        margin-bottom: 4px;
+    }
+    .nav-group-label {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: oklch(0.65 0 0);
+        padding: 14px 16px 6px;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+    /* Nav items */
+    #sidebar .menu {
+        padding: 0 8px;
+    }
+    #sidebar .menu li a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        color: oklch(0.75 0 0);
+        font-size: 0.925rem;
+        font-weight: 450;
+        transition: background 0.15s, color 0.15s;
+        white-space: nowrap;
+        overflow: hidden;
+        border-left: 3px solid transparent;
+        text-decoration: none;
+    }
+    #sidebar .menu li a:hover {
+        background: rgba(108, 140, 255, 0.08);
+        color: var(--text);
+    }
+    #sidebar .menu li a.active {
+        background: rgba(108, 140, 255, 0.12);
+        color: var(--accent);
+        border-left-color: var(--accent);
+        font-weight: 550;
+    }
+    #sidebar .menu li a .nav-icon {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        opacity: 0.85;
+    }
+    #sidebar .menu li a .nav-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ── Mobile top bar ──────────────────────────────────────────── */
+    #mobile-topbar {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 48px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        z-index: 45;
+        align-items: center;
+        padding: 0 12px;
+    }
+    #mobile-topbar .hamburger {
+        background: none;
+        border: none;
+        color: var(--text);
+        cursor: pointer;
+        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+    }
+    #mobile-topbar .topbar-title {
+        flex: 1;
+        text-align: center;
+        font-weight: 700;
+        font-size: 1rem;
+        color: var(--text);
+    }
+    #mobile-topbar .topbar-spacer {
+        width: 36px;
+    }
+
+    /* ── Overlay backdrop ────────────────────────────────────────── */
+    #sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 49;
+    }
+
+    /* ── Content area ────────────────────────────────────────────── */
+    #main-content {
+        transition: margin-left 0.2s ease;
+    }
+
+    /* ── Desktop (>1024px): sidebar expanded ─────────────────────── */
+    body.sidebar-expanded #sidebar {
+        width: var(--sidebar-width);
+        transform: translateX(0);
+    }
+    body.sidebar-expanded #main-content {
+        margin-left: var(--sidebar-width);
+    }
+    body.sidebar-expanded #mobile-topbar {
+        display: none;
+    }
+
+    /* ── Tablet (640-1024px): sidebar collapsed, icons only ──────── */
+    body.sidebar-collapsed #sidebar {
+        width: var(--sidebar-collapsed);
+        transform: translateX(0);
+    }
+    body.sidebar-collapsed #sidebar .sidebar-title,
+    body.sidebar-collapsed #sidebar .nav-group-label,
+    body.sidebar-collapsed #sidebar .nav-label {
+        opacity: 0;
+        width: 0;
+        overflow: hidden;
+    }
+    body.sidebar-collapsed #sidebar .sidebar-header {
+        justify-content: center;
+        padding: 16px 0 12px;
+    }
+    body.sidebar-collapsed #sidebar .menu li a {
+        justify-content: center;
+        padding: 10px 0;
+        border-left-color: transparent;
+    }
+    body.sidebar-collapsed #sidebar .menu li a.active {
+        border-left-color: transparent;
+        background: rgba(108, 140, 255, 0.12);
+    }
+    body.sidebar-collapsed #sidebar .nav-group-label {
+        height: 0;
+        padding: 0;
+        margin: 0;
+    }
+    body.sidebar-collapsed #main-content {
+        margin-left: var(--sidebar-collapsed);
+    }
+    body.sidebar-collapsed #mobile-topbar {
+        display: none;
+    }
+
+    /* Tablet hover expand */
+    body.sidebar-collapsed #sidebar:hover {
+        width: var(--sidebar-width);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+    }
+    body.sidebar-collapsed #sidebar:hover .sidebar-title,
+    body.sidebar-collapsed #sidebar:hover .nav-group-label,
+    body.sidebar-collapsed #sidebar:hover .nav-label {
+        opacity: 1;
+        width: auto;
+    }
+    body.sidebar-collapsed #sidebar:hover .sidebar-header {
+        justify-content: flex-start;
+        padding: 16px 16px 12px;
+    }
+    body.sidebar-collapsed #sidebar:hover .menu li a {
+        justify-content: flex-start;
+        padding: 8px 12px;
+    }
+    body.sidebar-collapsed #sidebar:hover .menu li a.active {
+        border-left-color: var(--accent);
+    }
+    body.sidebar-collapsed #sidebar:hover .nav-group-label {
+        height: auto;
+        padding: 12px 16px 4px;
+    }
+
+    /* ── Mobile (<640px): sidebar off-screen ─────────────────────── */
+    body.sidebar-mobile #sidebar {
+        width: var(--sidebar-width);
+        transform: translateX(-100%);
+    }
+    body.sidebar-mobile #main-content {
+        margin-left: 0;
+    }
+    body.sidebar-mobile #mobile-topbar {
+        display: flex;
+    }
+    body.sidebar-mobile #main-content {
+        padding-top: 48px;
+    }
+
+    /* Mobile sidebar open */
+    body.sidebar-mobile.sidebar-open #sidebar {
+        transform: translateX(0);
+    }
+    body.sidebar-mobile.sidebar-open #sidebar-backdrop {
+        display: block;
+    }
+
+    /* ── PWA standalone mode ─────────────────────────────────────── */
+    @media (display-mode: standalone) {
+        body { padding-top: env(safe-area-inset-top); }
+        #mobile-topbar { padding-top: env(safe-area-inset-top); }
+    }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">V</div>
+            <span class="sidebar-title">Roost</span>
+        </div>
+        <nav class="sidebar-nav">
+            <!-- CORE -->
+            <div class="nav-group">
+                <div class="nav-group-label">Core</div>
+                <ul class="menu">
+                    <li><a href="/">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                        </svg>
+                        <span class="nav-label">Dashboard</span>
+                    </a></li>
+                    <li><a href="/tasks">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                            <path d="M9 12l2 2 4-4"></path>
+                        </svg>
+                        <span class="nav-label">Tasks</span>
+                    </a></li>
+                    <li><a href="/calendar">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span class="nav-label">Calendar</span>
+                    </a></li>
+                    <li><a href="/notes">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                        </svg>
+                        <span class="nav-label">Notes</span>
+                    </a></li>
+                </ul>
+            </div>
+            <!-- CRM -->
+            <div class="nav-group">
+                <div class="nav-group-label">CRM</div>
+                <ul class="menu">
+                    <li><a href="/projects">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"></path>
+                        </svg>
+                        <span class="nav-label">Projects</span>
+                    </a></li>
+                    <li><a href="/entities">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="7" width="18" height="13" rx="2"></rect>
+                            <path d="M3 7l6-4h6l6 4"></path>
+                            <line x1="12" y1="3" x2="12" y2="20"></line>
+                        </svg>
+                        <span class="nav-label">Entities</span>
+                    </a></li>
+                    <li><a href="/contacts">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 00-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 010 7.75"></path>
+                        </svg>
+                        <span class="nav-label">People</span>
+                    </a></li>
+                    <li><a href="/inbox">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        <span class="nav-label">Inbox</span>
+                    </a></li>
+                </ul>
+            </div>
+            <!-- TOOLS (DeptTools apps on same domain) -->
+            {% if depttools_enabled %}
+            <div class="nav-group">
+                <div class="nav-group-label">Tools</div>
+                <ul class="menu">
+                    <li><a href="/vapt/">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span class="nav-label">VAPT Calculator</span>
+                    </a></li>
+                </ul>
+            </div>
+            {% endif %}
+            <!-- ADMIN -->
+            <div class="nav-group">
+                <div class="nav-group-label">Admin</div>
+                <ul class="menu">
+                    <li><a href="/docs">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <span class="nav-label">Docs</span>
+                    </a></li>
+                    <li><a href="/curriculum">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"></path>
+                        </svg>
+                        <span class="nav-label">Curriculum</span>
+                    </a></li>
+                    {% set _role = current_user.get("role", "") if current_user else "" %}
+                    {% if not current_user or _role in ("admin", "owner") %}
+                    <li><a href="/integrations">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v6"></path>
+                            <path d="M12 16v6"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M2 12h6"></path>
+                            <path d="M16 12h6"></path>
+                        </svg>
+                        <span class="nav-label">Integrations</span>
+                    </a></li>
+                    <li><a href="/sessions">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 17 10 11 4 5"></polyline>
+                            <line x1="12" y1="19" x2="20" y2="19"></line>
+                        </svg>
+                        <span class="nav-label">Sessions</span>
+                    </a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </nav>
+        {% if current_user %}
+        <div class="sidebar-user" style="border-top: 1px solid var(--border); padding: 12px 16px; flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: oklch(0.65 0.2 260); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; flex-shrink: 0;">
+                    {{ current_user.get("name", "?")[0] | upper }}
+                </div>
+                <div style="min-width: 0; flex: 1;" class="nav-label">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ current_user.get("name", "") }}</div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="badge badge-sm" style="font-size: 0.6rem; padding: 2px 6px;">{{ current_user.get("role", "member") }}</span>
+                        <a href="/auth/logout" style="font-size: 0.65rem; color: var(--text-dim); text-decoration: none; opacity: 0.7;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </aside>
+
+    <!-- Mobile top bar -->
+    <div id="mobile-topbar">
+        <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </button>
+        <span class="topbar-title">Roost</span>
+        <span class="topbar-spacer"></span>
+    </div>
+
+    <!-- Overlay backdrop (mobile) -->
+    <div id="sidebar-backdrop"></div>
+
+    <!-- Main content -->
+    <div id="main-content">
+        <div class="{% block container_class %}max-w-5xl{% endblock %} mx-auto px-4 py-4">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    {% block scripts %}{% endblock %}
+
+    <!-- Capture Modal (DaisyUI dialog) -->
+    <dialog class="modal" id="captureModal">
+        <div class="modal-box max-w-lg p-0">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-4 py-3 border-b border-base-300">
+                <div class="flex items-center gap-2">
+                    <h3 class="font-semibold text-base">Rapid Capture</h3>
+                    <kbd class="kbd kbd-sm">Ctrl+K</kbd>
+                </div>
+                <button class="btn btn-sm btn-ghost" id="captureClose">&times;</button>
+            </div>
+            <!-- Tabs -->
+            <div class="flex gap-1 px-4 py-2.5 border-b border-base-300" id="captureTabs">
+                <button class="btn btn-sm btn-ghost rounded-full btn-active" data-mode="tasks">Tasks</button>
+                <button class="btn btn-sm btn-ghost rounded-full" data-mode="notes">Notes</button>
+                <button class="btn btn-sm btn-ghost rounded-full" data-mode="subtasks">Subtasks</button>
+            </div>
+            <!-- Parent ID (subtasks mode) -->
+            <div class="hidden px-4 pt-2.5" id="captureParentRow">
+                <input type="number" id="captureParentId" placeholder="Parent task ID" min="1"
+                       class="input input-bordered input-sm w-full">
+            </div>
+            <!-- Main input -->
+            <div class="p-3">
+                <input type="text" id="captureInput" placeholder="Type and press Enter..." autocomplete="off"
+                       class="input input-bordered w-full input-lg">
+            </div>
+            <!-- Captured items -->
+            <div class="overflow-y-auto max-h-[40vh] px-4" id="captureItems"></div>
+            <!-- Footer -->
+            <div class="px-4 py-2.5 border-t border-base-300 text-center text-sm opacity-60" id="captureFooter">
+                0 items captured
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
+
+    <!-- Capture FAB -->
+    <button class="btn btn-circle btn-primary btn-lg fixed bottom-6 right-6 z-40 shadow-lg text-xl"
+            id="captureFab">+</button>
+
+    <script>
+    // PWA standalone detection: redirect to mobile if running as installed app
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true) {
+        const p = location.pathname;
+        if (!p.startsWith('/m/') && !p.startsWith('/api/') &&
+            !p.startsWith('/auth/') && !p.startsWith('/static')) {
+            location.replace(p === '/' ? '/m/' : '/m' + p);
+        }
+    }
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(() => {});
+    }
+
+    // ── Sidebar responsive logic ──
+    (function() {
+        var sidebar = document.getElementById('sidebar');
+        var backdrop = document.getElementById('sidebar-backdrop');
+        var hamburger = document.getElementById('hamburgerBtn');
+        var body = document.body;
+
+        function getMode() {
+            var w = window.innerWidth;
+            if (w > 1024) return 'expanded';
+            if (w >= 640) return 'collapsed';
+            return 'mobile';
+        }
+
+        function applyMode() {
+            var mode = getMode();
+            body.classList.remove('sidebar-expanded', 'sidebar-collapsed', 'sidebar-mobile', 'sidebar-open');
+            body.classList.add('sidebar-' + mode);
+        }
+
+        function toggleMobileSidebar() {
+            if (body.classList.contains('sidebar-mobile')) {
+                body.classList.toggle('sidebar-open');
+            }
+        }
+
+        function closeMobileSidebar() {
+            body.classList.remove('sidebar-open');
+        }
+
+        // Init
+        applyMode();
+
+        // Resize
+        window.addEventListener('resize', applyMode);
+
+        // Hamburger
+        hamburger.addEventListener('click', toggleMobileSidebar);
+
+        // Backdrop click
+        backdrop.addEventListener('click', closeMobileSidebar);
+
+        // Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && body.classList.contains('sidebar-open')) {
+                closeMobileSidebar();
+            }
+        });
+
+        // Active page indicator
+        document.querySelectorAll('#sidebar a[href]').forEach(function(a) {
+            var href = a.getAttribute('href');
+            if (href === '/' ? location.pathname === '/' : location.pathname.startsWith(href)) {
+                a.classList.add('active');
+            }
+        });
+    })();
+
+    // ── Capture panel logic ──
+    (function() {
+        const modal = document.getElementById('captureModal');
+        const input = document.getElementById('captureInput');
+        const parentRow = document.getElementById('captureParentRow');
+        const parentInput = document.getElementById('captureParentId');
+        const itemsEl = document.getElementById('captureItems');
+        const footerEl = document.getElementById('captureFooter');
+        const closeBtn = document.getElementById('captureClose');
+        const fab = document.getElementById('captureFab');
+        const tabs = document.querySelectorAll('#captureTabs .btn');
+
+        let currentMode = 'tasks';
+        let items = [];
+
+        function openPanel() {
+            modal.showModal();
+            setTimeout(() => input.focus(), 50);
+        }
+        function closePanel() {
+            modal.close();
+        }
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                modal.open ? closePanel() : openPanel();
+            }
+            if (e.key === 'Escape' && modal.open) {
+                closePanel();
+            }
+        });
+
+        // Close button + FAB
+        closeBtn.addEventListener('click', closePanel);
+        fab.addEventListener('click', openPanel);
+
+        // Tab switching
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                tabs.forEach(t => t.classList.remove('btn-active'));
+                tab.classList.add('btn-active');
+                currentMode = tab.dataset.mode;
+                if (currentMode === 'subtasks') {
+                    parentRow.classList.remove('hidden');
+                } else {
+                    parentRow.classList.add('hidden');
+                }
+                input.placeholder = currentMode === 'notes' ? 'Type a note...' :
+                    currentMode === 'subtasks' ? 'Type subtask title...' : 'Type a task title...';
+                input.focus();
+            });
+        });
+
+        function renderItems() {
+            itemsEl.innerHTML = '';
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                const div = document.createElement('div');
+                div.className = 'capture-item';
+                div.innerHTML =
+                    '<span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">' + escapeHtml(item.text) + '</span>' +
+                    '<button class="btn btn-ghost btn-xs undo-btn" data-idx="' + i + '">undo</button>';
+                itemsEl.appendChild(div);
+            }
+            footerEl.textContent = items.length + ' item' + (items.length !== 1 ? 's' : '') + ' captured';
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        // Undo
+        itemsEl.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('undo-btn')) return;
+            const idx = parseInt(e.target.dataset.idx, 10);
+            const item = items[idx];
+            if (!item) return;
+            const endpoint = item.type === 'note'
+                ? '/api/notes/' + item.id
+                : '/api/tasks/' + item.id;
+            fetch(endpoint, { method: 'DELETE' }).then(function() {
+                items.splice(idx, 1);
+                renderItems();
+            }).catch(function() {});
+        });
+
+        // Submit
+        input.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') return;
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+
+            let body, endpoint;
+            if (currentMode === 'notes') {
+                endpoint = '/api/notes';
+                body = { content: text };
+            } else if (currentMode === 'subtasks') {
+                endpoint = '/api/tasks';
+                const pid = parseInt(parentInput.value, 10);
+                if (!pid) { input.value = text; input.placeholder = 'Set parent task ID first!'; return; }
+                body = { title: text, parent_task_id: pid, task_type: 'subtask' };
+            } else {
+                endpoint = '/api/tasks';
+                body = { title: text };
+            }
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }).then(function(r) {
+                if (!r.ok) throw new Error('API error');
+                return r.json();
+            }).then(function(data) {
+                items.push({
+                    type: currentMode === 'notes' ? 'note' : 'task',
+                    id: data.id,
+                    text: text,
+                });
+                renderItems();
+            }).catch(function() {
+                input.value = text;
+                input.placeholder = 'Error — try again';
+                setTimeout(function() {
+                    input.placeholder = 'Type and press Enter...';
+                }, 2000);
+            });
+        });
+    })();
+    </script>
+</body>
+</html>

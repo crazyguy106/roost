@@ -1,0 +1,99 @@
+{% extends "mobile/base.html" %}
+{% block title %}Task #{{ task.id }} — Roost{% endblock %}
+{% block topbar_title %}Task #{{ task.id }}{% endblock %}
+{% block topbar_left %}
+<a href="/m/tasks" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+{% if can_edit %}
+<button class="m-topbar-btn" id="editToggle">Edit</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- View mode -->
+{% include "mobile/fragments/task_view.html" %}
+
+<!-- Edit mode (hidden by default) -->
+{% if can_edit %}
+<div id="editMode" style="display: none;">
+    <form hx-put="/m/tasks/{{ task.id }}/edit" hx-target="#viewMode" hx-swap="outerHTML">
+        <div class="m-form-group">
+            <label class="m-form-label">Title</label>
+            <input type="text" name="title" value="{{ task.title }}" class="m-form-input" required>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Description</label>
+            <textarea name="description" class="m-form-textarea">{{ task.description }}</textarea>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="m-form-group">
+                <label class="m-form-label">Status</label>
+                <select name="status" class="m-form-select">
+                    {% for s in ['todo', 'in_progress', 'done', 'blocked'] %}
+                    <option value="{{ s }}" {% if task.status.value == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Priority</label>
+                <select name="priority" class="m-form-select">
+                    {% for p in ['low', 'medium', 'high', 'urgent'] %}
+                    <option value="{{ p }}" {% if task.priority.value == p %}selected{% endif %}>{{ p | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="m-form-group">
+                <label class="m-form-label">Deadline</label>
+                <input type="date" name="deadline" value="{{ task.deadline or '' }}" class="m-form-input">
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Project</label>
+                <select name="project_id" class="m-form-select">
+                    <option value="">None</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if task.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Context Note</label>
+            <input type="text" name="context_note" value="{{ task.context_note or '' }}" placeholder="Where I left off..." class="m-form-input">
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Save Changes</button>
+        <button type="button" class="m-btn m-btn-ghost" id="cancelBtn" style="margin-top: 6px;">Cancel</button>
+    </form>
+    <button class="m-btn m-btn-error m-btn-sm" style="margin-top: 24px;"
+            hx-post="/m/tasks/{{ task.id }}/delete"
+            hx-swap="none"
+            onclick="return confirm('Delete this task?')">Delete Task</button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if can_edit %}
+<script>
+(function() {
+    var viewMode = document.getElementById('viewMode');
+    var editMode = document.getElementById('editMode');
+    var toggle = document.getElementById('editToggle');
+    var editing = false;
+
+    toggle.addEventListener('click', function() {
+        editing = !editing;
+        viewMode.style.display = editing ? 'none' : 'block';
+        editMode.style.display = editing ? 'block' : 'none';
+        toggle.textContent = editing ? 'Cancel' : 'Edit';
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', function() {
+        toggle.click();
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

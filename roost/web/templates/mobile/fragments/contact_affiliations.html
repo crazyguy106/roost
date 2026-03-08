@@ -1,0 +1,53 @@
+<div id="affiliationsSection">
+    <div class="m-section-title">Affiliations ({{ affiliations|length }})</div>
+    {% for ce in affiliations %}
+    <div style="background: var(--surface); border-radius: 6px; padding: 8px 12px; margin-bottom: 4px; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <strong>{{ ce.entity_name }}</strong>
+            {% if ce.title %}
+            <span style="color: var(--text-dim); margin-left: 6px;">{{ ce.title }}</span>
+            {% endif %}
+            {% if ce.is_primary %}
+            <span class="m-badge" style="background: rgba(108,140,255,0.15); color: var(--accent); margin-left: 4px;">primary</span>
+            {% endif %}
+        </div>
+        <button class="m-btn m-btn-sm" style="background: transparent; color: var(--red); padding: 2px 8px; font-size: 0.75rem;"
+                hx-post="/m/contacts/{{ contact.id }}/remove-affiliation/{{ ce.id }}"
+                hx-target="#affiliationsSection"
+                hx-swap="outerHTML"
+                onclick="return confirm('Remove this affiliation?')">Remove</button>
+    </div>
+    {% endfor %}
+
+    <!-- Add affiliation form -->
+    <div id="addAffiliationForm" style="display: none; margin-top: 8px;">
+        <form hx-post="/m/contacts/{{ contact.id }}/add-affiliation"
+              hx-target="#affiliationsSection"
+              hx-swap="outerHTML">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="m-form-group">
+                    <label class="m-form-label">Entity</label>
+                    <select name="entity_id" class="m-form-select" required>
+                        <option value="">Select...</option>
+                        {% for e in entities %}
+                        <option value="{{ e.id }}">{{ e.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="m-form-group">
+                    <label class="m-form-label">Title/Role</label>
+                    <input type="text" name="title" class="m-form-input" placeholder="e.g. CEO, Consultant">
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="flex: 1;">Add</button>
+                <button type="button" class="m-btn m-btn-ghost m-btn-sm"
+                        onclick="this.closest('#addAffiliationForm').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+    <button class="m-btn m-btn-ghost m-btn-sm" style="margin-top: 6px;"
+            onclick="var f=document.getElementById('addAffiliationForm'); f.style.display=f.style.display==='none'?'block':'none'">
+        + Add Affiliation
+    </button>
+</div>

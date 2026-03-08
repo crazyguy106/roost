@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Contacts — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Contacts</h1>
+</div>
+
+<div class="flex gap-2 mb-5 flex-wrap">
+    <form method="POST" action="/contacts/add" class="contents">
+        <input type="text" name="name" placeholder="Contact name" required class="input input-bordered flex-1">
+        <input type="text" name="email" placeholder="Email (optional)" class="input input-bordered" style="width: auto; min-width: 160px;">
+        <select name="entity_id" class="select select-bordered" style="width: auto; min-width: 120px;">
+            <option value="">No entity</option>
+            {% for e in entities %}
+            <option value="{{ e.id }}">{{ e.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-primary" type="submit">Add</button>
+    </form>
+</div>
+
+{% if grouped_contacts %}
+    {% for group_name, group_contacts in grouped_contacts %}
+    <div class="mb-5">
+        <div class="font-semibold text-base mb-2">
+            {% if group_name != 'Independent' %}
+            <a href="/entities/{{ group_entity_ids[group_name] }}">{{ group_name }}</a>
+            {% else %}
+            <span class="opacity-60">{{ group_name }}</span>
+            {% endif %}
+            <span class="text-xs opacity-60">({{ group_contacts|length }})</span>
+        </div>
+        {% for c in group_contacts %}
+        <div class="card" style="display: flex; align-items: center; justify-content: space-between; margin-left: 12px;">
+            <div>
+                <strong><a href="/contacts/{{ c.id }}">{{ c.name }}</a></strong>
+                {% if c.email %}
+                <span class="text-sm opacity-60 ml-2">{{ c.email }}</span>
+                {% endif %}
+                {% if c.phone %}
+                <span class="text-sm opacity-60 ml-2">{{ c.phone }}</span>
+                {% endif %}
+            </div>
+            <div class="flex gap-1">
+                <a href="/contacts/{{ c.id }}" class="btn btn-sm btn-primary">View</a>
+                <form method="POST" action="/contacts/{{ c.id }}/delete">
+                    <button class="btn btn-error btn-sm" onclick="return confirm('Delete contact?')">Del</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No contacts yet. Add one above.</div>
+{% endif %}
+{% endblock %}

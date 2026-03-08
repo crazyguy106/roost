@@ -1,0 +1,95 @@
+{% extends "mobile/base.html" %}
+{% block title %}Notes — Roost{% endblock %}
+{% block topbar_title %}Notes{% endblock %}
+{% block topbar_left %}
+<a href="/m/" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<button class="m-topbar-btn" id="newNoteToggle">+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Quick add form (hidden by default) -->
+<div id="newNoteForm" style="display: none; margin-bottom: 12px;">
+    <form hx-post="/m/notes/create" hx-swap="none">
+        <div class="m-form-group">
+            <label class="m-form-label">Title</label>
+            <input type="text" name="title" class="m-form-input" placeholder="Short title (optional)">
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Note</label>
+            <textarea name="content" class="m-form-textarea" rows="3" required></textarea>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div class="m-form-group">
+                <label class="m-form-label">Tag</label>
+                <input type="text" name="tag" class="m-form-input" placeholder="e.g. idea, meeting">
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Project</label>
+                <select name="project_id" class="m-form-select">
+                    <option value="">None</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="flex: 1;">Save Note</button>
+            <button type="button" class="m-btn m-btn-ghost m-btn-sm"
+                    onclick="document.getElementById('newNoteForm').style.display='none'">Cancel</button>
+        </div>
+    </form>
+</div>
+
+<!-- Tag filter -->
+{% if tags %}
+<div class="m-filter-row">
+    <a href="/m/notes" class="m-filter-chip {% if not current_tag %}active{% endif %}">All</a>
+    {% for t in tags %}
+    <a href="/m/notes?tag={{ t }}" class="m-filter-chip {% if current_tag == t %}active{% endif %}">{{ t }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Notes list -->
+{% if notes %}
+    {% for n in notes %}
+    <div style="background: var(--surface); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; position: relative;">
+        <div style="font-size: 0.9rem; font-weight: 600; margin-bottom: 2px;">{{ n.display_title }}</div>
+        {% if n.title %}
+        <div style="font-size: 0.8rem; opacity: 0.7; white-space: pre-wrap; word-break: break-word; max-height: 3em; overflow: hidden;">{{ n.content[:150] }}{% if n.content|length > 150 %}...{% endif %}</div>
+        {% endif %}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+            <div style="font-size: 0.7rem; color: var(--text-dim);">
+                {{ n.created_at }}
+                {% if n.tag %}
+                <span class="m-badge" style="background: var(--border); margin-left: 4px;">{{ n.tag }}</span>
+                {% endif %}
+                {% if n.project_name %}
+                <span style="color: var(--accent); margin-left: 4px;">{{ n.project_name }}</span>
+                {% endif %}
+            </div>
+            <button class="m-btn m-btn-sm" style="background: transparent; color: var(--red); padding: 2px 6px; font-size: 0.7rem;"
+                    hx-post="/m/notes/{{ n.id }}/delete"
+                    hx-swap="none"
+                    onclick="return confirm('Delete this note?')">&#10005;</button>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div style="text-align: center; padding: 24px; color: var(--text-dim);">No notes found.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newNoteToggle').addEventListener('click', function() {
+    var form = document.getElementById('newNoteForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') form.querySelector('textarea').focus();
+});
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

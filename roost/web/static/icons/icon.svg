@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1a1d27"/>
+  <rect x="40" y="40" width="432" height="432" rx="64" fill="#0f1117" stroke="#2a2d3a" stroke-width="4"/>
+  <text x="256" y="200" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="120" fill="#6c8cff">VPS</text>
+  <rect x="120" y="260" width="272" height="8" rx="4" fill="#2a2d3a"/>
+  <rect x="120" y="260" width="180" height="8" rx="4" fill="#4ade80"/>
+  <rect x="120" y="290" width="32" height="32" rx="6" fill="#6c8cff"/>
+  <rect x="165" y="296" width="160" height="20" rx="4" fill="#2a2d3a"/>
+  <rect x="120" y="335" width="32" height="32" rx="6" fill="#2a2d3a" stroke="#6c8cff" stroke-width="2"/>
+  <rect x="165" y="341" width="120" height="20" rx="4" fill="#2a2d3a"/>
+  <rect x="120" y="380" width="32" height="32" rx="6" fill="#4ade80"/>
+  <path d="M130 396 l8 8 l16-16" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="165" y="386" width="140" height="20" rx="4" fill="#2a2d3a"/>
+</svg>

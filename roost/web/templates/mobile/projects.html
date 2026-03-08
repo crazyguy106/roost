@@ -1,0 +1,51 @@
+{% extends "mobile/base.html" %}
+{% block title %}Projects — Roost{% endblock %}
+{% block topbar_title %}Projects{% endblock %}
+{% block topbar_right %}
+<a href="/m/projects/new" class="m-topbar-btn" title="New Project">+</a>
+{% endblock %}
+
+{% block content %}
+{% if grouped_projects %}
+    {% for group_name, group_projects in grouped_projects %}
+    <div class="m-group-header">
+        {{ group_name }}
+        <span style="opacity: 0.6;">({{ group_projects|length }})</span>
+    </div>
+    {% for p in group_projects %}
+    <div class="m-project-card">
+        <a href="/m/projects/{{ p.id }}">
+            <div class="m-project-name">
+                {% if p.project_type == 'programme' %}
+                <span style="font-size: 0.8rem;">&#128193;</span>
+                {% elif p.project_type == 'initiative' %}
+                <span style="font-size: 0.8rem;">&#128640;</span>
+                {% endif %}
+                {{ p.name }}
+                {% if p.status == 'paused' %}
+                <span class="m-badge" style="background: rgba(250,204,21,0.15); color: var(--yellow);">paused</span>
+                {% endif %}
+            </div>
+            <div class="m-project-meta">
+                {{ p.task_count }} task{{ 's' if p.task_count != 1 }}
+                {% if p.project_type != 'project' %}
+                &middot; {{ p.project_type }}
+                {% endif %}
+                {% if p.children_count %}
+                &middot; {{ p.children_count }} sub-projects
+                {% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+    {% endfor %}
+{% else %}
+    <div style="text-align: center; padding: 24px; color: var(--text-dim);">No projects found.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

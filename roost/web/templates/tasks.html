@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Tasks — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Tasks</h1>
+    <a href="/tasks/new" class="btn btn-primary btn-sm">+ New Task</a>
+</div>
+
+<form class="mb-3" method="GET" action="/tasks">
+    <input type="text" name="q" value="{{ search_query or '' }}" placeholder="Search tasks..."
+           class="input input-bordered input-sm w-full"
+           {% if search_query %}autofocus{% endif %}>
+    {% if current_status %}<input type="hidden" name="status" value="{{ current_status }}">{% endif %}
+    {% if current_someday %}<input type="hidden" name="someday" value="true">{% endif %}
+    {% if current_focus %}<input type="hidden" name="focus" value="true">{% endif %}
+</form>
+
+<div class="flex flex-wrap gap-2 mb-4">
+    <a href="/tasks" class="btn btn-sm btn-ghost rounded-full {% if not current_status and not current_someday and not current_focus and not current_mine %}btn-active{% endif %}">All</a>
+    <a href="/tasks?status=todo" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'todo' %}btn-active{% endif %}">To Do</a>
+    <a href="/tasks?status=in_progress" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'in_progress' %}btn-active{% endif %}">In Progress</a>
+    <a href="/tasks?status=done" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'done' %}btn-active{% endif %}">Done</a>
+    <a href="/tasks?status=blocked" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'blocked' %}btn-active{% endif %}">Blocked</a>
+    <span class="border-l border-base-content/20 mx-1"></span>
+    <a href="/tasks?focus=true" class="btn btn-sm btn-ghost rounded-full {% if current_focus %}btn-active{% endif %}">Focus</a>
+    {% if current_user and current_user.get("user_id") %}
+    <a href="/tasks?mine=true" class="btn btn-sm btn-ghost rounded-full {% if current_mine %}btn-active{% endif %}">Mine</a>
+    {% endif %}
+    <a href="/tasks?someday=true" class="btn btn-sm btn-ghost rounded-full {% if current_someday %}btn-active{% endif %}">Someday</a>
+</div>
+
+{% if project_names %}
+<div class="flex flex-wrap gap-1.5 mb-4">
+    <a href="/tasks{% if current_status %}?status={{ current_status }}{% endif %}" class="btn btn-xs btn-ghost rounded-full {% if not current_project %}btn-active{% endif %}">All Projects</a>
+    {% for pname in project_names %}
+    <a href="/tasks?project={{ pname | urlencode }}{% if current_status %}&status={{ current_status }}{% endif %}"
+       class="btn btn-xs btn-ghost rounded-full {% if current_project == pname %}btn-active{% endif %}">{{ pname }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if tasks %}
+    {% for t in tasks %}
+    <div class="task-item{% if t.status.value == 'done' %} done{% endif %}">
+        <form method="POST" action="/tasks/{{ t.id }}/toggle" class="flex items-center">
+            <input type="checkbox" class="task-checkbox"
+                   {% if t.status.value == 'done' %}checked{% endif %}
+                   onchange="this.form.submit()">
+        </form>
+        <div class="task-body">
+            <div class="task-title">
+                {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+            </div>
+            <div class="task-meta">
+                <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                {% if not current_status %}<span class="badge badge-{{ t.status.value }}">{{ t.status.value | replace('_', ' ') }}</span>{% endif %}
+                {% if t.project_name %}<span class="opacity-60">{{ t.project_name }}</span>{% endif %}
+                {% if t.deadline %}<span class="{% if t.deadline | is_overdue %}text-error{% endif %}">{{ t.deadline | short_date }}</span>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% if has_more %}
+    <div class="text-center mt-4">
+        <a href="/tasks?{{ pagination_query }}&page={{ current_page + 1 }}" class="btn btn-sm btn-ghost">Load more...</a>
+    </div>
+    {% endif %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No tasks match your filter.</div>
+{% endif %}
+{% endblock %}

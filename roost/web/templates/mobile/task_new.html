@@ -1,0 +1,44 @@
+{% extends "mobile/base.html" %}
+{% block title %}New Task — Roost{% endblock %}
+{% block topbar_title %}New Task{% endblock %}
+{% block topbar_left %}
+<a href="/m/tasks" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="/m/tasks/create" hx-post="/m/tasks/create" hx-swap="none">
+    <div class="m-form-group">
+        <label class="m-form-label">Title</label>
+        <input type="text" name="title" placeholder="What needs to be done?" autofocus class="m-form-input" required>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Description</label>
+        <textarea name="description" placeholder="Details (optional)" class="m-form-textarea"></textarea>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div class="m-form-group">
+            <label class="m-form-label">Priority</label>
+            <select name="priority" class="m-form-select">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+            </select>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Deadline</label>
+            <input type="date" name="deadline" class="m-form-input">
+        </div>
+    </div>
+    <div class="m-form-group">
+        <label class="m-form-label">Project</label>
+        <select name="project_id" class="m-form-select">
+            <option value="">None</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="m-btn m-btn-primary" style="margin-top: 8px;">Create Task</button>
+</form>
+{% endblock %}

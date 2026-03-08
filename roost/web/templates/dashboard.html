@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Dashboard</h1>
+    <div class="flex gap-2">
+        {% if shutdown_summary %}
+        <form method="POST" action="/resume-day" class="inline">
+            <button class="btn btn-primary btn-sm">Resume Day</button>
+        </form>
+        {% else %}
+        <form method="POST" action="/shutdown" class="inline"
+              onsubmit="return confirm('Pause all work? In-progress tasks will be paused and today\'s deadlines deferred.')">
+            <button class="btn btn-sm btn-neutral">Pause Day</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Shutdown Banner -->
+{% if shutdown_summary %}
+<div class="card border-l-4 border-warning mb-4 p-3">
+    <div class="font-semibold mb-1">Day Paused</div>
+    <div class="text-sm opacity-60">
+        {{ shutdown_summary.paused_count }} task{{ 's' if shutdown_summary.paused_count != 1 }} paused.
+        Click <strong>Resume Day</strong> to restore them.
+    </div>
+</div>
+{% endif %}
+
+<div class="stats shadow w-full mb-5">
+    <div class="stat">
+        <div class="stat-title">To Do</div>
+        <div class="stat-value">{{ counts.todo }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">In Progress</div>
+        <div class="stat-value">{{ counts.in_progress }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Done</div>
+        <div class="stat-value">{{ counts.done }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Blocked</div>
+        <div class="stat-value">{{ counts.blocked }}</div>
+    </div>
+</div>
+
+<!-- 2-column grid: actionable (left) + context (right) -->
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+    <!-- Left column: actionable items -->
+    <div class="lg:col-span-3">
+        <!-- Daily Focus -->
+        <div class="card mb-4 p-3">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold">Daily Focus ({{ focus_tasks|length }}/3)</h2>
+            </div>
+            {% if focus_tasks %}
+                {% for t in focus_tasks %}
+                <div class="task-item border-l-3 border-primary">
+                    <div class="task-body">
+                        <div class="task-title"><a href="/tasks/{{ t.id }}">{{ t.title }}</a></div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                            {% if t.effort_estimate != 'moderate' %}<span>effort: {{ t.effort_estimate }}</span>{% endif %}
+                        </div>
+                    </div>
+                    <form method="POST" action="/tasks/{{ t.id }}/unfocus" class="inline">
+                        <button class="btn btn-sm text-xs" title="Remove from focus">x</button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% elif focus_suggestions %}
+                <div class="text-sm opacity-60 mb-2">No tasks focused. Suggestions:</div>
+                {% for t in focus_suggestions[:3] %}
+                <div class="task-item">
+                    <div class="task-body">
+                        <div class="task-title"><a href="/tasks/{{ t.id }}">{{ t.title }}</a></div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                        </div>
+                    </div>
+                    <form method="POST" action="/tasks/{{ t.id }}/focus" class="inline">
+                        <button class="btn btn-sm text-xs" title="Add to focus">+</button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-10 opacity-50">No tasks to focus on.</div>
+            {% endif %}
+        </div>
+
+        <!-- Low Energy Tasks -->
+        {% if energy_mode == 'low' and energy_tasks %}
+        <div class="card mb-4 p-3 border-l-4 border-warning">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold">Light Tasks (low energy day)</h2>
+            </div>
+            {% for t in energy_tasks[:5] %}
+            <div class="task-item">
+                <div class="task-body">
+                    <div class="task-title"><a href="/tasks/{{ t.id }}">{{ t.title }}</a></div>
+                    <div class="task-meta">
+                        <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                        {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Today's Triage -->
+        {% if today %}
+        <div class="card triage-section">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold">Today's Triage</h2>
+            </div>
+
+            {% if today.overdue %}
+            <div class="triage-group">
+                <div class="triage-label text-error">OVERDUE ({{ today.overdue|length }})</div>
+                {% for t in today.overdue[:5] %}
+                <div class="task-item border-l-3 border-error">
+                    <div class="task-body">
+                        <div class="task-title">
+                            {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                            <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                            {% if t.deadline %}<span class="{% if t.deadline | is_overdue %}text-error{% endif %}">{{ t.deadline | short_date }}</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if today.due_today %}
+            <div class="triage-group">
+                <div class="triage-label text-warning">Due Today ({{ today.due_today|length }})</div>
+                {% for t in today.due_today[:5] %}
+                <div class="task-item border-l-3 border-warning">
+                    <div class="task-body">
+                        <div class="task-title">
+                            {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                            <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if today.in_progress %}
+            <div class="triage-group">
+                <div class="triage-label text-primary">In Progress ({{ today.in_progress|length }})</div>
+                {% for t in today.in_progress[:5] %}
+                <div class="task-item border-l-3 border-primary">
+                    <div class="task-body">
+                        <div class="task-title">
+                            {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                            <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                        </div>
+                        {% if t.context_note %}
+                        <div class="text-xs opacity-60 mt-1">
+                            {{ t.context_note }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if today.top_urgent %}
+            <div class="triage-group">
+                <div class="triage-label">Suggested Next</div>
+                {% for t in today.top_urgent[:3] %}
+                <div class="task-item">
+                    <div class="task-body">
+                        <div class="task-title">
+                            {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                            <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+                        </div>
+                        <div class="task-meta">
+                            <span class="badge badge-{{ t.priority }}">{{ t.priority }}</span>
+                            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if not today.overdue and not today.due_today and not today.in_progress and not today.top_urgent %}
+            <div class="text-center py-10 opacity-50">Nothing urgent today!</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right column: context -->
+    <div class="lg:col-span-2">
+        <!-- Streak + Spoons -->
+        <div class="flex gap-3 mb-4 flex-wrap">
+            {% if streak and streak.current > 0 %}
+            <div class="card px-4 py-2 flex items-center gap-2">
+                <span class="text-lg">{{ streak.current }}</span>
+                <span class="text-xs opacity-60">day streak{% if streak.best > streak.current %} (best: {{ streak.best }}){% endif %}</span>
+            </div>
+            {% endif %}
+            {% if spoon_status %}
+            <div class="card px-4 py-2 flex items-center gap-2">
+                <progress class="progress w-20 {% if spoon_status.percentage > 50 %}progress-success{% elif spoon_status.percentage > 20 %}progress-warning{% else %}progress-error{% endif %}" value="{{ spoon_status.percentage }}" max="100"></progress>
+                <span class="text-xs opacity-60">{{ spoon_status.remaining }}/{{ spoon_status.budget }} spoons</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Energy Mode -->
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-sm opacity-60">Energy:</span>
+            {% for lvl in ['low', 'medium', 'high'] %}
+            <form method="POST" action="/energy-mode" class="inline">
+                <input type="hidden" name="level" value="{{ lvl }}">
+                <button class="btn btn-sm btn-ghost rounded-full {% if energy_mode == lvl %}btn-active{% endif %} {% if lvl == 'low' %}border-warning{% elif lvl == 'high' %}border-success{% endif %}" type="submit">
+                    {{ lvl | title }}
+                </button>
+            </form>
+            {% endfor %}
+            {% if energy_mode %}
+            <span class="text-xs opacity-60">({{ energy_mode }} today)</span>
+            {% endif %}
+        </div>
+
+        <!-- Entity Summary -->
+        {% if entity_summary %}
+        <div class="mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold">By Entity</h2>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {% for es in entity_summary %}
+                <a href="/entities/{{ es.id }}" class="card block no-underline p-3">
+                    <div class="font-semibold mb-1">{{ es.name }}</div>
+                    <div class="text-xs opacity-60">
+                        {{ es.project_count }} project{{ 's' if es.project_count != 1 }} &middot; {{ es.open_tasks }} open task{{ 's' if es.open_tasks != 1 }}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">Quick Add</h2>
+</div>
+<form class="join w-full mb-5" method="POST" action="/tasks/add">
+    <input class="input input-bordered join-item flex-1" type="text" name="title" placeholder="What needs to be done?" required>
+    <button class="btn btn-primary join-item" type="submit">Add</button>
+</form>
+
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">Active Tasks</h2>
+</div>
+{% if active_tasks %}
+    {% for t in active_tasks %}
+    <div class="task-item{% if t.status.value == 'done' %} done{% endif %}">
+        <form method="POST" action="/tasks/{{ t.id }}/toggle" class="flex items-center">
+            <input type="checkbox" class="task-checkbox"
+                   {% if t.status.value == 'done' %}checked{% endif %}
+                   onchange="this.form.submit()">
+        </form>
+        <div class="task-body">
+            <div class="task-title">
+                {% if t.sort_order %}<span class="task-pos">{{ t.sort_order }}.</span>{% endif %}
+                <a href="/tasks/{{ t.id }}">{{ t.title }}</a>
+            </div>
+            <div class="task-meta">
+                <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                {% if t.deadline %}<span class="{% if t.deadline | is_overdue %}text-error{% endif %}">{{ t.deadline | short_date }}</span>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No active tasks. Add one above!</div>
+{% endif %}
+{% endblock %}

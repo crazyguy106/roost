@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Inbox — Roost{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Inbox Triage</h1>
+    <span class="badge badge-neutral" id="actionCount">0 actions</span>
+</div>
+
+<!-- Search bar -->
+<div class="join w-full mb-5" id="searchBar">
+    <input type="text" id="searchQuery" value="is:unread label:INBOX" placeholder="Gmail query..."
+           class="input input-bordered join-item flex-1">
+    <button class="btn btn-primary join-item" id="searchBtn">Search</button>
+</div>
+
+<!-- Email list -->
+<div id="emailListSection">
+    <div id="emailList"></div>
+    <div class="empty" id="emailEmpty" style="display:none;">No emails found.</div>
+    <div id="emailLoading" style="display:none;" class="text-center py-5 opacity-50">Loading...</div>
+</div>
+
+<!-- Thread view -->
+<div id="threadSection" class="email-hidden">
+    <div class="card">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold" id="threadSubject"></h2>
+            <button class="btn btn-sm" id="threadBack">Back</button>
+        </div>
+        <div id="threadMessages"></div>
+        <div class="email-actions" id="threadActions">
+            <button class="btn btn-primary btn-sm" data-action="reply">Reply</button>
+            <button class="btn btn-sm" data-action="ai">AI Draft</button>
+            <button class="btn btn-sm" data-action="archive">Archive</button>
+            <button class="btn btn-sm" data-action="task">Task</button>
+        </div>
+    </div>
+</div>
+
+<!-- Compose panel -->
+<div id="composeSection" class="email-hidden">
+    <div class="card">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold">Compose Reply</h2>
+            <button class="btn btn-sm" id="composeCancel">Cancel</button>
+        </div>
+        <div class="mb-3">
+            <label class="label text-sm">To</label>
+            <input type="text" id="composeTo" readonly class="input input-bordered w-full">
+        </div>
+        <div class="mb-3">
+            <label class="label text-sm">Subject</label>
+            <input type="text" id="composeSubject" readonly class="input input-bordered w-full">
+        </div>
+        <div class="mb-3">
+            <label class="label text-sm">Cc</label>
+            <input type="text" id="composeCc" placeholder="Optional" class="input input-bordered w-full">
+        </div>
+        <div class="mb-3">
+            <label class="label text-sm">Body</label>
+            <textarea id="composeBody" rows="10" placeholder="Type your reply..."
+                      class="textarea textarea-bordered w-full"></textarea>
+        </div>
+        <div class="email-actions">
+            <button class="btn btn-primary btn-sm" id="composeSend">Send</button>
+            <button class="btn btn-sm" id="composeAIDraft">AI Draft</button>
+        </div>
+    </div>
+</div>
+
+<!-- Status bar -->
+<div id="statusBar" class="email-hidden text-center py-3 opacity-50 text-sm"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/email.js"></script>
+{% endblock %}

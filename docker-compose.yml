@@ -1,0 +1,24 @@
+services:
+  roost:
+    build:
+      context: .
+      args:
+        ENABLE_GOOGLE: "false"
+        ENABLE_MICROSOFT: "false"
+        ENABLE_AI: "true"
+        ENABLE_TELEGRAM: "false"
+        ENABLE_NOTION: "false"
+        ENABLE_INFRA: "false"
+    ports:
+      - "8080:8080"
+      - "2222:22"
+    volumes:
+      - roost-data:/app/data
+      - roost-config:/app/config
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  roost-data:
+  roost-config:

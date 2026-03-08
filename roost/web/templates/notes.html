@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Notes — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Notes</h1>
+</div>
+
+<div class="flex gap-2 mb-5 flex-wrap">
+    <form class="flex gap-2 flex-wrap w-full" method="POST" action="/notes/add">
+        <input class="input input-bordered w-[200px]" type="text" name="title" placeholder="Title (optional)">
+        <input class="input input-bordered flex-1 min-w-[200px]" type="text" name="content" placeholder="Jot something down..." required>
+        <input class="input input-bordered w-[100px]" type="text" name="tag" placeholder="tag">
+        <button class="btn btn-primary" type="submit">Save</button>
+    </form>
+</div>
+
+{% if tags %}
+<div class="flex flex-wrap gap-2 mb-4">
+    <a href="/notes" class="btn btn-sm btn-ghost rounded-full {% if not current_tag %}btn-active{% endif %}">All</a>
+    {% for t in tags %}
+    <a href="/notes?tag={{ t }}" class="btn btn-sm btn-ghost rounded-full {% if current_tag == t %}btn-active{% endif %}">#{{ t }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if notes %}
+    {% for n in notes %}
+    <div class="card flex justify-between items-start">
+        <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                {% if n.tag %}<span class="badge badge-medium">#{{ n.tag }}</span>{% endif %}
+                <span style="font-weight: 600; font-size: 0.95rem;">{{ n.display_title }}</span>
+            </div>
+            {% if n.title %}
+            <div class="text-sm opacity-70" style="white-space: pre-wrap; word-break: break-word; max-height: 3.6em; overflow: hidden;">{{ n.content[:200] }}{% if n.content|length > 200 %}...{% endif %}</div>
+            {% endif %}
+            <div class="text-xs opacity-60 mt-1">
+                {{ n.created_at }}
+                {% if n.project_name %}<span style="margin-left: 6px; color: var(--accent);">{{ n.project_name }}</span>{% endif %}
+            </div>
+        </div>
+        <form method="POST" action="/notes/{{ n.id }}/delete" class="ml-3">
+            <button class="btn btn-error btn-sm" onclick="return confirm('Delete?')">x</button>
+        </form>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No notes yet. Jot something above!</div>
+{% endif %}
+{% endblock %}

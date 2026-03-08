@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Projects — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Projects</h1>
+</div>
+
+<div class="flex gap-2 mb-5 flex-wrap">
+    <form method="POST" action="/projects/add" class="contents">
+        <input type="text" name="name" placeholder="New project name" required class="input input-bordered flex-1">
+        <select name="entity_id" class="select select-bordered" style="width: auto; min-width: 120px;">
+            <option value="">No entity</option>
+            {% for e in entities %}
+            <option value="{{ e.id }}">{{ e.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="project_type" class="select select-bordered" style="width: auto; min-width: 100px;">
+            <option value="project">Project</option>
+            <option value="programme">Programme</option>
+            <option value="initiative">Initiative</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Add</button>
+    </form>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-4">
+    <a href="/projects" class="btn btn-sm btn-ghost rounded-full {% if not current_status and not current_type %}btn-active{% endif %}">All</a>
+    <a href="/projects?status=active" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'active' %}btn-active{% endif %}">Active</a>
+    <a href="/projects?status=paused" class="btn btn-sm btn-ghost rounded-full {% if current_status == 'paused' %}btn-active{% endif %}">Paused</a>
+    <a href="/projects?type=programme" class="btn btn-sm btn-ghost rounded-full {% if current_type == 'programme' %}btn-active{% endif %}">Programmes</a>
+    <a href="/projects?type=initiative" class="btn btn-sm btn-ghost rounded-full {% if current_type == 'initiative' %}btn-active{% endif %}">Initiatives</a>
+</div>
+
+{% if grouped_projects %}
+    {% for group_name, group_projects in grouped_projects %}
+    <div class="mb-5">
+        <div class="flex items-center gap-2 mb-2">
+            {% if group_name != 'Unaffiliated' %}
+            <a href="/entities/{{ group_entity_ids[group_name] }}" class="font-semibold text-base">{{ group_name }}</a>
+            {% else %}
+            <span class="font-semibold text-base opacity-60">{{ group_name }}</span>
+            {% endif %}
+            <span class="text-xs opacity-60">({{ group_projects|length }})</span>
+        </div>
+        {% for p in group_projects %}
+        <div class="card" style="display: flex; align-items: center; justify-content: space-between; margin-left: 12px;">
+            <div>
+                {% if p.pinned %}📌 {% endif %}
+                {% if p.project_type == 'programme' %}📁{% elif p.project_type == 'initiative' %}🚀{% else %}📋{% endif %}
+                <strong><a href="/projects/{{ p.id }}">{{ p.name }}</a></strong>
+                {% if p.project_type != 'project' %}
+                <span class="badge badge-medium" style="margin-left: 4px;">{{ p.project_type }}</span>
+                {% endif %}
+                {% if p.status == 'paused' %}<span class="badge badge-warning" style="margin-left: 4px;">paused</span>{% endif %}
+                <div class="text-xs opacity-60">
+                    {{ p.task_count }} task{{ 's' if p.task_count != 1 }}
+                    {% if p.children_count %} &middot; {{ p.children_count }} sub-projects{% endif %}
+                </div>
+            </div>
+            <div class="flex gap-1">
+                {% if p.status == 'active' %}
+                <form method="POST" action="/projects/{{ p.id }}/pause">
+                    <button class="btn btn-sm btn-warning" title="Pause">⏸</button>
+                </form>
+                {% elif p.status == 'paused' %}
+                <form method="POST" action="/projects/{{ p.id }}/resume">
+                    <button class="btn btn-sm btn-success" title="Resume">▶</button>
+                </form>
+                {% endif %}
+                <form method="POST" action="/projects/{{ p.id }}/delete">
+                    <button class="btn btn-error btn-sm" onclick="return confirm('Delete project?')">Del</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No projects found.</div>
+{% endif %}
+{% endblock %}

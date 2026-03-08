@@ -1,0 +1,56 @@
+<div id="teamSection">
+    <div class="m-section-title">Team ({{ assignments|length }})</div>
+    {% for a in assignments %}
+    <div style="background: var(--surface); border-radius: 6px; padding: 8px 12px; margin-bottom: 4px; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <strong>{{ a.contact_name }}</strong>
+            {% if a.entity_name %}
+            <span style="color: var(--text-dim);">@ {{ a.entity_name }}</span>
+            {% endif %}
+            <span class="m-badge" style="background: var(--border); color: var(--text); margin-left: 4px;">{{ a.role_label or a.role }}</span>
+        </div>
+        <button class="m-btn m-btn-sm" style="background: transparent; color: var(--red); padding: 2px 8px; font-size: 0.75rem;"
+                hx-post="/m/projects/{{ project.id }}/remove-member/{{ a.id }}"
+                hx-target="#teamSection"
+                hx-swap="outerHTML"
+                onclick="return confirm('Remove this member?')">Remove</button>
+    </div>
+    {% endfor %}
+
+    <!-- Add member form -->
+    <div id="addMemberForm" style="display: none; margin-top: 8px;">
+        <form hx-post="/m/projects/{{ project.id }}/add-member"
+              hx-target="#teamSection"
+              hx-swap="outerHTML">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="m-form-group">
+                    <label class="m-form-label">Contact</label>
+                    <select name="contact_id" class="m-form-select" required>
+                        <option value="">Select...</option>
+                        {% for c in contacts %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="m-form-group">
+                    <label class="m-form-label">Role</label>
+                    <select name="role" class="m-form-select">
+                        <option value="R">Responsible</option>
+                        <option value="A">Accountable</option>
+                        <option value="C">Consulted</option>
+                        <option value="I" selected>Informed</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="flex: 1;">Add</button>
+                <button type="button" class="m-btn m-btn-ghost m-btn-sm"
+                        onclick="this.closest('#addMemberForm').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+    <button class="m-btn m-btn-ghost m-btn-sm" style="margin-top: 6px;"
+            onclick="var f=document.getElementById('addMemberForm'); f.style.display=f.style.display==='none'?'block':'none'">
+        + Add Member
+    </button>
+</div>

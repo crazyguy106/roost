@@ -1,0 +1,79 @@
+<div id="commsSection">
+    <div class="m-section-title">Communications ({{ communications|length }})</div>
+
+    <!-- Log communication form (hidden by default) -->
+    <div id="logCommForm" style="display: none; margin-bottom: 12px;">
+        <form hx-post="/m/contacts/{{ contact.id }}/log-communication"
+              hx-target="#commsSection"
+              hx-swap="outerHTML">
+            <div class="m-form-group">
+                <label class="m-form-label">Type</label>
+                <select name="comm_type" class="m-form-select" required>
+                    <option value="email_sent">Email Sent</option>
+                    <option value="email_received">Email Received</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="call">Call</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="note">Note</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Subject</label>
+                <input type="text" name="subject" class="m-form-input">
+            </div>
+            <div class="m-form-group">
+                <label class="m-form-label">Detail</label>
+                <textarea name="detail" class="m-form-textarea" rows="2"></textarea>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="flex: 1;">Log</button>
+                <button type="button" class="m-btn m-btn-ghost m-btn-sm"
+                        onclick="this.closest('#logCommForm').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <button class="m-btn m-btn-ghost m-btn-sm" style="margin-bottom: 8px;"
+            onclick="var f=document.getElementById('logCommForm'); f.style.display=f.style.display==='none'?'block':'none'">
+        + Log Communication
+    </button>
+
+    {% if communications %}
+        {% for comm in communications %}
+        <div class="m-comm-item">
+            <div class="m-comm-badge" style="
+                {% if comm.comm_type == 'email_sent' %}background: rgba(108,140,255,0.15); color: var(--accent);
+                {% elif comm.comm_type == 'email_received' %}background: rgba(74,222,128,0.15); color: var(--green);
+                {% elif comm.comm_type == 'meeting' %}background: rgba(250,204,21,0.15); color: var(--yellow);
+                {% elif comm.comm_type == 'call' %}background: rgba(168,85,247,0.15); color: #a855f7;
+                {% else %}background: var(--border); color: var(--text-dim);
+                {% endif %}
+            ">
+                {% if comm.comm_type == 'email_sent' %}sent
+                {% elif comm.comm_type == 'email_received' %}recv
+                {% elif comm.comm_type == 'meeting' %}meet
+                {% elif comm.comm_type == 'call' %}call
+                {% elif comm.comm_type == 'whatsapp' %}wa
+                {% elif comm.comm_type == 'note' %}note
+                {% else %}{{ comm.comm_type[:4] }}
+                {% endif %}
+            </div>
+            <div class="m-comm-body">
+                <div style="font-weight: 500;">{{ comm.subject or '(no subject)' }}</div>
+                {% if comm.detail %}
+                <div style="color: var(--text-dim); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ comm.detail }}</div>
+                {% endif %}
+                <div class="m-comm-date">{{ comm.occurred_at }}</div>
+            </div>
+            <button class="m-btn m-btn-sm" style="background: transparent; color: var(--red); padding: 2px 6px; font-size: 0.7rem; align-self: flex-start;"
+                    hx-post="/m/contacts/{{ contact.id }}/delete-communication/{{ comm.id }}"
+                    hx-target="#commsSection"
+                    hx-swap="outerHTML"
+                    onclick="return confirm('Delete this entry?')">&#10005;</button>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 16px; color: var(--text-dim);">No communication history.</div>
+    {% endif %}
+</div>

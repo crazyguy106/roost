@@ -1,0 +1,80 @@
+{% extends "mobile/base.html" %}
+{% block title %}Entities — Roost{% endblock %}
+{% block topbar_title %}Entities{% endblock %}
+{% block topbar_left %}
+<a href="/m/contacts" class="m-topbar-btn m-back-btn">&lsaquo;</a>
+{% endblock %}
+{% block topbar_right %}
+<button class="m-topbar-btn" id="newEntityToggle">+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Inline create form (hidden by default) -->
+<div id="newEntityForm" style="display: none; margin-bottom: 12px;">
+    <form hx-post="/m/entities/create" hx-swap="none">
+        <div class="m-form-group">
+            <label class="m-form-label">Name</label>
+            <input type="text" name="name" class="m-form-input" required>
+        </div>
+        <div class="m-form-group">
+            <label class="m-form-label">Description</label>
+            <textarea name="description" class="m-form-textarea" rows="2"></textarea>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button type="submit" class="m-btn m-btn-primary m-btn-sm" style="flex: 1;">Create</button>
+            <button type="button" class="m-btn m-btn-ghost m-btn-sm" onclick="document.getElementById('newEntityForm').style.display='none'">Cancel</button>
+        </div>
+    </form>
+</div>
+
+{% if active_entities %}
+<div class="m-group-header">
+    Active
+    <span style="opacity: 0.6;">({{ active_entities|length }})</span>
+</div>
+{% for e in active_entities %}
+<div class="m-contact-card">
+    <a href="/m/entities/{{ e.id }}">
+        <div class="m-contact-name">{{ e.name }}</div>
+        <div class="m-contact-email">
+            {{ e.project_count }} project{{ 's' if e.project_count != 1 }}
+            &middot; {{ e.contact_count }} contact{{ 's' if e.contact_count != 1 }}
+        </div>
+    </a>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if inactive_entities %}
+<div class="m-group-header">
+    Inactive
+    <span style="opacity: 0.6;">({{ inactive_entities|length }})</span>
+</div>
+{% for e in inactive_entities %}
+<div class="m-contact-card" style="opacity: 0.6;">
+    <a href="/m/entities/{{ e.id }}">
+        <div class="m-contact-name">{{ e.name }}</div>
+        <div class="m-contact-email">
+            {{ e.project_count }} project{{ 's' if e.project_count != 1 }}
+            &middot; {{ e.contact_count }} contact{{ 's' if e.contact_count != 1 }}
+        </div>
+    </a>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if not active_entities and not inactive_entities %}
+<div style="text-align: center; padding: 24px; color: var(--text-dim);">No entities found.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newEntityToggle').addEventListener('click', function() {
+    var form = document.getElementById('newEntityForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') form.querySelector('input[name="name"]').focus();
+});
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

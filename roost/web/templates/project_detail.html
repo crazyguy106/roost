@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">{{ project.name }}</h1>
+    <div class="flex gap-2">
+        <span class="badge badge-medium">{{ project.project_type }}</span>
+        {% if project.status == 'paused' %}
+        <span class="badge badge-warning">paused</span>
+        {% elif project.status == 'active' %}
+        <span class="badge badge-success">active</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if project.entity_name %}
+<p class="opacity-60 mb-4">Entity: <a href="/entities/{{ project.entity_id }}">{{ project.entity_name }}</a></p>
+{% endif %}
+
+<!-- Task Stats -->
+<div class="stats shadow w-full mb-5">
+    <div class="stat">
+        <div class="stat-title">To Do</div>
+        <div class="stat-value text-base-content opacity-60">{{ progress.todo or 0 }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">In Progress</div>
+        <div class="stat-value text-warning">{{ progress.in_progress or 0 }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Done</div>
+        <div class="stat-value text-success">{{ progress.done or 0 }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-title">Blocked</div>
+        <div class="stat-value text-error">{{ progress.blocked or 0 }}</div>
+    </div>
+</div>
+
+{% set total = (progress.todo or 0) + (progress.in_progress or 0) + (progress.done or 0) + (progress.blocked or 0) %}
+{% if total > 0 %}
+{% set pct = ((progress.done or 0) * 100 / total) | int %}
+<div class="mb-5">
+    <div class="flex justify-between text-sm mb-1">
+        <span>Progress</span>
+        <span>{{ pct }}%</span>
+    </div>
+    <progress class="progress progress-success w-full" value="{{ pct }}" max="100"></progress>
+</div>
+{% endif %}
+
+<!-- Edit Form (only for users with write access) -->
+{% if can_edit is not defined or can_edit %}
+<div class="card mb-5">
+    <div class="flex items-center justify-between mb-3 mt-5">
+        <h2 class="text-lg font-semibold">Edit Project</h2>
+    </div>
+    <form method="POST" action="/projects/{{ project.id }}/edit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="mb-4">
+                <label class="label text-sm">Name</label>
+                <input type="text" name="name" value="{{ project.name }}" required class="input input-bordered w-full">
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Type</label>
+                <select name="project_type" class="select select-bordered w-full">
+                    <option value="project" {% if project.project_type == 'project' %}selected{% endif %}>Project</option>
+                    <option value="programme" {% if project.project_type == 'programme' %}selected{% endif %}>Programme</option>
+                    <option value="initiative" {% if project.project_type == 'initiative' %}selected{% endif %}>Initiative</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Entity</label>
+                <select name="entity_id" class="select select-bordered w-full">
+                    <option value="">None</option>
+                    {% for e in entities %}
+                    <option value="{{ e.id }}" {% if project.entity_id == e.id %}selected{% endif %}>{{ e.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Status</label>
+                <select name="status" class="select select-bordered w-full">
+                    <option value="active" {% if project.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="paused" {% if project.status == 'paused' %}selected{% endif %}>Paused</option>
+                    <option value="completed" {% if project.status == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="archived" {% if project.status == 'archived' %}selected{% endif %}>Archived</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="label text-sm">Parent Project</label>
+                <select name="parent_project_id" class="select select-bordered w-full">
+                    <option value="">None</option>
+                    {% for p in all_projects %}
+                    {% if p.id != project.id %}
+                    <option value="{{ p.id }}" {% if project.parent_project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Description</label>
+            <textarea name="description" class="textarea textarea-bordered w-full">{{ project.description or '' }}</textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Save Changes</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Team (RACI contacts) -->
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">Team ({{ team|length }})</h2>
+</div>
+{% if team %}
+    {% for a in team %}
+    <div class="card" style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <span class="badge badge-medium">{{ a.role }}</span>
+            {% if a.role_label %}<span class="opacity-60 ml-1">{{ a.role_label }}</span>{% endif %}
+            <strong class="ml-2"><a href="/contacts/{{ a.contact_id }}">{{ a.contact_name }}</a></strong>
+            {% if a.entity_name %}<span class="opacity-60 text-xs ml-1">({{ a.entity_name }})</span>{% endif %}
+        </div>
+        {% if can_edit is not defined or can_edit %}
+        <form method="POST" action="/projects/{{ project.id }}/remove-member/{{ a.id }}">
+            <button class="btn btn-error btn-sm" onclick="return confirm('Remove this member?')">Remove</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No team members assigned.</div>
+{% endif %}
+
+<!-- Add Team Member (RACI) -->
+{% if can_edit is not defined or can_edit %}
+<div class="flex gap-2 items-end flex-wrap mb-3" style="margin-top: 8px;">
+    <form method="POST" action="/projects/{{ project.id }}/add-member" class="contents">
+        <div class="mb-4">
+            <label class="label text-sm">Person</label>
+            <select name="contact_id" required class="select select-bordered">
+                <option value="">Select person...</option>
+                {% for c in contacts %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Role</label>
+            <select name="role" class="select select-bordered">
+                {% for r in roles %}
+                <option value="{{ r.code }}">{{ r.code }} — {{ r.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Add Member</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- Access Members (users with login access) -->
+{% set _user_role = current_user.get("role", "") if current_user else "" %}
+{% if members is defined and (_user_role in ("admin", "owner") or (can_edit is not defined or can_edit)) %}
+<div class="flex items-center justify-between mb-3 mt-8">
+    <h2 class="text-lg font-semibold">Access Members ({{ members|length }})</h2>
+</div>
+<p class="text-xs opacity-50 mb-3">Users with login access to this project. Controls who can see and edit this project when visibility scoping is active.</p>
+{% if members %}
+    {% for m in members %}
+    <div class="card" style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <strong>{{ m.name }}</strong>
+            <span class="opacity-60 text-xs ml-1">{{ m.email }}</span>
+            <span class="badge badge-sm ml-2">{{ m.member_role }}</span>
+        </div>
+        {% if _user_role in ("admin", "owner") %}
+        <form method="POST" action="/projects/{{ project.id }}/remove-access-member/{{ m.id }}">
+            <button class="btn btn-error btn-sm" onclick="return confirm('Remove access for {{ m.name }}?')">Remove</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-6 opacity-50">No access members. Admin/owner users can see all projects.</div>
+{% endif %}
+
+<!-- Add Access Member -->
+{% if _user_role in ("admin", "owner") and all_users is defined %}
+<div class="flex gap-2 items-end flex-wrap mb-3" style="margin-top: 8px;">
+    <form method="POST" action="/projects/{{ project.id }}/add-access-member" class="contents">
+        <div class="mb-4">
+            <label class="label text-sm">User</label>
+            <select name="user_id" required class="select select-bordered">
+                <option value="">Select user...</option>
+                {% for u in all_users %}
+                <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-4">
+            <label class="label text-sm">Access Role</label>
+            <select name="role" class="select select-bordered">
+                <option value="editor">Editor</option>
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Add Access</button>
+    </form>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Recent Tasks -->
+<div class="flex items-center justify-between mb-3 mt-5">
+    <h2 class="text-lg font-semibold">Recent Tasks</h2>
+    <a href="/tasks?project={{ project.name }}" class="text-sm">View all tasks &rarr;</a>
+</div>
+{% if recent_tasks %}
+    {% for t in recent_tasks %}
+    <div class="task-item{% if t.status.value == 'done' %} done{% endif %}">
+        <div class="task-body">
+            <div class="task-title"><a href="/tasks/{{ t.id }}">{{ t.title }}</a></div>
+            <div class="task-meta">
+                <span class="badge badge-{{ t.status.value }}">{{ t.status.value }}</span>
+                <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+                {% if t.deadline %}<span>due {{ t.deadline }}</span>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="text-center py-10 opacity-50">No tasks yet.</div>
+{% endif %}
+
+<!-- Actions -->
+<div class="flex gap-2 mt-6 pt-4 border-t border-base-300">
+    {% if can_edit is not defined or can_edit %}
+    {% if project.status == 'active' %}
+    <form method="POST" action="/projects/{{ project.id }}/pause">
+        <button class="btn btn-sm btn-warning">Pause</button>
+    </form>
+    {% elif project.status == 'paused' %}
+    <form method="POST" action="/projects/{{ project.id }}/resume">
+        <button class="btn btn-sm btn-success">Resume</button>
+    </form>
+    {% endif %}
+    <form method="POST" action="/projects/{{ project.id }}/delete">
+        <button class="btn btn-error btn-sm" onclick="return confirm('Delete this project and all its tasks?')">Delete Project</button>
+    </form>
+    {% endif %}
+    <a href="/projects" class="btn btn-sm btn-ghost">&larr; Back to Projects</a>
+</div>
+{% endblock %}

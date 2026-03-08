@@ -1,0 +1,175 @@
+{% extends "mobile/base.html" %}
+{% block title %}Dashboard — Roost{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats strip -->
+<div class="m-stats">
+    <a href="/m/tasks?status=todo" class="m-stat-pill">
+        <div class="m-stat-val">{{ counts.todo }}</div>
+        <div class="m-stat-label">To Do</div>
+    </a>
+    <a href="/m/tasks?status=in_progress" class="m-stat-pill">
+        <div class="m-stat-val" style="color: var(--yellow);">{{ counts.in_progress }}</div>
+        <div class="m-stat-label">In Progress</div>
+    </a>
+    <a href="/m/tasks?status=done" class="m-stat-pill">
+        <div class="m-stat-val" style="color: var(--green);">{{ counts.done }}</div>
+        <div class="m-stat-label">Done</div>
+    </a>
+    <a href="/m/tasks?status=blocked" class="m-stat-pill">
+        <div class="m-stat-val" style="color: var(--red);">{{ counts.blocked }}</div>
+        <div class="m-stat-label">Blocked</div>
+    </a>
+</div>
+
+<!-- Focus tasks -->
+{% if focus_tasks %}
+<div class="m-section-title">Focus ({{ focus_tasks|length }}/3)</div>
+{% for t in focus_tasks %}
+<div class="m-task-card" data-task-id="{{ t.id }}">
+    <a href="/m/tasks/{{ t.id }}">
+        <div class="m-task-title">{{ t.title }}</div>
+        <div class="m-task-meta">
+            <span class="m-badge m-badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+            {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+            {% if t.status.value == 'todo' %}
+            <button class="m-btn m-btn-sm m-btn-primary"
+                    hx-post="/m/tasks/{{ t.id }}/start"
+                    hx-swap="none"
+                    hx-on::after-request="location.reload()"
+                    onclick="event.preventDefault(); event.stopPropagation();">
+                Start Working
+            </button>
+            {% endif %}
+        </div>
+    </a>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Today's triage -->
+{% if today %}
+    {% if today.overdue %}
+    <div class="m-section-title" style="color: var(--red);">Overdue ({{ today.overdue|length }})</div>
+    {% for t in today.overdue[:5] %}
+    <div class="m-task-card">
+        <a href="/m/tasks/{{ t.id }}">
+            <div class="m-task-title">{{ t.title }}</div>
+            <div class="m-task-meta">
+                <span class="m-badge m-badge-{{ t.priority }}">{{ t.priority }}</span>
+                {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+                {% if t.deadline %}<span style="color: var(--red);">{{ t.deadline | short_date }}</span>{% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if today.due_today %}
+    <div class="m-section-title" style="color: var(--yellow);">Due Today ({{ today.due_today|length }})</div>
+    {% for t in today.due_today[:5] %}
+    <div class="m-task-card">
+        <a href="/m/tasks/{{ t.id }}">
+            <div class="m-task-title">{{ t.title }}</div>
+            <div class="m-task-meta">
+                <span class="m-badge m-badge-{{ t.priority }}">{{ t.priority }}</span>
+                {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if today.in_progress %}
+    <div class="m-section-title" style="color: var(--accent);">In Progress ({{ today.in_progress|length }})</div>
+    {% for t in today.in_progress[:5] %}
+    <div class="m-task-card">
+        <a href="/m/tasks/{{ t.id }}">
+            <div class="m-task-title">{{ t.title }}</div>
+            <div class="m-task-meta">
+                <span class="m-badge m-badge-{{ t.priority }}">{{ t.priority }}</span>
+                {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+            </div>
+            {% if t.context_note %}
+            <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 4px;">{{ t.context_note }}</div>
+            {% endif %}
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if today.top_urgent %}
+    <div class="m-section-title">Suggested Next</div>
+    {% for t in today.top_urgent[:3] %}
+    <div class="m-task-card">
+        <a href="/m/tasks/{{ t.id }}">
+            <div class="m-task-title">{{ t.title }}</div>
+            <div class="m-task-meta">
+                <span class="m-badge m-badge-{{ t.priority }}">{{ t.priority }}</span>
+                {% if t.project_name %}<span>{{ t.project_name }}</span>{% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not today.overdue and not today.due_today and not today.in_progress and not today.top_urgent %}
+    <div style="text-align: center; padding: 24px; color: var(--text-dim);">Nothing urgent today</div>
+    {% endif %}
+{% endif %}
+
+<!-- Streak + Spoons -->
+<div class="m-wellness-bar">
+    {% if streak and streak.current > 0 %}
+    <div class="m-wellness-item">
+        <span class="m-wellness-val">{{ streak.current }}</span>
+        <span>day streak{% if streak.best > streak.current %} (best: {{ streak.best }}){% endif %}</span>
+    </div>
+    {% endif %}
+    {% if spoon_status %}
+    <div class="m-wellness-item" style="flex: 1;">
+        <span class="m-wellness-val">{{ spoon_status.remaining }}/{{ spoon_status.budget }}</span>
+        <div style="flex: 1;">
+            <div class="m-progress-bar">
+                <div class="m-progress-fill" style="width: {{ spoon_status.percentage }}%;
+                    {% if spoon_status.percentage > 50 %}background: var(--green);
+                    {% elif spoon_status.percentage > 20 %}background: var(--yellow);
+                    {% else %}background: var(--red);{% endif %}"></div>
+            </div>
+        </div>
+        <span>spoons</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Energy mode -->
+<div class="m-section-title">Energy Mode{% if energy_mode %} — {{ energy_mode | title }}{% endif %}</div>
+<div style="display: flex; gap: 8px; margin-bottom: 12px;">
+    <form hx-post="/m/energy-mode" hx-swap="none" style="display: flex; gap: 8px; width: 100%;">
+        <button type="submit" name="level" value="low" class="m-btn m-btn-sm {% if energy_mode == 'low' %}m-btn-primary{% else %}m-btn-ghost{% endif %}" style="flex: 1;">Low</button>
+        <button type="submit" name="level" value="medium" class="m-btn m-btn-sm {% if energy_mode == 'medium' %}m-btn-primary{% else %}m-btn-ghost{% endif %}" style="flex: 1;">Medium</button>
+        <button type="submit" name="level" value="high" class="m-btn m-btn-sm {% if energy_mode == 'high' %}m-btn-primary{% else %}m-btn-ghost{% endif %}" style="flex: 1;">High</button>
+    </form>
+</div>
+
+<!-- Quick actions -->
+<div class="m-section-title">Actions</div>
+<div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+    {% if shutdown_active %}
+    <button class="m-btn m-btn-primary m-btn-sm" style="flex: 1;"
+            hx-post="/m/resume-day" hx-swap="none">Resume Day</button>
+    {% else %}
+    <button class="m-btn m-btn-ghost m-btn-sm" style="flex: 1;"
+            hx-post="/m/shutdown" hx-swap="none"
+            onclick="return confirm('Shut down for the day? This will pause all in-progress tasks.')">Shutdown</button>
+    {% endif %}
+    <a href="/m/notes" class="m-btn m-btn-ghost m-btn-sm" style="flex: 1; text-align: center; text-decoration: none;">Notes</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+MobileUI.initPTR('#mContent');
+</script>
+{% endblock %}

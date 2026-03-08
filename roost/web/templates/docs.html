@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title or 'Docs' }} — Roost{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ page_title or 'Docs' }}</h1>
+        {% if breadcrumbs %}
+        <div style="font-size: 0.85rem; opacity: 0.6; margin-top: 4px;">
+            <a href="/docs" style="color: inherit; text-decoration: none;">Docs</a>
+            {% for crumb in breadcrumbs %}
+            <span style="margin: 0 4px;">/</span>
+            {% if loop.last %}
+            <span>{{ crumb.name }}</span>
+            {% else %}
+            <a href="/docs?path={{ crumb.path }}" style="color: inherit; text-decoration: none;">{{ crumb.name }}</a>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+        {% if parent_path is not none %}
+        <a href="/docs{% if parent_path %}?path={{ parent_path }}{% endif %}" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; text-decoration: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 19l-7-7 7-7"/></svg>
+            Back
+        </a>
+        {% endif %}
+        {% if view_mode == 'view' and can_edit %}
+        <button id="btnEdit" onclick="enterEditMode()" class="btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% if view_mode == 'browse' %}
+<!-- ============ BROWSE MODE ============ -->
+<div style="max-width: 800px;">
+    <!-- Search filter -->
+    <div style="margin-bottom: 16px;">
+        <input type="text" id="filterInput" placeholder="Filter files..." oninput="filterEntries(this.value)"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-size: 0.9rem;">
+    </div>
+
+    <!-- Directory listing -->
+    <div id="entryList" style="display: flex; flex-direction: column; gap: 2px;">
+    {% if entries %}
+        {% for entry in entries %}
+        <a href="{{ entry.url }}" class="entry-item" data-name="{{ entry.name|lower }}"
+           style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; text-decoration: none; color: var(--text); transition: background 0.15s;"
+           onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
+            {% if entry.is_dir %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color: #f59e0b; flex-shrink: 0;"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+            {% else %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" style="color: #60a5fa; flex-shrink: 0;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            {% endif %}
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 0.9rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ entry.name }}</div>
+                {% if entry.size %}
+                <div style="font-size: 0.75rem; opacity: 0.5;">{{ entry.size }}</div>
+                {% endif %}
+            </div>
+            {% if entry.is_dir %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="opacity: 0.3; flex-shrink: 0;"><path d="M9 18l6-6-6-6"/></svg>
+            {% endif %}
+        </a>
+        {% endfor %}
+    {% else %}
+        <div style="text-align: center; padding: 40px 0; opacity: 0.5; font-size: 0.9rem;">No files or directories found.</div>
+    {% endif %}
+    </div>
+</div>
+
+{% elif view_mode == 'view' %}
+<!-- ============ VIEW MODE ============ -->
+<div id="viewContainer" style="max-width: 900px;">
+    <article id="mdRendered" class="prose" style="max-width: none; line-height: 1.7; font-size: 0.95rem;"></article>
+</div>
+
+<!-- Edit container (hidden by default) -->
+<div id="editContainer" style="max-width: 900px; display: none;">
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button onclick="saveEdit()" class="btn-primary" style="padding: 6px 18px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Save</button>
+        <button onclick="cancelEdit()" class="btn-secondary" style="padding: 6px 18px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Cancel</button>
+        <button onclick="togglePreview()" class="btn-secondary" style="padding: 6px 18px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Preview</button>
+    </div>
+    <textarea id="mdEditor" style="width: 100%; min-height: 70vh; resize: vertical; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font-family: monospace; font-size: 0.85rem; line-height: 1.6;"></textarea>
+    <div id="mdPreview" class="prose" style="max-width: none; margin-top: 16px; display: none;"></div>
+</div>
+{% endif %}
+
+<style>
+    .prose { color: var(--text); }
+    .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { color: var(--text); margin-bottom: 0.5em; line-height: 1.25; }
+    .prose h1 { font-size: clamp(1.45rem, 1.2rem + 1vw, 2rem); font-weight: 700; margin-top: 1.8em; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+    .prose h2 { font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem); font-weight: 700; margin-top: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .prose h3 { font-size: clamp(1.1rem, 1rem + 0.4vw, 1.25rem); font-weight: 600; margin-top: 1.4em; }
+    .prose h4 { font-size: 1.05rem; font-weight: 600; margin-top: 1.2em; }
+    .prose h5 { font-size: 0.9rem; font-weight: 600; margin-top: 1em; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.8; }
+    .prose h6 { font-size: 0.85rem; font-weight: 600; margin-top: 1em; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.6; }
+    .prose p { margin: 0.8em 0; }
+    .prose ul, .prose ol { margin: 0.5em 0; padding-left: 1.5em; }
+    .prose li { margin: 0.25em 0; }
+    .prose code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+    .prose pre { background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; overflow-x: auto; margin: 1em 0; }
+    .prose pre code { background: none; padding: 0; }
+    .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    .prose th, .prose td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; font-size: 0.85rem; }
+    .prose th { background: rgba(255,255,255,0.05); font-weight: 600; }
+    .prose a { color: oklch(0.7 0.15 260); text-decoration: underline; }
+    .prose blockquote { border-left: 3px solid var(--border); padding-left: 16px; opacity: 0.8; margin: 1em 0; }
+    .prose hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+    .prose img { max-width: 100%; height: auto; border-radius: 8px; margin: 0.5em 0; }
+    .prose strong { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+{% if view_mode == 'view' %}
+<script src="/static/vendor/marked.min.js"></script>
+<script>
+(function() {
+    const rawContent = {{ content|tojson }};
+    const filePath = {{ file_path|tojson }};
+
+    // Directory of current file for resolving relative paths
+    const fileDir = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : '';
+
+    function resolveMediaSrc(container) {
+        container.querySelectorAll('img').forEach(img => {
+            const src = img.getAttribute('src');
+            if (!src || src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/docs/file')) return;
+            // Resolve relative path: strip ./ prefix, combine with file directory
+            let resolved = src.replace(/^\.\//, '');
+            if (fileDir) resolved = fileDir + '/' + resolved;
+            // Collapse any foo/../bar segments
+            const parts = resolved.split('/');
+            const clean = [];
+            for (const p of parts) {
+                if (p === '..') clean.pop();
+                else if (p && p !== '.') clean.push(p);
+            }
+            img.src = '/docs/file?path=' + encodeURIComponent(clean.join('/'));
+            img.style.maxWidth = '100%';
+            img.style.borderRadius = '8px';
+            img.style.margin = '0.5em 0';
+        });
+    }
+
+    marked.setOptions({ breaks: true, gfm: true });
+    document.getElementById('mdRendered').innerHTML = marked.parse(rawContent);
+    resolveMediaSrc(document.getElementById('mdRendered'));
+
+    document.querySelectorAll('#mdRendered a').forEach(a => {
+        if (a.href && !a.href.startsWith(location.origin)) {
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener');
+        }
+    });
+
+    window.enterEditMode = function() {
+        document.getElementById('viewContainer').style.display = 'none';
+        document.getElementById('editContainer').style.display = '';
+        document.getElementById('btnEdit').style.display = 'none';
+        document.getElementById('mdEditor').value = rawContent;
+        document.getElementById('mdPreview').style.display = 'none';
+    };
+
+    window.cancelEdit = function() {
+        document.getElementById('editContainer').style.display = 'none';
+        document.getElementById('viewContainer').style.display = '';
+        document.getElementById('btnEdit').style.display = '';
+    };
+
+    window.togglePreview = function() {
+        const preview = document.getElementById('mdPreview');
+        const editor = document.getElementById('mdEditor');
+        if (preview.style.display === 'none') {
+            preview.innerHTML = marked.parse(editor.value);
+            resolveMediaSrc(preview);
+            preview.style.display = '';
+        } else {
+            preview.style.display = 'none';
+        }
+    };
+
+    window.saveEdit = function() {
+        const content = document.getElementById('mdEditor').value;
+        const form = new FormData();
+        form.append('path', filePath);
+        form.append('content', content);
+        fetch('/m/docs/save', { method: 'POST', body: form })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Save failed: ' + data.error);
+                } else {
+                    document.getElementById('mdRendered').innerHTML = marked.parse(content);
+                    resolveMediaSrc(document.getElementById('mdRendered'));
+                    cancelEdit();
+                }
+            })
+            .catch(e => alert('Save failed: ' + e));
+    };
+})();
+</script>
+{% endif %}
+
+{% if view_mode == 'browse' %}
+<script>
+function filterEntries(query) {
+    const q = query.toLowerCase();
+    document.querySelectorAll('.entry-item').forEach(el => {
+        el.style.display = el.dataset.name.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endif %}
+{% endblock %}

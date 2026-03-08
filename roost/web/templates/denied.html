@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Access Denied - Roost</title>
+    <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link href="/static/vendor/daisyui.css" rel="stylesheet" type="text/css" />
+    <link href="/static/vendor/daisyui-themes.css" rel="stylesheet" type="text/css" />
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: oklch(0.2 0.015 250);
+        }
+    </style>
+</head>
+<body>
+    <div class="card bg-base-200 shadow-xl w-full max-w-sm mx-4">
+        <div class="card-body items-center text-center">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl mb-2 bg-error/20 text-error">
+                <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold mb-1">Access Denied</h1>
+            <p class="opacity-60 mb-2">Your account is not authorized to access this instance.</p>
+            <p class="opacity-40 text-sm mb-6">If you should have access, ask your admin to add your email address.</p>
+            <a href="/auth/login-page" class="btn btn-primary w-full">Try Another Account</a>
+        </div>
+    </div>
+</body>
+</html>
