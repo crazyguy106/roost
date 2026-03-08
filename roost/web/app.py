@@ -299,9 +299,13 @@ def create_app() -> FastAPI:
             request.session.clear()
             return RedirectResponse("/auth/login-page")
 
-    # Microsoft OAuth consent routes (registered in both OAuth and basic auth modes)
-    from roost.microsoft.auth import router as ms_auth_router
-    app.include_router(ms_auth_router)
+    # Microsoft OAuth consent routes (only when MS is enabled)
+    if MS_CLIENT_ID:
+        try:
+            from roost.microsoft.auth import router as ms_auth_router
+            app.include_router(ms_auth_router)
+        except ImportError:
+            pass
 
     # CORS — single-origin app, block all cross-origin requests
     from starlette.middleware.cors import CORSMiddleware

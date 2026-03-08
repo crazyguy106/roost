@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     git \
     pandoc \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (LTS) + npm
@@ -76,7 +77,7 @@ RUN if [ "$ENABLE_INFRA" = "true" ] && [ -f requirements/infra.txt ]; then \
 
 # Copy source code
 COPY roost/ roost/
-COPY pyproject.toml setup.py setup.cfg* ./
+COPY setup.py ./
 
 # Editable install
 RUN pip install --no-cache-dir -e .
@@ -89,7 +90,5 @@ RUN chmod +x ./entrypoint.sh
 RUN chown -R dev:dev /app
 
 EXPOSE 8080 22
-
-USER dev
 
 ENTRYPOINT ["./entrypoint.sh"]

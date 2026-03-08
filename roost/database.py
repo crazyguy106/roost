@@ -548,9 +548,6 @@ CREATE INDEX IF NOT EXISTS idx_claude_sessions_name ON claude_sessions(name);
 """
 
 
-"""
-
-
 # Phase 15: Scheduled emails — persistent queue for delayed sending
 SCHEMA_V15 = """
 CREATE TABLE IF NOT EXISTS scheduled_emails (
@@ -1105,7 +1102,6 @@ def init_db() -> None:
     conn.executescript(SCHEMA_V11)
     conn.executescript(SCHEMA_V12)
     conn.executescript(SCHEMA_V13)
-    conn.executescript(SCHEMA_V14)
     conn.executescript(SCHEMA_V15)
     conn.executescript(SCHEMA_V16)
     conn.executescript(SCHEMA_V17)
