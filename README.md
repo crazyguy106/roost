@@ -25,7 +25,7 @@ All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server
 
 ```bash
 # Clone
-git clone https://github.com/your-username/roost.git
+git clone https://github.com/crazyguy106/roost.git
 cd roost
 
 # Configure
@@ -99,11 +99,16 @@ Both browser terminal and SSH connect to the same persistent tmux session. Disco
 ## Documentation
 
 See `docs/` for detailed guides:
-- [Setup Guide](docs/setup-guide.md)
-- [MCP Tools Reference](docs/mcp-tools.md)
+- [Platform Overview](docs/platform-overview.md)
+- [Onboarding Guide](docs/onboarding-guide.md)
+- [User Guide](docs/user-guide.md)
+- [MCP Server Reference](docs/mcp-server.md)
 - [Google OAuth Setup](docs/setup-google-oauth.md)
 - [Microsoft Graph Setup](docs/setup-microsoft-graph.md)
 - [Telegram Bot Setup](docs/setup-telegram-bot.md)
+- [Gmail Automation](docs/gmail-automation.md)
+- [Multi-Tenancy](docs/multi-tenancy.md)
+- [Neurodivergent Features](docs/neurodivergent-features.md)
 
 ## License
 
