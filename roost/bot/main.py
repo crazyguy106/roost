@@ -54,6 +54,8 @@ from roost.bot.handlers import (
     cmd_deck, cmd_mnotes,
     # Tutorial
     cmd_tutorial, handle_tutorial_callback,
+    # Agent + Skill Builder
+    handle_agent_message, cmd_agent, cmd_skill,
 )
 
 logging.basicConfig(
@@ -204,6 +206,10 @@ def main():
     # Tutorial
     app.add_handler(CommandHandler("tutorial", cmd_tutorial))
 
+    # Agent + Skill Builder
+    app.add_handler(CommandHandler("agent", cmd_agent))
+    app.add_handler(CommandHandler("skill", cmd_skill))
+
     # Capture message handler (group -1: runs before all group-0 handlers)
     from roost.bot.capture import handle_capture_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_capture_message), group=-1)
@@ -211,6 +217,10 @@ def main():
     # Email triage message handler (group -1: intercepts replies/AI prompts)
     from roost.bot.handlers.email_triage import handle_triage_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_triage_message), group=-1)
+
+    # Agent free-text handler (group 0: catches messages not consumed by capture/triage)
+    # Skill revision intercept is handled inside handle_agent_message
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_agent_message), group=0)
 
     # Inline keyboard callbacks (before MessageHandlers)
     app.add_handler(CallbackQueryHandler(handle_callback))
@@ -275,7 +285,7 @@ def main():
 
     app.add_error_handler(error_handler)
 
-    logger.info("Bot starting (polling) — 65 commands + callbacks + voice handler registered...")
+    logger.info("Bot starting (polling) — 67 commands + agent handler + callbacks + voice handler registered...")
     app.run_polling(drop_pending_updates=True)
 
 

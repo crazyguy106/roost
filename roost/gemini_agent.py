@@ -371,8 +371,262 @@ def _tool_get_task_with_context(task_id: int) -> dict[str, Any]:
         return {"error": str(e)}
 
 
+# ── Personal assistant tools ──────────────────────────────────────────
+
+def _tool_get_today_events() -> dict[str, Any]:
+    """Get today's calendar events."""
+    try:
+        from roost.calendar_service import get_today_events
+        events = get_today_events()
+        return {
+            "count": len(events),
+            "events": [
+                {
+                    "summary": e["summary"],
+                    "start": str(e["start"]) if e.get("start") else None,
+                    "end": str(e["end"]) if e.get("end") else None,
+                    "location": e.get("location", ""),
+                    "calendar": e.get("calendar", ""),
+                }
+                for e in events
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _tool_get_week_events(days: int = 7) -> dict[str, Any]:
+    """Get calendar events for the next N days."""
+    try:
+        from roost.calendar_service import get_week_events
+        events = get_week_events(days=min(days, 30))
+        return {
+            "count": len(events),
+            "events": [
+                {
+                    "summary": e["summary"],
+                    "start": str(e["start"]) if e.get("start") else None,
+                    "end": str(e["end"]) if e.get("end") else None,
+                    "location": e.get("location", ""),
+                    "calendar": e.get("calendar", ""),
+                }
+                for e in events
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _tool_search_emails(query: str, max_results: int = 5) -> dict[str, Any]:
+    """Search Gmail messages. Uses Gmail query syntax."""
+    try:
+        from roost.mcp.gmail_helpers import search_messages
+        messages = search_messages(query, max_results=min(max_results, 10))
+        return {"count": len(messages), "messages": messages}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _tool_draft_email(to: str, subject: str, body: str) -> dict[str, Any]:
+    """Draft an email for the user to review. Does NOT send — returns the draft for approval.
+
+    The agent MUST present the draft to the user and wait for explicit approval
+    before any email is sent.
+    """
+    return {
+        "draft": {
+            "to": to,
+            "subject": subject,
+            "body": body,
+        },
+        "status": "draft_created",
+        "note": "Present this draft to the user. Do NOT send without explicit approval.",
+    }
+
+
+def _tool_complete_task(task_id: int) -> dict[str, Any]:
+    """Mark a task as completed."""
+    try:
+        task = task_service.complete_task(task_id, source="gemini:agent")
+        if not task:
+            return {"error": f"Task #{task_id} not found"}
+        return {"id": task.id, "title": task.title, "status": "done", "completed": True}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _tool_list_skills() -> dict[str, Any]:
+    """List all installed skills with their metadata."""
+    try:
+        from pathlib import Path
+        from roost.config import PROJECT_ROOT
+        import re as _re
+
+        skills_dir = Path(PROJECT_ROOT) / "skills"
+        if not skills_dir.exists():
+            return {"count": 0, "skills": [], "note": "No skills directory yet. Use /skill to create one."}
+
+        skills = []
+        for path in sorted(skills_dir.glob("*.py")):
+            content = path.read_text(encoding="utf-8")
+            meta = {}
+            # Extract SKILL_META fields
+            for field in ("name", "description", "trigger"):
+                match = _re.search(rf'"{field}"\s*:\s*"([^"]+)"', content)
+                if not match:
+                    match = _re.search(rf"'{field}'\s*:\s*'([^']+)'", content)
+                if match:
+                    meta[field] = match.group(1)
+
+            skills.append({
+                "file": path.name,
+                "name": meta.get("name", path.stem),
+                "description": meta.get("description", ""),
+                "trigger": meta.get("trigger", ""),
+            })
+
+        return {"count": len(skills), "skills": skills}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _tool_run_skill(skill_name: str, args: str = "") -> dict[str, Any]:
+    """Run an installed skill by name. The skill's async run() function is executed.
+
+    Args:
+        skill_name: Name of the skill (from SKILL_META) or filename (without .py).
+        args: JSON string of arguments to pass to the skill's run() function.
+    """
+    try:
+        import importlib.util
+        from pathlib import Path
+        from roost.config import PROJECT_ROOT
+        import re as _re
+
+        skills_dir = Path(PROJECT_ROOT) / "skills"
+        if not skills_dir.exists():
+            return {"error": "No skills installed. Use /skill to create one."}
+
+        # Find the skill file — match by SKILL_META name or filename
+        target_path = None
+        skill_name_lower = skill_name.lower().replace(" ", "_")
+
+        for path in skills_dir.glob("*.py"):
+            # Match by filename
+            if path.stem == skill_name_lower:
+                target_path = path
+                break
+            # Match by SKILL_META name
+            content = path.read_text(encoding="utf-8")
+            match = _re.search(r'"name"\s*:\s*"([^"]+)"', content)
+            if not match:
+                match = _re.search(r"'name'\s*:\s*'([^']+)'", content)
+            if match and match.group(1).lower() == skill_name.lower():
+                target_path = path
+                break
+            # Match by trigger
+            match = _re.search(r'"trigger"\s*:\s*"([^"]+)"', content)
+            if not match:
+                match = _re.search(r"'trigger'\s*:\s*'([^']+)'", content)
+            if match and match.group(1).lower() == skill_name.lower():
+                target_path = path
+                break
+
+        if not target_path:
+            available = _tool_list_skills()
+            skill_list = ", ".join(s["name"] for s in available.get("skills", []))
+            return {"error": f"Skill '{skill_name}' not found. Available: {skill_list or 'none'}"}
+
+        # Parse args
+        skill_args = {}
+        if args:
+            try:
+                skill_args = json.loads(args)
+            except json.JSONDecodeError:
+                # Treat as a simple string arg
+                skill_args = {"input": args}
+
+        # Load and execute the skill module
+        spec = importlib.util.spec_from_file_location(f"roost_skill_{target_path.stem}", target_path)
+        if not spec or not spec.loader:
+            return {"error": f"Failed to load skill module: {target_path.name}"}
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        if not hasattr(module, "run"):
+            return {"error": f"Skill '{target_path.stem}' has no run() function"}
+
+        # Execute — handle both sync and async run()
+        import asyncio
+        import inspect
+
+        if inspect.iscoroutinefunction(module.run):
+            # Run async function
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're already in an async context — use a thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(
+                        asyncio.run, module.run(skill_args)
+                    ).result(timeout=TOOL_TIMEOUT)
+            else:
+                result = asyncio.run(module.run(skill_args))
+        else:
+            result = module.run(skill_args)
+
+        return {
+            "skill": target_path.stem,
+            "result": str(result) if result else "(no output)",
+            "success": True,
+        }
+
+    except TimeoutError:
+        return {"error": f"Skill '{skill_name}' timed out after {TOOL_TIMEOUT}s"}
+    except Exception as e:
+        logger.exception("Skill execution error: %s", skill_name)
+        return {"error": f"Skill error: {e}"}
+
+
+def _tool_get_today_briefing() -> dict[str, Any]:
+    """Get the daily briefing: today's calendar events, overdue tasks, due today, in-progress tasks."""
+    try:
+        from roost.calendar_service import get_merged_today
+        result = get_merged_today()
+
+        events = result.get("events", [])
+        triage = result.get("triage", {})
+
+        return {
+            "events": [
+                {"summary": e["summary"], "start": str(e.get("start", "")), "location": e.get("location", "")}
+                for e in events[:10]
+            ],
+            "overdue": [
+                {"id": t["id"], "title": t["title"], "priority": t.get("priority", "")}
+                for t in triage.get("overdue", [])[:5]
+            ],
+            "due_today": [
+                {"id": t["id"], "title": t["title"], "priority": t.get("priority", "")}
+                for t in triage.get("due_today", [])[:5]
+            ],
+            "in_progress": [
+                {"id": t["id"], "title": t["title"], "context_note": t.get("context_note", "")}
+                for t in triage.get("in_progress", [])[:5]
+            ],
+            "top_urgent": [
+                {"id": t["id"], "title": t["title"]}
+                for t in triage.get("top_urgent", [])[:3]
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Tool registry ─────────────────────────────────────────────────────
 
+# Core tools (file, task, note, curriculum)
 TOOL_HANDLERS: dict[str, Callable] = {
     "read_file": _tool_read_file,
     "write_file": _tool_write_file,
@@ -390,9 +644,104 @@ TOOL_HANDLERS: dict[str, Callable] = {
     "get_task_with_context": _tool_get_task_with_context,
 }
 
+# Personal assistant tools (calendar, email, briefing, skills)
+AGENT_TOOL_HANDLERS: dict[str, Callable] = {
+    "get_today_events": _tool_get_today_events,
+    "get_week_events": _tool_get_week_events,
+    "search_emails": _tool_search_emails,
+    "draft_email": _tool_draft_email,
+    "complete_task": _tool_complete_task,
+    "get_today_briefing": _tool_get_today_briefing,
+    "list_skills": _tool_list_skills,
+    "run_skill": _tool_run_skill,
+}
 
-def _build_tool_declarations() -> list[types.Tool]:
-    """Build Gemini function declarations for all tools."""
+
+def _build_agent_tool_declarations() -> list[types.FunctionDeclaration]:
+    """Build function declarations for personal assistant tools."""
+    return [
+        types.FunctionDeclaration(
+            name="get_today_events",
+            description="Get today's calendar events. Returns summary, start/end times, location.",
+            parameters=types.Schema(type="OBJECT", properties={}),
+        ),
+        types.FunctionDeclaration(
+            name="get_week_events",
+            description="Get calendar events for the next N days.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "days": types.Schema(type="INTEGER", description="Number of days ahead (default 7, max 30)"),
+                },
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="search_emails",
+            description="Search Gmail messages using Gmail query syntax (e.g. 'is:unread', 'from:alice', 'subject:invoice after:2026/01/01').",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "query": types.Schema(type="STRING", description="Gmail search query"),
+                    "max_results": types.Schema(type="INTEGER", description="Max messages to return (default 5, max 10)"),
+                },
+                required=["query"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="draft_email",
+            description="Draft an email for the user to review. Does NOT send — you MUST present the draft and get explicit approval before sending. Never call send directly.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "to": types.Schema(type="STRING", description="Recipient email address"),
+                    "subject": types.Schema(type="STRING", description="Email subject"),
+                    "body": types.Schema(type="STRING", description="Email body text"),
+                },
+                required=["to", "subject", "body"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="complete_task",
+            description="Mark a task as completed by its ID.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "task_id": types.Schema(type="INTEGER", description="Task ID to complete"),
+                },
+                required=["task_id"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="get_today_briefing",
+            description="Get the daily briefing: today's calendar events, overdue tasks, tasks due today, in-progress work, and suggested focus. Use this when the user asks for their daily overview or morning briefing.",
+            parameters=types.Schema(type="OBJECT", properties={}),
+        ),
+        types.FunctionDeclaration(
+            name="list_skills",
+            description="List all installed custom skills. Shows each skill's name, description, and trigger word. Use this to discover what skills are available before running one.",
+            parameters=types.Schema(type="OBJECT", properties={}),
+        ),
+        types.FunctionDeclaration(
+            name="run_skill",
+            description="Run an installed custom skill by name. First use list_skills to see what's available. The skill's run() function is executed with the provided arguments.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "skill_name": types.Schema(type="STRING", description="Skill name, trigger word, or filename (without .py)"),
+                    "args": types.Schema(type="STRING", description="JSON string of arguments to pass to the skill (optional)"),
+                },
+                required=["skill_name"],
+            ),
+        ),
+    ]
+
+
+def _build_tool_declarations(include_agent_tools: bool = False) -> list[types.Tool]:
+    """Build Gemini function declarations for all tools.
+
+    Args:
+        include_agent_tools: If True, include personal assistant tools (calendar, email, briefing).
+    """
     declarations = [
         types.FunctionDeclaration(
             name="read_file",
@@ -562,12 +911,15 @@ def _build_tool_declarations() -> list[types.Tool]:
             ),
         ),
     ]
+    if include_agent_tools:
+        declarations.extend(_build_agent_tool_declarations())
+
     return [types.Tool(functionDeclarations=declarations)]
 
 
 def _execute_tool(name: str, args: dict[str, Any], user_id: str = "") -> dict[str, Any]:
     """Execute a tool by name with arguments. Logs to command_log."""
-    handler = TOOL_HANDLERS.get(name)
+    handler = TOOL_HANDLERS.get(name) or AGENT_TOOL_HANDLERS.get(name)
     if not handler:
         return {"error": f"Unknown tool: {name}"}
 
@@ -629,10 +981,11 @@ def _save_session(session_id: str, history: list[types.Content]) -> None:
 class GeminiAgent:
     """Agentic Gemini with Roost function calling."""
 
-    def __init__(self, system_prompt: str = "", session_id: str | None = None):
+    def __init__(self, system_prompt: str = "", session_id: str | None = None,
+                 include_agent_tools: bool = False):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.model = GEMINI_MODEL
-        self.tools = _build_tool_declarations()
+        self.tools = _build_tool_declarations(include_agent_tools=include_agent_tools)
         self.system_prompt = system_prompt
         self.session_id = session_id
         self.history = _load_session(session_id)

@@ -97,6 +97,21 @@ INFRA_ENABLED = os.getenv("INFRA_ENABLED", "true").lower() in ("true", "1", "yes
 SSH_ENABLED = os.getenv("SSH_ENABLED", "true").lower() in ("true", "1", "yes")
 CHARTS_ENABLED = False  # Charts not included in open-source release
 
+# Agent — natural language via Telegram (agentic with tool use)
+AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "true").lower() == "true"
+AGENT_PROVIDER: str = os.getenv("AGENT_PROVIDER", "gemini")  # gemini | claude | openai | ollama
+AGENT_TIMEOUT: int = int(os.getenv("AGENT_TIMEOUT", "120"))
+
+# Agent API keys (for agentic mode — separate from CLI subscriptions)
+CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
+OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
+CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+
+# Ollama (local LLM — OpenAI-compatible API, free)
+OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://localhost:11434/v1")
+OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.1")
+
 # Default email domain for username→email resolution (e.g. "example.com")
 # When set, usernames without @ are tried as username@DEFAULT_EMAIL_DOMAIN
 DEFAULT_EMAIL_DOMAIN: str = os.getenv("DEFAULT_EMAIL_DOMAIN", "")

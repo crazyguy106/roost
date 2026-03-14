@@ -103,6 +103,10 @@ from roost.bot.handlers.presentations import cmd_deck, cmd_mnotes
 # Tutorial
 from roost.bot.handlers.tutorial import cmd_tutorial, handle_tutorial_callback
 
+# Agent (CLI passthrough) + Skill Builder
+from roost.bot.handlers.agent import handle_agent_message, cmd_agent
+from roost.bot.handlers.skill_builder import cmd_skill
+
 __all__ = [
     # Help
     "cmd_start", "cmd_help",
@@ -151,4 +155,6 @@ __all__ = [
     "cmd_inbox",
     # Tutorial
     "cmd_tutorial", "handle_tutorial_callback",
+    # Agent + Skill Builder
+    "handle_agent_message", "cmd_agent", "cmd_skill",
 ]
