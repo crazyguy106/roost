@@ -18,6 +18,39 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    # Kernel-level hardening
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN        # sshd: file ownership
+      - SETUID       # gosu + sshd: privilege drop
+      - SETGID       # gosu + sshd: privilege drop
+      - NET_BIND_SERVICE  # sshd: bind port 22
+      - SYS_CHROOT   # sshd: chroot
+      - DAC_OVERRIDE  # sshd: read host keys
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    pids_limit: 512
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Log rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
 
 volumes:
   roost-data:
