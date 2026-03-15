@@ -624,6 +624,20 @@ def _tool_get_today_briefing() -> dict[str, Any]:
         return {"error": str(e)}
 
 
+def _tool_set_preference(key: str, value: str, _user_id: str = "") -> dict[str, Any]:
+    """Save a user preference so the agent remembers it across sessions."""
+    from roost.context import set_preference
+    set_preference(_user_id, key, value)
+    return {"saved": True, "key": key, "value": value}
+
+
+def _tool_get_preferences(_user_id: str = "") -> dict[str, Any]:
+    """Get all saved user preferences."""
+    from roost.context import get_preferences
+    prefs = get_preferences(_user_id)
+    return {"preferences": prefs} if prefs else {"preferences": {}, "note": "No preferences saved yet."}
+
+
 # ── Tool registry ─────────────────────────────────────────────────────
 
 # Core tools (file, task, note, curriculum)
@@ -654,6 +668,8 @@ AGENT_TOOL_HANDLERS: dict[str, Callable] = {
     "get_today_briefing": _tool_get_today_briefing,
     "list_skills": _tool_list_skills,
     "run_skill": _tool_run_skill,
+    "set_preference": _tool_set_preference,
+    "get_preferences": _tool_get_preferences,
 }
 
 
@@ -732,6 +748,23 @@ def _build_agent_tool_declarations() -> list[types.FunctionDeclaration]:
                 },
                 required=["skill_name"],
             ),
+        ),
+        types.FunctionDeclaration(
+            name="set_preference",
+            description="Save a user preference so the agent remembers it across sessions and restarts. Use when the user says 'remember that...', 'I prefer...', 'always...', 'never...'. Examples: key='email_style' value='under 3 sentences', key='tone' value='formal', key='summary_format' value='bullet points'.",
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "key": types.Schema(type="STRING", description="Preference name (short, descriptive)"),
+                    "value": types.Schema(type="STRING", description="Preference value"),
+                },
+                required=["key", "value"],
+            ),
+        ),
+        types.FunctionDeclaration(
+            name="get_preferences",
+            description="Get all saved user preferences.",
+            parameters=types.Schema(type="OBJECT", properties={}),
         ),
     ]
 
@@ -924,6 +957,11 @@ def _execute_tool(name: str, args: dict[str, Any], user_id: str = "") -> dict[st
         return {"error": f"Unknown tool: {name}"}
 
     try:
+        # Inject user_id for tools that accept it (prefixed with _user_id)
+        import inspect
+        sig = inspect.signature(handler)
+        if "_user_id" in sig.parameters:
+            args = {**args, "_user_id": user_id}
         result = handler(**args)
 
         # Audit log

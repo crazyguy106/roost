@@ -668,6 +668,31 @@ CREATE TABLE IF NOT EXISTS otter_processed (
 CREATE INDEX IF NOT EXISTS idx_otter_processed_filename ON otter_processed(filename);
 """
 
+SCHEMA_V19 = """
+CREATE TABLE IF NOT EXISTS chat_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    user_id TEXT DEFAULT '',
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
+"""
+
 SCHEMA_V18 = """
 CREATE TABLE IF NOT EXISTS contact_identifiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1158,6 +1183,9 @@ def init_db() -> None:
 
     # Phase 21: Multi-account Google OAuth - add account column to oauth_tokens
     _migrate_oauth_tokens_account(conn)
+
+    # Phase 22: CAGE framework — chat history + user preferences
+    conn.executescript(SCHEMA_V19)
 
     conn.close()
 

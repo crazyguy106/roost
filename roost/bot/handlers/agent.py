@@ -32,6 +32,7 @@ from roost.config import (
     OPENAI_API_KEY, OPENAI_MODEL,
     OLLAMA_URL, OLLAMA_MODEL,
 )
+from roost.context import build_agent_context, save_chat_history
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,10 @@ Guidelines:
 - When asked to create a task or note, use create_task or create_note.
 - When asked to complete/finish a task, use complete_task.
 - When the user's request might match a custom skill, use list_skills to check what's available, then run_skill to execute it.
+- When the user says "remember that...", "I prefer...", "always...", or "never...", use set_preference to save it. These persist across restarts.
 - For general questions that don't need tools, just answer directly.
 - Keep responses under 2000 characters when possible (Telegram limit).
+- Respect user preferences listed below (if any) — they represent how the user wants you to behave.
 """
 
 
@@ -138,8 +141,11 @@ async def _run_agentic(update: Update, prompt: str, user_id: int, mode: str):
         except Exception:
             pass
 
+    # Build dynamic system prompt with CAGE context
+    system_prompt = build_agent_context(str(user_id), AGENT_SYSTEM_PROMPT)
+
     try:
-        agent = _create_agent(mode, session_id)
+        agent = _create_agent(mode, session_id, system_prompt)
     except ImportError as e:
         logger.warning("Agent import failed for %s: %s", mode, e)
         await status_msg.edit_text(f"Provider '{mode}' SDK not installed: {e}")
@@ -149,13 +155,19 @@ async def _run_agentic(update: Update, prompt: str, user_id: int, mode: str):
         await status_msg.edit_text(f"Agent error: {e}")
         return
 
+    # Persist user message
+    save_chat_history(session_id, "user", prompt, str(user_id))
+
     try:
         output = await agent.run(prompt, user_id=str(user_id), on_progress=on_progress)
     except Exception as e:
         logger.exception("Agent.run() failed for %s", mode)
         output = f"Agent error: {e}"
 
+    # Persist agent response
     if output:
+        save_chat_history(session_id, "assistant", output, str(user_id))
+
         display = _truncate_output(output, limit=4000)
         try:
             await status_msg.edit_text(display)
@@ -166,12 +178,14 @@ async def _run_agentic(update: Update, prompt: str, user_id: int, mode: str):
                 logger.debug("Failed to send agent output", exc_info=True)
 
 
-def _create_agent(mode: str, session_id: str):
+def _create_agent(mode: str, session_id: str, system_prompt: str = ""):
     """Factory: create the right agent class for the provider."""
+    prompt = system_prompt or AGENT_SYSTEM_PROMPT
+
     if mode == "gemini":
         from roost.gemini_agent import GeminiAgent
         return GeminiAgent(
-            system_prompt=AGENT_SYSTEM_PROMPT,
+            system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
         )
@@ -179,7 +193,7 @@ def _create_agent(mode: str, session_id: str):
     if mode == "claude":
         from roost.agents import ClaudeAgent
         return ClaudeAgent(
-            system_prompt=AGENT_SYSTEM_PROMPT,
+            system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
             api_key=CLAUDE_API_KEY,
@@ -189,7 +203,7 @@ def _create_agent(mode: str, session_id: str):
     if mode == "openai":
         from roost.agents import OpenAIAgent
         return OpenAIAgent(
-            system_prompt=AGENT_SYSTEM_PROMPT,
+            system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
             api_key=OPENAI_API_KEY,
@@ -199,7 +213,7 @@ def _create_agent(mode: str, session_id: str):
     if mode == "ollama":
         from roost.agents import OpenAIAgent
         return OpenAIAgent(
-            system_prompt=AGENT_SYSTEM_PROMPT,
+            system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
             api_key="ollama",  # Ollama doesn't need a real key

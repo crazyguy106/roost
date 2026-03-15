@@ -238,6 +238,21 @@ def _build_openai_tools(include_agent_tools: bool = False) -> list[dict]:
                 "required": ["skill_name"],
             },
         },
+        "set_preference": {
+            "description": "Save a user preference so the agent remembers it across sessions and restarts. Use when the user says 'remember that...', 'I prefer...', 'always...', 'never...'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "Preference name (short, descriptive)"},
+                    "value": {"type": "string", "description": "Preference value"},
+                },
+                "required": ["key", "value"],
+            },
+        },
+        "get_preferences": {
+            "description": "Get all saved user preferences.",
+            "parameters": {"type": "object", "properties": {}},
+        },
     }
 
     tools = []
