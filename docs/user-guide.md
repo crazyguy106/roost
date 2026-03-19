@@ -224,6 +224,18 @@ Roost includes features designed for sustainable productivity, especially on day
 
 **Daily Routines** -- Set up morning and evening checklists with `/routine morning` or `/routine evening`. Add items like "Check calendar" or "Set tomorrow's focus." Items reset each day so you always have a fresh checklist.
 
+### Settings & Integrations
+
+The settings page at `/settings` (or `/m/settings` on mobile) lets you manage your Roost instance:
+
+**Integrations** -- Connect and test your AI providers, Telegram bot, Google Workspace, Microsoft 365, and Notion. Each integration shows its connection status. Click "Test" to verify a credential works before relying on it.
+
+**Feature Flags** -- Toggle features on and off without restarting. Useful for disabling integrations you don't use (reduces the attack surface and simplifies the interface).
+
+**Personality** -- Customise how your AI agent sounds. Write a short description like "Direct and concise, no emojis" or "Warm and encouraging, use bullet points." This text is injected into the agent's system prompt.
+
+To access settings, click "Settings" in the sidebar (desktop) or tap the gear icon (mobile). Credential management requires admin access.
+
 ---
 
 ## 5. Tips and Tricks

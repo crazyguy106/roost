@@ -38,6 +38,16 @@ This is by design. Your instance uses Microsoft 365 as the primary integration f
    - **Contacts** -- people you work with, linked to projects and communications.
    - **Projects** -- organised by entity (company/organisation).
 
+### Settings page
+
+Once logged in, visit `/settings` to manage your instance:
+
+- **Integrations** -- View connection status for all services. Add or update API keys and credentials directly from the browser (encrypted at rest).
+- **Feature Flags** -- Toggle features on/off without editing `.env` or restarting.
+- **Personality** -- Customise how your AI agent communicates.
+
+Credential management requires admin access. If you don't see the save buttons, ask your administrator to upgrade your role.
+
 ### Changing your password
 
 Your web password is stored in the `.env` file on your VPS. To change it, ask your_user to update the `WEB_PASSWORD` value and restart the web service. There is no self-service password change in the web UI yet.

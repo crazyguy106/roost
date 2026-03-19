@@ -21,27 +21,42 @@ Roost gives Claude Code (or any MCP-compatible AI) a persistent workspace with:
 
 All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server (219 tools).
 
+**New to Roost?** Run `roost-onboard` for the interactive setup wizard, or manage everything from the `/settings` page after deployment.
+
 ## Quick Start
 
+### Option A: Interactive Setup Wizard (recommended)
+
 ```bash
-# Clone
 git clone https://github.com/crazyguy106/roost.git
 cd roost
+pip install -e .
+roost-onboard
+```
 
-# Configure
+The wizard walks you through:
+1. **AI provider** — Gemini (free), Claude, OpenAI, or Ollama
+2. **Telegram bot** — paste your @BotFather token, validates via API
+3. **Web credentials** — set admin username and password
+4. **Launch** — generates `.env` (0600 permissions) and starts Docker
+
+### Option B: Manual Configuration
+
+```bash
+git clone https://github.com/crazyguy106/roost.git
+cd roost
 cp .env.example .env
 # Edit .env with your API keys
-
-# Run (core only)
 docker compose up -d
+```
 
-# Run with features
-ENABLE_GOOGLE=true ENABLE_TELEGRAM=true docker compose up -d
+### Access
 
-# Access
-open http://localhost:8080          # Web UI + Setup Wizard
-open http://localhost:8080/terminal  # Claude Code (browser terminal)
-ssh -p 2222 dev@localhost           # Claude Code (SSH)
+```
+http://localhost:8080              # Web UI
+http://localhost:8080/settings     # Integrations, flags, personality
+http://localhost:8080/terminal     # Claude Code (browser terminal)
+ssh -p 2222 dev@localhost          # Claude Code (SSH)
 ```
 
 ## Feature Flags
@@ -66,12 +81,15 @@ Roost runs Claude Code inside a Docker container — **the container IS the sand
 2. **Outbound guard hook** — emails, SSH commands, Teams messages require explicit user confirmation
 3. **No permission bypass** — Claude Code runs with standard permission prompts
 4. **Secrets stay outside** — `.env` is mounted at runtime, never baked into the image
+5. **Encrypted credentials** — API keys stored with Fernet (AES-128-CBC), tied to SESSION_SECRET
+6. **Admin-gated settings** — only admin/owner roles can manage credentials and feature flags
 
 ## Access Methods
 
 | Method | URL/Command | Use Case |
 |--------|-------------|----------|
-| **Web UI** | `http://localhost:8080` | Dashboard, settings, setup wizard |
+| **Web UI** | `http://localhost:8080` | Dashboard, tasks, contacts, projects, calendar |
+| **Settings** | `http://localhost:8080/settings` | Credentials, feature flags, personality editor |
 | **Browser Terminal** | `http://localhost:8080/terminal/` | Claude Code via ttyd → tmux |
 | **SSH** | `ssh -p 2222 dev@localhost` | Claude Code via tmux attach |
 | **Telegram** | Talk to your bot | Mobile access to all features |
@@ -87,7 +105,7 @@ Both browser terminal and SSH connect to the same persistent tmux session. Disco
 │    └─ Claude Code (persistent)           │
 │        └─ MCP Server (219 tools)         │
 │                                          │
-│  Web UI (:8080) ─── Setup Wizard         │
+│  Web UI (:8080) ─── Dashboard + Settings  │
 │  ttyd (:7681) ───── Browser Terminal     │
 │  sshd (:22) ─────── SSH Access           │
 │  Telegram Bot ───── Mobile Access        │
@@ -96,12 +114,22 @@ Both browser terminal and SSH connect to the same persistent tmux session. Disco
 └──────────────────────────────────────────┘
 ```
 
+## Tests
+
+```bash
+pip install -r requirements/test.txt
+pytest tests/ -v
+```
+
+66 tests covering database schema, CAGE context framework, encrypted credential storage, and the onboard wizard.
+
 ## Documentation
 
 See `docs/` for detailed guides:
-- [Platform Overview](docs/platform-overview.md)
-- [Onboarding Guide](docs/onboarding-guide.md)
-- [User Guide](docs/user-guide.md)
+- [Platform Overview](docs/platform-overview.md) — architecture, APIs, file structure
+- [Onboarding Guide](docs/onboarding-guide.md) — first login, connecting integrations
+- [User Guide](docs/user-guide.md) — daily workflow, features, tips
+- [Settings & Credentials](docs/settings.md) — setup wizard, integration management, encryption
 - [MCP Server Reference](docs/mcp-server.md)
 - [Google OAuth Setup](docs/setup-google-oauth.md)
 - [Microsoft Graph Setup](docs/setup-microsoft-graph.md)
