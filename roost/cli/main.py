@@ -217,11 +217,20 @@ def main():
     # projects
     sub.add_parser("projects", help="List projects")
 
+    # onboard
+    sub.add_parser("onboard", help="Interactive setup wizard — generates .env and starts Roost")
+
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    # Onboard runs separately (no DB imports needed)
+    if args.command == "onboard":
+        from roost.cli.onboard import run_onboard
+        run_onboard()
+        return
 
     handlers = {
         "add": cmd_add,

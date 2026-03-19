@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% block title %}Settings — Roost{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-6 px-4">
+    <h1 class="text-2xl font-bold mb-6">Settings</h1>
+
+    <!-- Tabs -->
+    <div class="tabs tabs-boxed bg-base-200 mb-6" role="tablist" id="settingsTabs">
+        <a class="tab tab-active" role="tab" data-tab="integrations" onclick="switchTab('integrations', this)">Integrations</a>
+        <a class="tab" role="tab" data-tab="flags" onclick="switchTab('flags', this)">Feature Flags</a>
+        <a class="tab" role="tab" data-tab="personality" onclick="switchTab('personality', this)">Personality</a>
+    </div>
+
+    <!-- Restart banner -->
+    <div id="restartBanner" class="alert alert-warning text-sm mb-4" style="display: none;">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        <span>Changes require a service restart to take effect.</span>
+    </div>
+
+    <!-- ============ INTEGRATIONS TAB ============ -->
+    <div id="tab-integrations">
+
+        <!-- AI Provider -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">AI Provider</h3>
+                        <p class="text-xs opacity-60">Your agent's brain — Gemini, Claude, OpenAI, or Ollama</p>
+                    </div>
+                    <span id="status-ai" class="badge badge-ghost badge-sm">checking...</span>
+                </div>
+                {% for provider in ["gemini", "claude", "openai"] %}
+                <div class="form-control mb-2" id="cred-group-{{ provider }}">
+                    <label class="label py-1">
+                        <span class="label-text text-xs font-medium capitalize">{{ provider }} API Key</span>
+                        <span class="label-text-alt text-xs opacity-50" id="masked-{{ integrations_map[provider].credentials[0] }}"></span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                               id="input-{{ integrations_map[provider].credentials[0] }}"
+                               placeholder="Paste {{ provider }} API key">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="saveCredential('{{ integrations_map[provider].credentials[0] }}')">Save</button>
+                        <button class="btn btn-sm btn-outline"
+                                onclick="testIntegration('{{ provider }}', this)">Test</button>
+                    </div>
+                    <div class="text-xs mt-1 hidden" id="result-{{ provider }}"></div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Telegram -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">Telegram Bot</h3>
+                        <p class="text-xs opacity-60">Your agent's chat interface</p>
+                    </div>
+                    <span id="status-telegram" class="badge badge-ghost badge-sm">checking...</span>
+                </div>
+                <div class="form-control mb-2">
+                    <label class="label py-1">
+                        <span class="label-text text-xs font-medium">Bot Token</span>
+                        <span class="label-text-alt text-xs opacity-50" id="masked-TELEGRAM_BOT_TOKEN"></span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                               id="input-TELEGRAM_BOT_TOKEN"
+                               placeholder="123456789:ABCdefGHI...">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="saveCredential('TELEGRAM_BOT_TOKEN')">Save</button>
+                        <button class="btn btn-sm btn-outline"
+                                onclick="testIntegration('telegram', this)">Test</button>
+                    </div>
+                    <div class="text-xs mt-1 hidden" id="result-telegram"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Google Workspace -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">Google Workspace</h3>
+                        <p class="text-xs opacity-60">Gmail, Calendar, Drive — requires Google Cloud Console setup</p>
+                    </div>
+                    <span id="status-google" class="badge badge-ghost badge-sm">checking...</span>
+                </div>
+                {% for cred_key, label in [("GOOGLE_CLIENT_ID", "Client ID"), ("GOOGLE_CLIENT_SECRET", "Client Secret")] %}
+                <div class="form-control mb-2">
+                    <label class="label py-1">
+                        <span class="label-text text-xs font-medium">{{ label }}</span>
+                        <span class="label-text-alt text-xs opacity-50" id="masked-{{ cred_key }}"></span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="{{ 'password' if 'Secret' in label else 'text' }}"
+                               class="input input-sm input-bordered flex-1 font-mono text-xs"
+                               id="input-{{ cred_key }}"
+                               placeholder="{{ label }}">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="saveCredential('{{ cred_key }}')">Save</button>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="mt-2">
+                    <a href="/auth/gmail" class="btn btn-sm btn-outline">Connect Google Account</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Microsoft 365 -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">Microsoft 365</h3>
+                        <p class="text-xs opacity-60">Outlook, Calendar, OneDrive, Teams — requires Azure AD setup</p>
+                    </div>
+                    <span id="status-microsoft" class="badge badge-ghost badge-sm">checking...</span>
+                </div>
+                {% for cred_key, label in [("MS_CLIENT_ID", "Application (Client) ID"), ("MS_CLIENT_SECRET", "Client Secret"), ("MS_TENANT_ID", "Tenant ID")] %}
+                <div class="form-control mb-2">
+                    <label class="label py-1">
+                        <span class="label-text text-xs font-medium">{{ label }}</span>
+                        <span class="label-text-alt text-xs opacity-50" id="masked-{{ cred_key }}"></span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="{{ 'password' if 'Secret' in label else 'text' }}"
+                               class="input input-sm input-bordered flex-1 font-mono text-xs"
+                               id="input-{{ cred_key }}"
+                               placeholder="{{ label }}">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="saveCredential('{{ cred_key }}')">Save</button>
+                    </div>
+                </div>
+                {% endfor %}
+                <div class="mt-2">
+                    <a href="/auth/microsoft" class="btn btn-sm btn-outline">Connect Microsoft Account</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notion -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">Notion</h3>
+                        <p class="text-xs opacity-60">Bidirectional sync with Notion databases</p>
+                    </div>
+                    <span id="status-notion" class="badge badge-ghost badge-sm">checking...</span>
+                </div>
+                <div class="form-control mb-2">
+                    <label class="label py-1">
+                        <span class="label-text text-xs font-medium">Internal Integration Token</span>
+                        <span class="label-text-alt text-xs opacity-50" id="masked-NOTION_API_TOKEN"></span>
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                               id="input-NOTION_API_TOKEN"
+                               placeholder="ntn_...">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="saveCredential('NOTION_API_TOKEN')">Save</button>
+                        <button class="btn btn-sm btn-outline"
+                                onclick="testIntegration('notion', this)">Test</button>
+                    </div>
+                    <div class="text-xs mt-1 hidden" id="result-notion"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ FEATURE FLAGS TAB ============ -->
+    <div id="tab-flags" style="display: none;">
+        {% for f in flags %}
+        <div class="card bg-base-200 mb-2">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 mr-4">
+                        <div class="font-semibold text-sm">{{ f.label }}</div>
+                        <div class="text-xs opacity-60">{{ f.description }}</div>
+                        {% if f.has_override %}
+                        <div class="text-xs text-warning mt-1">Overridden from .env default</div>
+                        {% endif %}
+                        {% if f.restart_needed %}
+                        <div class="text-xs text-error mt-1">Restart needed to take effect</div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% set is_admin = current_user and current_user.role in ['admin', 'owner'] %}
+                        <input type="checkbox"
+                               class="toggle toggle-primary toggle-sm"
+                               data-flag="{{ f.flag }}"
+                               {{ 'checked' if f.effective else '' }}
+                               {{ '' if is_admin else 'disabled' }}
+                               hx-post="/api/settings/flag/{{ f.flag }}"
+                               hx-swap="none"
+                               hx-trigger="change"
+                               onclick="{% if not is_admin %}return false;{% endif %}"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not (current_user and current_user.role in ['admin', 'owner']) %}
+        <div class="text-xs opacity-50 mt-2 text-center">Admin access required to change flags.</div>
+        {% endif %}
+    </div>
+
+    <!-- ============ PERSONALITY TAB ============ -->
+    <div id="tab-personality" style="display: none;">
+        <div class="card bg-base-200">
+            <div class="card-body p-4">
+                <h3 class="font-semibold mb-1">Agent Personality</h3>
+                <p class="text-xs opacity-60 mb-3">
+                    Describe how your agent should communicate. This is injected into every
+                    conversation — your agent will adapt its tone, style, and behaviour to match.
+                </p>
+                <textarea id="personalityText"
+                          class="textarea textarea-bordered w-full font-mono text-sm"
+                          rows="10"
+                          maxlength="1000"
+                          placeholder="Example: Be concise and direct. Use technical terms but explain them. Address me by name. Never use emojis. When I ask about tasks, prioritise by deadline.">{{ personality }}</textarea>
+                <div class="flex items-center justify-between mt-3">
+                    <span class="text-xs opacity-50"><span id="charCount">0</span>/1000</span>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm btn-ghost" onclick="resetPersonality()">Reset</button>
+                        <button class="btn btn-sm btn-primary" onclick="savePersonality()">Save</button>
+                    </div>
+                </div>
+                <div class="text-xs mt-2 hidden" id="personality-result"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script>
+// ── Tab switching ──────────────────────────────────────────────
+function switchTab(tab, el) {
+    document.querySelectorAll('#settingsTabs .tab').forEach(t => t.classList.remove('tab-active'));
+    el.classList.add('tab-active');
+    ['integrations', 'flags', 'personality'].forEach(t => {
+        const panel = document.getElementById('tab-' + t);
+        if (panel) panel.style.display = t === tab ? '' : 'none';
+    });
+}
+
+// ── Credentials ────────────────────────────────────────────────
+async function saveCredential(key) {
+    const input = document.getElementById('input-' + key);
+    const value = input.value.trim();
+    if (!value) return;
+
+    try {
+        const resp = await fetch('/api/settings/credential/' + key, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({value}),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            input.value = '';
+            const masked = document.getElementById('masked-' + key);
+            if (masked) masked.textContent = data.masked;
+            if (data.restart_needed) {
+                document.getElementById('restartBanner').style.display = '';
+            }
+            showFlash(input.closest('.form-control'), 'Saved', 'success');
+        } else {
+            showFlash(input.closest('.form-control'), data.error || 'Failed', 'error');
+        }
+    } catch (e) {
+        showFlash(input.closest('.form-control'), 'Network error', 'error');
+    }
+}
+
+async function testIntegration(integration, btn) {
+    const resultEl = document.getElementById('result-' + integration);
+    btn.classList.add('loading');
+    resultEl.classList.remove('hidden');
+    resultEl.textContent = 'Testing...';
+    resultEl.className = 'text-xs mt-1 opacity-60';
+
+    try {
+        const resp = await fetch('/api/settings/test/' + integration, {method: 'POST'});
+        const data = await resp.json();
+        resultEl.textContent = data.detail;
+        resultEl.className = 'text-xs mt-1 ' + (data.ok ? 'text-success' : 'text-error');
+
+        // Update status badge
+        const badge = document.getElementById('status-' + integration);
+        if (badge) {
+            badge.textContent = data.ok ? 'Connected' : 'Error';
+            badge.className = 'badge badge-sm ' + (data.ok ? 'badge-success' : 'badge-error');
+        }
+    } catch (e) {
+        resultEl.textContent = 'Network error';
+        resultEl.className = 'text-xs mt-1 text-error';
+    }
+    btn.classList.remove('loading');
+}
+
+function showFlash(container, message, type) {
+    const existing = container.querySelector('.flash-msg');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = 'flash-msg text-xs mt-1 ' + (type === 'success' ? 'text-success' : 'text-error');
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+// ── Personality ────────────────────────────────────────────────
+const textarea = document.getElementById('personalityText');
+const charCount = document.getElementById('charCount');
+
+if (textarea) {
+    charCount.textContent = textarea.value.length;
+    textarea.addEventListener('input', () => {
+        charCount.textContent = textarea.value.length;
+    });
+}
+
+async function savePersonality() {
+    const text = textarea.value.trim();
+    const resultEl = document.getElementById('personality-result');
+
+    try {
+        const resp = await fetch('/api/settings/personality', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text}),
+        });
+        const data = await resp.json();
+        resultEl.classList.remove('hidden');
+        if (data.ok) {
+            resultEl.textContent = text ? 'Personality saved.' : 'Personality cleared.';
+            resultEl.className = 'text-xs mt-2 text-success';
+        } else {
+            resultEl.textContent = data.error || 'Failed';
+            resultEl.className = 'text-xs mt-2 text-error';
+        }
+        setTimeout(() => resultEl.classList.add('hidden'), 3000);
+    } catch (e) {
+        resultEl.classList.remove('hidden');
+        resultEl.textContent = 'Network error';
+        resultEl.className = 'text-xs mt-2 text-error';
+    }
+}
+
+function resetPersonality() {
+    textarea.value = '';
+    charCount.textContent = '0';
+    savePersonality();
+}
+
+// ── Load integration status on page load ───────────────────────
+async function loadIntegrationStatus() {
+    try {
+        const resp = await fetch('/api/settings/integrations');
+        const data = await resp.json();
+        for (const integration of data) {
+            const badge = document.getElementById('status-' + integration.key);
+            if (badge) {
+                if (integration.status === 'configured') {
+                    badge.textContent = 'Configured';
+                    badge.className = 'badge badge-success badge-sm';
+                } else {
+                    badge.textContent = 'Not configured';
+                    badge.className = 'badge badge-ghost badge-sm';
+                }
+            }
+            // Fill masked values
+            for (const [credKey, credInfo] of Object.entries(integration.credentials)) {
+                const maskedEl = document.getElementById('masked-' + credKey);
+                if (maskedEl && credInfo.masked) {
+                    maskedEl.textContent = credInfo.masked;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load integration status:', e);
+    }
+}
+
+// Flag toggle via HTMX
+document.addEventListener('htmx:afterRequest', function(e) {
+    if (e.detail.pathInfo && e.detail.pathInfo.requestPath &&
+        e.detail.pathInfo.requestPath.includes('/settings/flag/')) {
+        document.getElementById('restartBanner').style.display = '';
+    }
+});
+
+// Init
+loadIntegrationStatus();
+</script>
+{% endblock %}

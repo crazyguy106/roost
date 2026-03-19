@@ -26,6 +26,7 @@ try:
 except ImportError:
     otter_router = None
 from roost.web.api_leads import router as leads_router
+from roost.web.api_settings import router as settings_api_router
 
 WEB_DIR = Path(__file__).parent
 USE_OAUTH = bool(GOOGLE_CLIENT_ID)
@@ -377,6 +378,7 @@ function msg(t){log.textContent += t + '\\n';}
     if otter_router is not None:
         app.include_router(otter_router)
     app.include_router(leads_router)
+    app.include_router(settings_api_router)
 
     return app
 

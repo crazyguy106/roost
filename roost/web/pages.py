@@ -1318,3 +1318,25 @@ def docs_file(path: str = ""):
         return JSONResponse({"error": "File type not allowed"}, status_code=403)
 
     return FileResponse(resolved)
+
+
+# ── Settings ─────────────────────────────────────────────────────────
+
+@router.get("/settings")
+def settings_page(request: Request):
+    """Desktop settings page — integrations, flags, personality."""
+    from roost.config_service import get_flags_status, get_integrations_status
+    from roost.context import get_preferences
+
+    user = getattr(request.state, "current_user", None)
+    user_id = str(user.get("user_id", 1)) if user else "1"
+    prefs = get_preferences(user_id)
+
+    return templates.TemplateResponse("settings.html", {
+        **_base_context(request),
+        "flags": get_flags_status(),
+        "integrations": get_integrations_status(),
+        "personality": prefs.get("personality", ""),
+        "active_tab": "",
+        "page_title": "Settings",
+    })

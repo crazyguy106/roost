@@ -14,6 +14,7 @@ setup(
             "roost-bot=roost.bot.main:main",
             "roost-cli=roost.cli.main:main",
             "roost-mcp=roost.mcp.server:main",
+            "roost-onboard=roost.cli.onboard:main",
         ],
     },
     python_requires=">=3.11",
