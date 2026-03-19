@@ -120,16 +120,32 @@ def prune_chat_history(days: int = 7) -> int:
 
 # ── Context assembly (the CAGE builder) ─────────────────────────────
 
-def build_agent_context(user_id: str, base_prompt: str) -> str:
-    """Build a dynamic system prompt with CAGE context injected.
+def build_agent_context(user_id: str, base_prompt: str,
+                        provider: str = "") -> str:
+    """Build a dynamic system prompt with charter + CAGE context.
+
+    Layers (in order):
+    1. Charter (core identity + provider-specific tuning from data/charter/)
+    2. Base prompt (tool guidance, Telegram-specific rules)
+    3. CAGE dynamic context (preferences, active state, goals)
 
     Args:
         user_id: Telegram user ID.
         base_prompt: Static system prompt (behavior rules, tool guidance).
+        provider: AI provider name for provider-specific charter tuning.
 
     Returns:
         Enhanced system prompt with injected context, bounded by token budget.
     """
+    # ── Charter: core identity ──
+    try:
+        from roost.charter import get_charter
+        charter = get_charter(provider)
+        if charter:
+            base_prompt = charter + "\n\n---\n\n" + base_prompt
+    except Exception:
+        pass  # Charter is optional — proceed without it
+
     sections = []
 
     # ── Align: user preferences ──

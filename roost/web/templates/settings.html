@@ -10,6 +10,7 @@
         <a class="tab tab-active" role="tab" data-tab="integrations" onclick="switchTab('integrations', this)">Integrations</a>
         <a class="tab" role="tab" data-tab="flags" onclick="switchTab('flags', this)">Feature Flags</a>
         <a class="tab" role="tab" data-tab="personality" onclick="switchTab('personality', this)">Personality</a>
+        <a class="tab" role="tab" data-tab="charter" onclick="switchTab('charter', this)">Charter</a>
     </div>
 
     <!-- Restart banner -->
@@ -238,6 +239,53 @@
             </div>
         </div>
     </div>
+
+    <!-- ============ CHARTER TAB ============ -->
+    <div id="tab-charter" style="display: none;">
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <h3 class="font-semibold mb-1">Agent Charter</h3>
+                <p class="text-xs opacity-60 mb-3">
+                    The charter defines your agent's core identity: purpose, voice, values, and boundaries.
+                    This is the foundation of every conversation — provider-specific files add behavioral
+                    tuning per AI engine. Written in Markdown.
+                </p>
+
+                <!-- Core charter -->
+                <label class="label py-1">
+                    <span class="label-text text-sm font-medium">charter.md</span>
+                    <span class="label-text-alt text-xs opacity-50">Core identity (all providers)</span>
+                </label>
+                <textarea id="charterText"
+                          class="textarea textarea-bordered w-full font-mono text-xs"
+                          rows="14"
+                          placeholder="Loading..."></textarea>
+                <div class="flex items-center justify-between mt-2 mb-4">
+                    <span class="text-xs opacity-50" id="charterInfo"></span>
+                    <button class="btn btn-sm btn-primary" onclick="saveCharter()">Save Charter</button>
+                </div>
+                <div class="text-xs mt-1 hidden" id="charter-result"></div>
+
+                <div class="divider text-xs opacity-40">Provider-Specific Tuning</div>
+
+                <!-- Provider tabs -->
+                <div class="tabs tabs-xs mb-3" id="providerTabs">
+                    <a class="tab tab-active" onclick="switchProvider('gemini', this)">Gemini</a>
+                    <a class="tab" onclick="switchProvider('claude', this)">Claude</a>
+                    <a class="tab" onclick="switchProvider('openai', this)">OpenAI</a>
+                </div>
+                <textarea id="providerCharterText"
+                          class="textarea textarea-bordered w-full font-mono text-xs"
+                          rows="8"
+                          placeholder="Loading..."></textarea>
+                <div class="flex items-center justify-between mt-2">
+                    <span class="text-xs opacity-50" id="providerInfo"></span>
+                    <button class="btn btn-sm btn-outline" onclick="saveProviderCharter()">Save Provider</button>
+                </div>
+                <div class="text-xs mt-1 hidden" id="provider-charter-result"></div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -248,7 +296,7 @@
 function switchTab(tab, el) {
     document.querySelectorAll('#settingsTabs .tab').forEach(t => t.classList.remove('tab-active'));
     el.classList.add('tab-active');
-    ['integrations', 'flags', 'personality'].forEach(t => {
+    ['integrations', 'flags', 'personality', 'charter'].forEach(t => {
         const panel = document.getElementById('tab-' + t);
         if (panel) panel.style.display = t === tab ? '' : 'none';
     });
@@ -400,7 +448,92 @@ document.addEventListener('htmx:afterRequest', function(e) {
     }
 });
 
+// ── Charter ───────────────────────────────────────────────────
+let charterData = {};
+let activeProvider = 'gemini';
+
+async function loadCharter() {
+    try {
+        const resp = await fetch('/api/settings/charter');
+        charterData = await resp.json();
+        document.getElementById('charterText').value = charterData.charter || '';
+        document.getElementById('charterInfo').textContent =
+            charterData.charter ? charterData.charter.length + ' chars' : 'Empty';
+        switchProvider('gemini', document.querySelector('#providerTabs .tab'));
+    } catch (e) {
+        console.error('Failed to load charter:', e);
+    }
+}
+
+function switchProvider(provider, el) {
+    activeProvider = provider;
+    document.querySelectorAll('#providerTabs .tab').forEach(t => t.classList.remove('tab-active'));
+    el.classList.add('tab-active');
+    const text = (charterData.providers && charterData.providers[provider]) || '';
+    document.getElementById('providerCharterText').value = text;
+    document.getElementById('providerInfo').textContent =
+        text ? provider + '.md — ' + text.length + ' chars' : provider + '.md — empty';
+}
+
+async function saveCharter() {
+    const text = document.getElementById('charterText').value;
+    const resultEl = document.getElementById('charter-result');
+    try {
+        const resp = await fetch('/api/settings/charter', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text}),
+        });
+        const data = await resp.json();
+        resultEl.classList.remove('hidden');
+        if (data.ok) {
+            resultEl.textContent = 'Charter saved (' + data.length + ' chars)';
+            resultEl.className = 'text-xs mt-1 text-success';
+            document.getElementById('charterInfo').textContent = data.length + ' chars';
+        } else {
+            resultEl.textContent = data.error || 'Failed';
+            resultEl.className = 'text-xs mt-1 text-error';
+        }
+        setTimeout(() => resultEl.classList.add('hidden'), 3000);
+    } catch (e) {
+        resultEl.classList.remove('hidden');
+        resultEl.textContent = 'Network error';
+        resultEl.className = 'text-xs mt-1 text-error';
+    }
+}
+
+async function saveProviderCharter() {
+    const text = document.getElementById('providerCharterText').value;
+    const resultEl = document.getElementById('provider-charter-result');
+    try {
+        const resp = await fetch('/api/settings/charter/' + activeProvider, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({text}),
+        });
+        const data = await resp.json();
+        resultEl.classList.remove('hidden');
+        if (data.ok) {
+            resultEl.textContent = activeProvider + '.md saved';
+            resultEl.className = 'text-xs mt-1 text-success';
+            // Update local cache
+            if (charterData.providers) charterData.providers[activeProvider] = text;
+            document.getElementById('providerInfo').textContent =
+                activeProvider + '.md — ' + text.length + ' chars';
+        } else {
+            resultEl.textContent = data.error || 'Failed';
+            resultEl.className = 'text-xs mt-1 text-error';
+        }
+        setTimeout(() => resultEl.classList.add('hidden'), 3000);
+    } catch (e) {
+        resultEl.classList.remove('hidden');
+        resultEl.textContent = 'Network error';
+        resultEl.className = 'text-xs mt-1 text-error';
+    }
+}
+
 // Init
 loadIntegrationStatus();
+loadCharter();
 </script>
 {% endblock %}

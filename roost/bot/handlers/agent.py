@@ -44,12 +44,11 @@ _CLI_PROVIDERS = {
     "openai": {"bin": "codex", "args": lambda p: ["codex", p], "label": "OpenAI"},
 }
 
-# System prompt shared by all agentic providers
-AGENT_SYSTEM_PROMPT = """You are a personal AI agent running on the user's private server via Roost.
-You help with daily productivity: managing tasks, checking calendar, triaging email, taking notes, and running custom skills.
+# Operational rules for Telegram context (tool guidance, format constraints).
+# Identity, voice, and boundaries come from data/charter/charter.md.
+AGENT_SYSTEM_PROMPT = """Operational context: this is a Telegram chat interface.
 
-Guidelines:
-- Be concise and direct. This is a Telegram chat, not an essay.
+Tool guidance:
 - When asked about today's schedule, use get_today_briefing or get_today_events.
 - When asked about email, use search_emails. Common queries: "is:unread", "is:unread label:INBOX", "from:person".
 - When asked to send/reply to email, use draft_email to create a draft. NEVER send without showing the draft first.
@@ -59,7 +58,6 @@ Guidelines:
 - When the user says "remember that...", "I prefer...", "always...", or "never...", use set_preference to save it. These persist across restarts.
 - For general questions that don't need tools, just answer directly.
 - Keep responses under 2000 characters when possible (Telegram limit).
-- Respect user preferences listed below (if any) — they represent how the user wants you to behave.
 """
 
 
@@ -141,8 +139,8 @@ async def _run_agentic(update: Update, prompt: str, user_id: int, mode: str):
         except Exception:
             pass
 
-    # Build dynamic system prompt with CAGE context
-    system_prompt = build_agent_context(str(user_id), AGENT_SYSTEM_PROMPT)
+    # Build dynamic system prompt with charter + CAGE context
+    system_prompt = build_agent_context(str(user_id), AGENT_SYSTEM_PROMPT, provider=mode)
 
     try:
         agent = _create_agent(mode, session_id, system_prompt)

@@ -78,6 +78,22 @@ Maximum 1000 characters. Examples:
 - "Direct, concise, slightly formal. No emojis."
 - "Warm and encouraging. Use bullet points. Explain technical terms."
 
+### Charter Tab
+
+Edit the agent's core identity and provider-specific tuning. The charter lives in `data/charter/` as markdown files:
+
+```
+data/charter/
+├── charter.md       ← Core identity (all providers)
+├── gemini.md        ← Gemini-specific behavioral tuning
+├── claude.md        ← Claude-specific tuning
+└── openai.md        ← OpenAI-specific tuning
+```
+
+**How it layers:** Charter (core identity) + Provider tuning + CAGE dynamic context (preferences, tasks, calendar) = the system prompt each AI provider receives.
+
+The charter is the deep structural definition. The personality preference (Personality tab) is the lightweight runtime override. Both are active simultaneously.
+
 ---
 
 ## 3. Credential Encryption
@@ -122,6 +138,9 @@ All endpoints require authentication. Credential management requires admin/owner
 | POST | `/api/settings/flag/{flag_name}` | Toggle a feature flag on/off |
 | GET | `/api/settings/personality` | Get current personality text |
 | POST | `/api/settings/personality` | Save personality text |
+| GET | `/api/settings/charter` | Get all charter files (core + providers) |
+| POST | `/api/settings/charter` | Save core charter.md (admin) |
+| POST | `/api/settings/charter/{provider}` | Save provider charter (admin) |
 
 ### Example: Store a Credential
 

@@ -203,3 +203,55 @@ def toggle_flag(request: Request, flag_name: str):
     if "error" in result:
         return JSONResponse(result, status_code=400)
     return JSONResponse(result)
+
+
+# ── Charter endpoints ────────────────────────────────────────────
+
+@router.get("/charter")
+def get_charter_endpoint(request: Request):
+    """Get the core charter and all provider files."""
+    from roost.charter import get_charter_raw, get_provider_charter_raw, list_charter_files
+
+    return JSONResponse({
+        "charter": get_charter_raw(),
+        "providers": {
+            p: get_provider_charter_raw(p)
+            for p in ("gemini", "claude", "openai")
+        },
+        "files": list_charter_files(),
+    })
+
+
+@router.post("/charter")
+async def save_charter_endpoint(request: Request):
+    """Save the core charter.md file."""
+    auth_error = _require_admin(request)
+    if auth_error:
+        return JSONResponse(auth_error, status_code=403)
+
+    body = await request.json()
+    text = body.get("text", "")
+
+    from roost.charter import save_charter
+    save_charter(text)
+
+    return JSONResponse({"ok": True, "length": len(text)})
+
+
+@router.post("/charter/{provider}")
+async def save_provider_charter_endpoint(request: Request, provider: str):
+    """Save a provider-specific charter file."""
+    auth_error = _require_admin(request)
+    if auth_error:
+        return JSONResponse(auth_error, status_code=403)
+
+    body = await request.json()
+    text = body.get("text", "")
+
+    from roost.charter import save_provider_charter
+    try:
+        save_provider_charter(provider, text)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    return JSONResponse({"ok": True, "provider": provider, "length": len(text)})

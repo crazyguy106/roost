@@ -164,12 +164,12 @@ class TestBuildAgentContext:
     BASE_PROMPT = "You are a helpful assistant."
 
     def test_no_context_returns_base(self, db_conn, user_id):
-        """With no data in DB, should return the base prompt unchanged."""
+        """With no data in DB, base prompt should be present in result."""
         from roost.context import build_agent_context
 
         result = build_agent_context(user_id, self.BASE_PROMPT)
-        # No preferences, no tasks, no calendar, no notes → base prompt
-        assert result == self.BASE_PROMPT
+        # Base prompt should be present (charter may be prepended)
+        assert self.BASE_PROMPT in result
 
     def test_preferences_injected(self, db_conn, user_id):
         from roost.context import set_preference, build_agent_context
@@ -182,7 +182,7 @@ class TestBuildAgentContext:
         assert "tone: concise" in result
         assert "language: en" in result
         # Base prompt still present
-        assert result.startswith(self.BASE_PROMPT)
+        assert self.BASE_PROMPT in result
 
     def test_notes_injected(self, db_conn, user_id):
         """Recent notes should appear in the context."""
