@@ -214,6 +214,12 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
                     username, password = decoded.split(":", 1)
                     if (secrets.compare_digest(username, WEB_USERNAME)
                             and secrets.compare_digest(password, WEB_PASSWORD)):
+                        # Set user context so admin-gated endpoints work
+                        request.state.current_user = {
+                            "name": WEB_USERNAME,
+                            "role": "owner",
+                            "user_id": 1,
+                        }
                         return await call_next(request)
             except Exception:
                 _logger.debug("Basic auth header decode failed", exc_info=True)
@@ -226,6 +232,9 @@ class UserContextMiddleware(BaseHTTPMiddleware):
     """Copy session user to request.state, refreshing role from DB."""
 
     async def dispatch(self, request: Request, call_next):
+        # Skip if already set (e.g. by basic auth in UnifiedAuthMiddleware)
+        if getattr(request.state, "current_user", None):
+            return await call_next(request)
         user = getattr(request, "session", {}).get("user")
         if user and user.get("user_id"):
             # Refresh role from DB to pick up changes without re-login
