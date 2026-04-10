@@ -6,7 +6,8 @@ from markdownify import markdownify as md
 
 _TIMEOUT = 30
 _USER_AGENT = "Mozilla/5.0 (compatible; Roost/1.0)"
-_CDP_ENDPOINT = "http://127.0.0.1:9222"
+import os
+_CDP_ENDPOINT = os.getenv("CDP_ENDPOINT", "http://chromium:3000")
 
 
 def fetch_article(url: str) -> dict:

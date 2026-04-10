@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AI_USER="dev"
+
+# Run tmux commands as dev (sessions live in dev's tmux server)
+# When already running as dev, skip sudo
+tmx() {
+    if [[ "$(id -u)" == "$(id -u "$AI_USER")" ]]; then
+        tmux "$@"
+    else
+        sudo -u "$AI_USER" tmux "$@"
+    fi
+}
+
+usage() {
+    cat <<'EOF'
+Usage: ai <command> [args]
+
+Commands:
+  claude[:id], c[:id]   Attach to Claude session (default or named)
+  gemini[:id], g[:id]   Attach to Gemini session (default or named)
+  peek <name[:id]> [N]  Print last N lines (default 30) without attaching
+  status                Show running sessions, PIDs, uptime, state
+  kill <name[:id]|name:all|all>  Kill session(s)
+  respawn <name[:id]>   Restart CLI in a crashed pane
+  log <name[:id]>       Dump full scrollback to stdout (pipeable)
+  reap [hours] [--dry-run] Restart sessions older than N hours (default 8)
+  start [name[:id]]     Launch session(s) in $PWD (alias for ai-start)
+
+Session IDs:
+  claude         Default session (ai-claude)
+  claude:2       Numbered session (ai-claude-2)
+  claude:research Named session (ai-claude-research)
+
+Names: claude, c, gemini, g
+Sessions run as dev with dangerous/yolo mode on.
+EOF
+}
+
+# Parse a target like "claude", "c:2", "gemini:research" into NAME and SESSION.
+# Sets global variables: NAME (cli name) and SESSION (tmux session name).
+parse_target() {
+    local input="$1"
+    local cli id=""
+
+    # Split on first colon
+    if [[ "$input" == *:* ]]; then
+        cli="${input%%:*}"
+        id="${input#*:}"
+
+        if [[ -z "$id" ]]; then
+            echo "Error: empty session ID after colon in '$input'" >&2
+            return 1
+        fi
+
+        if [[ ! "$id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "Error: invalid session ID '$id' (use alphanumeric, hyphens, underscores)" >&2
+            return 1
+        fi
+    else
+        cli="$input"
+    fi
+
+    # Resolve aliases
+    case "$cli" in
+        claude|c) NAME="claude" ;;
+        gemini|g) NAME="gemini" ;;
+        *) echo "Error: unknown session '$cli' (use claude/c or gemini/g)" >&2; return 1 ;;
+    esac
+
+    # Build session name
+    if [[ -n "$id" ]]; then
+        SESSION="ai-${NAME}-${id}"
+    else
+        SESSION="ai-${NAME}"
+    fi
+}
+
+# Discover all ai-* tmux sessions
+discover_sessions() {
+    tmx list-sessions -F '#{session_name}' 2>/dev/null | grep '^ai-' || true
+}
+
+# Discover sessions for a specific CLI (e.g., "claude" matches ai-claude, ai-claude-2, etc.)
+discover_sessions_for() {
+    local cli="$1"
+    discover_sessions | grep "^ai-${cli}\(-\|$\)" || true
+}
+
+cmd_attach() {
+    parse_target "$1"
+
+    if ! tmx has-session -t "$SESSION" 2>/dev/null; then
+        echo "Session '$SESSION' does not exist. Run: ai start $1"
+        exit 1
+    fi
+
+    tmx attach-session -t "$SESSION"
+}
+
+cmd_peek() {
+    parse_target "$1"
+    local lines="${2:-30}"
+
+    if ! tmx has-session -t "$SESSION" 2>/dev/null; then
+        echo "Session '$SESSION' does not exist."
+        exit 1
+    fi
+
+    tmx capture-pane -t "$SESSION" -p -S "-${lines}"
+}
+
+cmd_status() {
+    local fmt="%-24s %-8s %-10s %-8s %s\n"
+    printf "$fmt" "SESSION" "STATE" "PID" "UPTIME" "COMMAND"
+    printf "$fmt" "-------" "-----" "---" "------" "-------"
+
+    local sessions
+    sessions=$(discover_sessions)
+
+    if [[ -z "$sessions" ]]; then
+        echo "(no ai sessions running)"
+        return 0
+    fi
+
+    while IFS= read -r session; do
+        if ! tmx has-session -t "$session" 2>/dev/null; then
+            continue
+        fi
+
+        local pane_pid pane_dead
+        pane_pid=$(tmx display-message -t "$session" -p '#{pane_pid}')
+        pane_dead=$(tmx display-message -t "$session" -p '#{pane_dead}')
+
+        if [[ "$pane_dead" == "1" ]]; then
+            printf "$fmt" "$session" "DEAD" "$pane_pid" "-" "(exited)"
+        else
+            local child_pid cmd uptime_str
+            child_pid=$(pgrep -P "$pane_pid" 2>/dev/null | head -1) || true
+
+            if [[ -n "$child_pid" ]]; then
+                cmd=$(ps -o comm= -p "$child_pid" 2>/dev/null) || cmd="(unknown)"
+                uptime_str=$(ps -o etime= -p "$child_pid" 2>/dev/null | xargs) || uptime_str="?"
+            else
+                cmd=$(ps -o comm= -p "$pane_pid" 2>/dev/null) || cmd="(shell)"
+                uptime_str=$(ps -o etime= -p "$pane_pid" 2>/dev/null | xargs) || uptime_str="?"
+            fi
+
+            printf "$fmt" "$session" "running" "${child_pid:-$pane_pid}" "$uptime_str" "$cmd"
+        fi
+    done <<< "$sessions"
+}
+
+cmd_kill() {
+    local target="$1"
+
+    if [[ "$target" == "all" ]]; then
+        # Kill every ai-* session
+        local sessions
+        sessions=$(discover_sessions)
+
+        if [[ -z "$sessions" ]]; then
+            echo "[skip] No ai sessions running"
+            return 0
+        fi
+
+        while IFS= read -r session; do
+            if tmx has-session -t "$session" 2>/dev/null; then
+                tmx kill-session -t "$session"
+                echo "[ok]   Killed $session"
+            fi
+        done <<< "$sessions"
+        return 0
+    fi
+
+    # Check for name:all pattern (kill all sessions for a CLI)
+    if [[ "$target" == *:all ]]; then
+        local cli="${target%%:all}"
+        # Resolve alias to canonical name
+        case "$cli" in
+            claude|c) cli="claude" ;;
+            gemini|g) cli="gemini" ;;
+            *) echo "Error: unknown session '$cli' (use claude/c or gemini/g)" >&2; return 1 ;;
+        esac
+
+        local sessions
+        sessions=$(discover_sessions_for "$cli")
+
+        if [[ -z "$sessions" ]]; then
+            echo "[skip] No $cli sessions running"
+            return 0
+        fi
+
+        while IFS= read -r session; do
+            if tmx has-session -t "$session" 2>/dev/null; then
+                tmx kill-session -t "$session"
+                echo "[ok]   Killed $session"
+            fi
+        done <<< "$sessions"
+        return 0
+    fi
+
+    # Kill a specific session
+    parse_target "$target"
+
+    if tmx has-session -t "$SESSION" 2>/dev/null; then
+        tmx kill-session -t "$SESSION"
+        echo "[ok]   Killed $SESSION"
+    else
+        echo "[skip] $SESSION not running"
+    fi
+}
+
+cmd_respawn() {
+    parse_target "$1"
+
+    if ! tmx has-session -t "$SESSION" 2>/dev/null; then
+        echo "Session '$SESSION' does not exist. Run: ai start $1"
+        exit 1
+    fi
+
+    local pane_dead
+    pane_dead=$(tmx display-message -t "$SESSION" -p '#{pane_dead}')
+
+    if [[ "$pane_dead" == "1" ]]; then
+        local work_dir
+        work_dir=$(tmx display-message -t "$SESSION" -p '#{pane_current_path}' 2>/dev/null) || work_dir="/home/$AI_USER"
+
+        local cmd
+        case "$NAME" in
+            claude) cmd="claude --dangerously-skip-permissions" ;;
+            gemini) cmd="GEMINI_SANDBOX=false gemini -y" ;;
+        esac
+
+        tmx respawn-pane -t "$SESSION" -k
+        sleep 0.3
+        tmx send-keys -t "$SESSION" "cd $work_dir && $cmd" Enter
+        echo "[ok]   Respawned $NAME in $SESSION (in $work_dir)"
+    else
+        echo "Pane in '$SESSION' is still alive. Kill it first or use: ai kill $1 && ai start $1"
+    fi
+}
+
+cmd_log() {
+    parse_target "$1"
+
+    if ! tmx has-session -t "$SESSION" 2>/dev/null; then
+        echo "Session '$SESSION' does not exist."
+        exit 1
+    fi
+
+    tmx capture-pane -t "$SESSION" -p -S -
+}
+
+cmd_reap() {
+    local max_hours=8
+    local dry_run=false
+
+    # Parse arguments
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) dry_run=true ;;
+            *)
+                if [[ "$arg" =~ ^[0-9]+$ ]]; then
+                    max_hours="$arg"
+                else
+                    echo "Usage: ai reap [hours] [--dry-run]"; exit 1
+                fi
+                ;;
+        esac
+    done
+
+    local max_seconds=$((max_hours * 3600))
+    local sessions
+    sessions=$(discover_sessions)
+
+    if [[ -z "$sessions" ]]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') [skip] No ai sessions running"
+        return 0
+    fi
+
+    echo "$(date '+%Y-%m-%d %H:%M:%S') Reaping sessions older than ${max_hours}h (${max_seconds}s)${dry_run:+ [DRY RUN]}"
+
+    while IFS= read -r session; do
+        if ! tmx has-session -t "$session" 2>/dev/null; then
+            continue
+        fi
+
+        local pane_pid pane_dead
+        pane_pid=$(tmx display-message -t "$session" -p '#{pane_pid}')
+        pane_dead=$(tmx display-message -t "$session" -p '#{pane_dead}')
+
+        if [[ "$pane_dead" == "1" ]]; then
+            echo "  [dead] $session — pane is dead, skipping"
+            continue
+        fi
+
+        # Get child process (the actual CLI)
+        local child_pid
+        child_pid=$(pgrep -P "$pane_pid" 2>/dev/null | head -1) || true
+        local target_pid="${child_pid:-$pane_pid}"
+
+        # Get elapsed time in seconds
+        local elapsed
+        elapsed=$(ps -o etimes= -p "$target_pid" 2>/dev/null | xargs) || elapsed=0
+
+        if [[ "$elapsed" -gt "$max_seconds" ]]; then
+            local uptime_human
+            uptime_human=$(ps -o etime= -p "$target_pid" 2>/dev/null | xargs) || uptime_human="?"
+
+            # Capture working directory before killing
+            local work_dir
+            work_dir=$(tmx display-message -t "$session" -p '#{pane_current_path}' 2>/dev/null) || work_dir="/home/$AI_USER"
+
+            # Derive CLI name from session name (ai-claude-* → claude, ai-gemini-* → gemini)
+            local cli_name
+            if [[ "$session" =~ ^ai-claude ]]; then
+                cli_name="claude"
+            elif [[ "$session" =~ ^ai-gemini ]]; then
+                cli_name="gemini"
+            else
+                echo "  [skip] $session — unknown CLI type"
+                continue
+            fi
+
+            # Build CLI command
+            local cmd
+            case "$cli_name" in
+                claude) cmd="claude --dangerously-skip-permissions" ;;
+                gemini) cmd="GEMINI_SANDBOX=false gemini -y" ;;
+            esac
+
+            if [[ "$dry_run" == true ]]; then
+                echo "  [reap] $session — uptime ${uptime_human} (${elapsed}s) — would restart $cli_name in $work_dir"
+            else
+                # Kill the old session
+                tmx kill-session -t "$session"
+                # Relaunch: create new detached session, cd and start CLI
+                tmx new-session -d -s "$session" -x 200 -y 50
+                tmx send-keys -t "$session" "cd $work_dir && $cmd" Enter
+                echo "  [reap] $session — uptime ${uptime_human} (${elapsed}s) — restarted $cli_name in $work_dir"
+            fi
+        else
+            local uptime_human
+            uptime_human=$(ps -o etime= -p "$target_pid" 2>/dev/null | xargs) || uptime_human="?"
+            echo "  [skip] $session — uptime ${uptime_human} (${elapsed}s)"
+        fi
+    done <<< "$sessions"
+}
+
+# --- Main dispatch ---
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+fi
+
+case "$1" in
+    claude|c|claude:*|c:*|gemini|g|gemini:*|g:*)
+        cmd_attach "$1"
+        ;;
+    peek)
+        [[ $# -lt 2 ]] && { echo "Usage: ai peek <name[:id]> [lines]"; exit 1; }
+        cmd_peek "$2" "${3:-30}"
+        ;;
+    status)
+        cmd_status
+        ;;
+    kill)
+        [[ $# -lt 2 ]] && { echo "Usage: ai kill <name[:id]|name:all|all>"; exit 1; }
+        cmd_kill "$2"
+        ;;
+    respawn)
+        [[ $# -lt 2 ]] && { echo "Usage: ai respawn <name[:id]>"; exit 1; }
+        cmd_respawn "$2"
+        ;;
+    log)
+        [[ $# -lt 2 ]] && { echo "Usage: ai log <name[:id]>"; exit 1; }
+        cmd_log "$2"
+        ;;
+    reap)
+        shift
+        cmd_reap "$@"
+        ;;
+    start)
+        shift
+        exec ai-start "$@"
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    *)
+        echo "Unknown command: $1"
+        usage
+        exit 1
+        ;;
+esac

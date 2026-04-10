@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SESSIONS=("claude" "gemini")
+AI_USER="dev"
+AI_HOME="/home/$AI_USER"
+WORK_DIR="$(pwd)"
+
+# Run tmux commands as dev (sessions live in dev's tmux server)
+# When already running as dev, skip sudo
+tmx() {
+    if [[ "$(id -u)" == "$(id -u "$AI_USER")" ]]; then
+        tmux "$@"
+    else
+        sudo -u "$AI_USER" tmux "$@"
+    fi
+}
+
+# Parse a target like "claude", "c:2", "gemini:research" into NAME and SESSION.
+# Sets global variables: NAME (cli name) and SESSION (tmux session name).
+parse_target() {
+    local input="$1"
+    local cli id=""
+
+    # Split on first colon
+    if [[ "$input" == *:* ]]; then
+        cli="${input%%:*}"
+        id="${input#*:}"
+
+        if [[ -z "$id" ]]; then
+            echo "Error: empty session ID after colon in '$input'" >&2
+            return 1
+        fi
+
+        if [[ ! "$id" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "Error: invalid session ID '$id' (use alphanumeric, hyphens, underscores)" >&2
+            return 1
+        fi
+    else
+        cli="$input"
+    fi
+
+    # Resolve aliases
+    case "$cli" in
+        claude|c) NAME="claude" ;;
+        gemini|g) NAME="gemini" ;;
+        *) echo "Error: unknown session '$cli' (use claude/c or gemini/g)" >&2; return 1 ;;
+    esac
+
+    # Build session name
+    if [[ -n "$id" ]]; then
+        SESSION="ai-${NAME}-${id}"
+    else
+        SESSION="ai-${NAME}"
+    fi
+}
+
+launch_session() {
+    local input="$1"
+    parse_target "$input"
+
+    if tmx has-session -t "$SESSION" 2>/dev/null; then
+        echo "[skip] Session '$SESSION' already exists"
+        return 0
+    fi
+
+    # Build the command with dangerous/yolo flags
+    local cmd
+    case "$NAME" in
+        claude) cmd="claude --dangerously-skip-permissions" ;;
+        gemini) cmd="GEMINI_SANDBOX=false gemini -y" ;;
+    esac
+
+    # Create detached session as dev user
+    tmx new-session -d -s "$SESSION" -x 200 -y 50
+    tmx send-keys -t "$SESSION" "cd $WORK_DIR && $cmd" Enter
+
+    echo "[ok]   Session '$SESSION' launched as $AI_USER (in $WORK_DIR)"
+}
+
+if [[ $# -eq 0 ]]; then
+    for s in "${SESSIONS[@]}"; do
+        launch_session "$s"
+    done
+elif [[ $# -eq 1 ]]; then
+    launch_session "$1"
+else
+    echo "Usage: ai-start [name[:id]]"
+    echo "  ai-start              Launch default claude + gemini sessions"
+    echo "  ai-start claude       Launch default claude session"
+    echo "  ai-start claude:2     Launch numbered claude session"
+    echo "  ai-start c:research   Launch named claude session"
+    echo "Launches in current directory: $(pwd)"
+    exit 1
+fi

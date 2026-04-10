@@ -1,13 +1,14 @@
-"""Google OAuth2 authentication routes."""
+"""Google OAuth2 authentication routes + one-time password setup."""
 
 import logging
+import secrets
 from pathlib import Path
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from authlib.integrations.starlette_client import OAuth
 from roost.config import (
-    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MS_CLIENT_ID,
+    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MS_CLIENT_ID, PROJECT_ROOT,
 )
 
 logger = logging.getLogger("roost.auth")
@@ -112,3 +113,80 @@ async def auth_me(request: Request):
 @router.get("/denied")
 async def denied(request: Request):
     return templates.TemplateResponse("denied.html", {"request": request})
+
+
+# ── One-time password setup ─────────────────────────────────────
+
+SETUP_TOKEN_FILE = PROJECT_ROOT / "data" / ".setup_token"
+
+
+@router.get("/setup")
+async def setup_password_form(request: Request):
+    """Show the password setup form if the token is valid."""
+    token = request.query_params.get("token", "")
+    if not SETUP_TOKEN_FILE.exists():
+        return RedirectResponse("/auth/login-page")
+    stored_token = SETUP_TOKEN_FILE.read_text().strip()
+    if not stored_token or not secrets.compare_digest(token, stored_token):
+        return RedirectResponse("/auth/login-page")
+    return templates.TemplateResponse("setup_password.html", {
+        "request": request,
+        "token": token,
+        "error": None,
+    })
+
+
+@router.post("/setup")
+async def setup_password_submit(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    """Validate and set the web password, then delete the setup token."""
+    if not SETUP_TOKEN_FILE.exists():
+        return RedirectResponse("/auth/login-page")
+    stored_token = SETUP_TOKEN_FILE.read_text().strip()
+    if not stored_token or not secrets.compare_digest(token, stored_token):
+        return RedirectResponse("/auth/login-page")
+
+    if password != password_confirm:
+        return templates.TemplateResponse("setup_password.html", {
+            "request": request, "token": token,
+            "error": "Passwords do not match.",
+        })
+    if len(password) < 8:
+        return templates.TemplateResponse("setup_password.html", {
+            "request": request, "token": token,
+            "error": "Password must be at least 8 characters.",
+        })
+
+    # Update WEB_PASSWORD in .env
+    env_file = PROJECT_ROOT / ".env"
+    if env_file.exists():
+        lines = env_file.read_text().splitlines()
+        new_lines = []
+        found = False
+        for line in lines:
+            if line.startswith("WEB_PASSWORD="):
+                new_lines.append(f"WEB_PASSWORD={password}")
+                found = True
+            else:
+                new_lines.append(line)
+        if not found:
+            new_lines.append(f"WEB_PASSWORD={password}")
+        env_file.write_text("\n".join(new_lines) + "\n")
+    else:
+        env_file.write_text(f"WEB_PASSWORD={password}\n")
+
+    SETUP_TOKEN_FILE.unlink()
+
+    import roost.config as cfg
+    cfg.WEB_PASSWORD = password
+
+    logger.info("Password set via setup token — token consumed")
+    return templates.TemplateResponse("setup_password.html", {
+        "request": request, "token": "",
+        "error": None,
+        "success": True,
+    })

@@ -164,7 +164,7 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
 
     OPEN_PATHS = {
         "/auth/login", "/auth/login-page", "/auth/callback", "/auth/denied",
-        "/auth/logout",
+        "/auth/logout", "/auth/setup",
         "/auth/gmail/callback",
         "/auth/microsoft", "/auth/microsoft/callback",
         "/api/otter/ingest",
