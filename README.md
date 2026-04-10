@@ -15,11 +15,15 @@ Roost gives Claude Code (or any MCP-compatible AI) a persistent workspace with:
 - **Calendar** — Google Calendar and/or Microsoft Calendar
 - **Cloud Storage** — Google Drive and/or OneDrive
 - **AI Tools** — Gemini generation, research, summarization, vision
-- **Telegram Bot** — mobile access to all features via 50+ commands
+- **Messaging** — WhatsApp Cloud API and WeChat Official Account with AI CDR pipeline
+- **Response Templates** — canned messages with {{variable}} placeholders, AI-selected by intent
+- **Automation Recipes** — user-defined rules with risk tiers (read_only, internal_write, external_write)
+- **AI CDR Pipeline** — Content Disarm & Reconstruct for safe inbound message classification
+- **Telegram Bot** — mobile access to all features via 60+ commands
 - **Notion Sync** — pages, databases, blocks
 - **Infrastructure** — SSH, Docker, Kubernetes management for remote servers
 
-All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server (219 tools).
+All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server (235+ tools).
 
 **New to Roost?** Run `roost-onboard` for the interactive setup wizard, or manage everything from the `/settings` page after deployment.
 
@@ -71,6 +75,8 @@ Toggle features via build args or `.env`:
 | **AI** | `ENABLE_AI=true` | 10 | Gemini generate, research, summarize, vision, image |
 | **Telegram** | `ENABLE_TELEGRAM=true` | 2+bot | Full Telegram bot with 50+ commands |
 | **Notion** | `ENABLE_NOTION=true` | 16 | Pages, databases, blocks, comments |
+| **WhatsApp** | `WHATSAPP_ENABLED=true` | webhook | WhatsApp Cloud API messaging + AI CDR |
+| **WeChat** | `WECHAT_ENABLED=true` | webhook | WeChat Official Account messaging + AI CDR |
 | **Infra** | `ENABLE_INFRA=true` | 18 | SSH/SCP, Docker, Kubernetes |
 
 ## Security Model
@@ -79,10 +85,13 @@ Roost runs Claude Code inside a Docker container — **the container IS the sand
 
 1. **Container isolation** — Claude Code can only affect what's inside the container
 2. **Outbound guard hook** — emails, SSH commands, Teams messages require explicit user confirmation
-3. **No permission bypass** — Claude Code runs with standard permission prompts
-4. **Secrets stay outside** — `.env` is mounted at runtime, never baked into the image
-5. **Encrypted credentials** — API keys stored with Fernet (AES-128-CBC), tied to SESSION_SECRET
-6. **Admin-gated settings** — only admin/owner roles can manage credentials and feature flags
+3. **AI CDR pipeline** — inbound messages classified in a tool-less AI sandbox (prompt injection can't trigger tools)
+4. **Draft-first messaging** — external_write recipes hold drafts for human approval via Telegram
+5. **Tool scope tiers** — Gemini agent tools restricted by trust level (FULL / INTERNAL_WRITE / READ_ONLY / NONE)
+6. **No permission bypass** — Claude Code runs with standard permission prompts
+7. **Secrets stay outside** — `.env` is mounted at runtime, never baked into the image
+8. **Encrypted credentials** — API keys stored with Fernet (AES-128-CBC), tied to SESSION_SECRET
+9. **Admin-gated settings** — only admin/owner roles can manage credentials and feature flags
 
 ## Access Methods
 
@@ -121,7 +130,7 @@ pip install -r requirements/test.txt
 pytest tests/ -v
 ```
 
-66 tests covering database schema, CAGE context framework, encrypted credential storage, and the onboard wizard.
+140 tests covering database schema, CAGE context framework, encrypted credential storage, onboard wizard, AI CDR pipeline, response templates, automation recipes, tool scope tiers, and messaging integrations.
 
 ## Documentation
 

@@ -156,6 +156,20 @@ OTTER_SUMMARY_FOLDER: str = os.getenv("OTTER_SUMMARY_FOLDER", "/Otter")
 # Lead Pipeline (external assessment framework webhook)
 LEAD_WEBHOOK_SECRET: str = os.getenv("LEAD_WEBHOOK_SECRET", "")
 
+# WhatsApp Cloud API (Meta Business Platform)
+WHATSAPP_ENABLED: bool = os.getenv("WHATSAPP_ENABLED", "false").lower() == "true"
+WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
+
+# WeChat Official Account API (Tencent)
+WECHAT_ENABLED: bool = os.getenv("WECHAT_ENABLED", "false").lower() == "true"
+WECHAT_APP_ID: str = os.getenv("WECHAT_APP_ID", "")
+WECHAT_APP_SECRET: str = os.getenv("WECHAT_APP_SECRET", "")
+WECHAT_TOKEN: str = os.getenv("WECHAT_TOKEN", "")
+WECHAT_ENCODING_AES_KEY: str = os.getenv("WECHAT_ENCODING_AES_KEY", "")
+
 
 # ImprovMX (email forwarding management)
 IMPROVMX_API_KEY: str = os.getenv("IMPROVMX_API_KEY", "")

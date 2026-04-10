@@ -693,6 +693,72 @@ CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_user ON user_preferences(user_id);
 """
 
+SCHEMA_V20 = """
+-- Response templates: canned messages the user writes in their own voice
+CREATE TABLE IF NOT EXISTS response_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL DEFAULT 'general'
+        CHECK (category IN ('greeting', 'qualification', 'nurture', 're_engagement', 'closing', 'general')),
+    intent_tags TEXT DEFAULT '[]',
+    subject TEXT DEFAULT '',
+    body TEXT NOT NULL,
+    channel TEXT DEFAULT 'any'
+        CHECK (channel IN ('whatsapp', 'email', 'telegram', 'any')),
+    sequence_group TEXT DEFAULT '',
+    sequence_day INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    usage_count INTEGER DEFAULT 0,
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Automation recipes: user-defined automation rules
+CREATE TABLE IF NOT EXISTS automation_recipes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    trigger_type TEXT NOT NULL DEFAULT 'manual'
+        CHECK (trigger_type IN ('cron', 'event', 'manual')),
+    trigger_config TEXT DEFAULT '',
+    risk_tier TEXT NOT NULL DEFAULT 'read_only'
+        CHECK (risk_tier IN ('read_only', 'internal_write', 'external_write')),
+    instructions TEXT NOT NULL,
+    template_ids TEXT DEFAULT '[]',
+    enabled INTEGER DEFAULT 1,
+    last_run TEXT,
+    run_count INTEGER DEFAULT 0,
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Automation runs: execution audit trail
+CREATE TABLE IF NOT EXISTS automation_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipe_id INTEGER NOT NULL REFERENCES automation_recipes(id),
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'completed', 'failed', 'awaiting_approval', 'skipped')),
+    trigger_data TEXT DEFAULT '{}',
+    intent_classified TEXT DEFAULT '{}',
+    template_selected_id INTEGER,
+    draft_output TEXT DEFAULT '',
+    final_output TEXT DEFAULT '',
+    actions_taken TEXT DEFAULT '[]',
+    FOREIGN KEY (template_selected_id) REFERENCES response_templates(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_response_templates_category ON response_templates(category);
+CREATE INDEX IF NOT EXISTS idx_response_templates_active ON response_templates(is_active);
+CREATE INDEX IF NOT EXISTS idx_automation_recipes_trigger ON automation_recipes(trigger_type);
+CREATE INDEX IF NOT EXISTS idx_automation_recipes_enabled ON automation_recipes(enabled);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_recipe ON automation_runs(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_status ON automation_runs(status);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_started ON automation_runs(started_at);
+""";
+
 SCHEMA_V18 = """
 CREATE TABLE IF NOT EXISTS contact_identifiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1186,6 +1252,9 @@ def init_db() -> None:
 
     # Phase 22: CAGE framework — chat history + user preferences
     conn.executescript(SCHEMA_V19)
+
+    # Phase 23: AI CDR — response templates, automation recipes, automation runs
+    conn.executescript(SCHEMA_V20)
 
     conn.close()
 

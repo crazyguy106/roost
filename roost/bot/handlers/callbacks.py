@@ -88,6 +88,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from roost.bot.handlers.skill_builder import handle_skill_callback
         await handle_skill_callback(update, context)
 
+    elif prefix == "recipe":
+        from roost.bot.handlers.recipes import handle_recipe_callback
+        await handle_recipe_callback(update, context)
+
     else:
         logger.warning("Unknown callback prefix: %s (full data: %s)", prefix, query.data)
         await query.answer("Unknown action.")

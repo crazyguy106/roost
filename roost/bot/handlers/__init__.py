@@ -107,6 +107,12 @@ from roost.bot.handlers.tutorial import cmd_tutorial, handle_tutorial_callback
 from roost.bot.handlers.agent import handle_agent_message, cmd_agent
 from roost.bot.handlers.skill_builder import cmd_skill
 
+# Recipes & Templates
+from roost.bot.handlers.recipes import (
+    cmd_recipe, cmd_template, cmd_sequence,
+    cmd_approve, cmd_skip_run,
+)
+
 __all__ = [
     # Help
     "cmd_start", "cmd_help",
@@ -157,4 +163,7 @@ __all__ = [
     "cmd_tutorial", "handle_tutorial_callback",
     # Agent + Skill Builder
     "handle_agent_message", "cmd_agent", "cmd_skill",
+    # Recipes & Templates
+    "cmd_recipe", "cmd_template", "cmd_sequence",
+    "cmd_approve", "cmd_skip_run",
 ]

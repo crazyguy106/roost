@@ -56,6 +56,9 @@ from roost.bot.handlers import (
     cmd_tutorial, handle_tutorial_callback,
     # Agent + Skill Builder
     handle_agent_message, cmd_agent, cmd_skill,
+    # Recipes & Templates
+    cmd_recipe, cmd_template, cmd_sequence,
+    cmd_approve, cmd_skip_run,
 )
 
 logging.basicConfig(
@@ -205,6 +208,13 @@ def main():
 
     # Tutorial
     app.add_handler(CommandHandler("tutorial", cmd_tutorial))
+
+    # Recipes & Templates
+    app.add_handler(CommandHandler("recipe", cmd_recipe))
+    app.add_handler(CommandHandler("template", cmd_template))
+    app.add_handler(CommandHandler("sequence", cmd_sequence))
+    app.add_handler(CommandHandler("approve", cmd_approve))
+    app.add_handler(CommandHandler("skiprun", cmd_skip_run))
 
     # Agent + Skill Builder
     app.add_handler(CommandHandler("agent", cmd_agent))

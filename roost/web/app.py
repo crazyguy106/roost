@@ -27,6 +27,22 @@ except ImportError:
     otter_router = None
 from roost.web.api_leads import router as leads_router
 from roost.web.api_settings import router as settings_api_router
+try:
+    from roost.config import WHATSAPP_ENABLED
+    if WHATSAPP_ENABLED:
+        from roost.web.api_whatsapp import router as whatsapp_router
+    else:
+        whatsapp_router = None
+except ImportError:
+    whatsapp_router = None
+try:
+    from roost.config import WECHAT_ENABLED
+    if WECHAT_ENABLED:
+        from roost.web.api_wechat import router as wechat_router
+    else:
+        wechat_router = None
+except ImportError:
+    wechat_router = None
 
 WEB_DIR = Path(__file__).parent
 USE_OAUTH = bool(GOOGLE_CLIENT_ID)
@@ -387,6 +403,10 @@ function msg(t){log.textContent += t + '\\n';}
     if otter_router is not None:
         app.include_router(otter_router)
     app.include_router(leads_router)
+    if whatsapp_router is not None:
+        app.include_router(whatsapp_router)
+    if wechat_router is not None:
+        app.include_router(wechat_router)
     app.include_router(settings_api_router)
 
     return app

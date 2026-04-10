@@ -103,6 +103,10 @@ def init_scheduler(app: Application) -> None:
     jq.run_repeating(_send_scheduled_emails, interval=60, first=30, name="scheduled_emails")
     logger.info("Scheduled email sender (every 60s)")
 
+    # 10. Cron recipe runner — every 60 seconds, checks for due cron recipes
+    jq.run_repeating(_run_cron_recipes, interval=60, first=45, name="cron_recipes")
+    logger.info("Scheduled cron recipe runner (every 60s)")
+
     logger.info("Scheduler initialized")
 
 
@@ -432,3 +436,83 @@ async def _send_scheduled_emails(context) -> None:
             logger.info("Scheduled email sender: sent %d emails", sent)
     except Exception:
         logger.exception("Scheduled email sender failed")
+
+
+async def _run_cron_recipes(context) -> None:
+    """Check for cron-triggered recipes and execute due ones.
+
+    Uses a simple minute-matching approach: compares current HH:MM
+    against trigger_config (e.g. '09:00' for daily at 9am, or
+    'HH:MM:weekdays' for weekday-only schedules).
+    """
+    try:
+        from roost.services.recipes import list_recipes, execute_recipe
+
+        now = datetime.now()
+        current_time = now.strftime("%H:%M")
+        current_dow = now.weekday()  # 0=Monday, 6=Sunday
+
+        recipes = list_recipes(trigger_type="cron", enabled_only=True)
+        if not recipes:
+            return
+
+        for recipe in recipes:
+            config = recipe.get("trigger_config", "").strip()
+            if not config:
+                continue
+
+            # Parse trigger_config formats:
+            #   "09:00"           — daily at 09:00
+            #   "09:00:weekdays"  — Mon-Fri at 09:00
+            #   "09:00:0,2,4"    — Mon, Wed, Fri at 09:00
+            parts = config.split(":", 2)
+            if len(parts) < 2:
+                continue
+
+            trigger_time = f"{parts[0]}:{parts[1]}"
+            if trigger_time != current_time:
+                continue
+
+            # Day-of-week filter
+            if len(parts) > 2:
+                dow_spec = parts[2]
+                if dow_spec == "weekdays":
+                    if current_dow > 4:  # Saturday=5, Sunday=6
+                        continue
+                elif dow_spec == "weekends":
+                    if current_dow < 5:
+                        continue
+                else:
+                    # Comma-separated day numbers (0=Mon)
+                    try:
+                        allowed_days = [int(d.strip()) for d in dow_spec.split(",")]
+                        if current_dow not in allowed_days:
+                            continue
+                    except ValueError:
+                        continue
+
+            # Check if already ran this minute (avoid double execution)
+            last_run = recipe.get("last_run", "")
+            if last_run and last_run[:16] == now.strftime("%Y-%m-%dT%H:%M"):
+                continue
+
+            logger.info("Running cron recipe #%d: %s", recipe["id"], recipe["name"])
+            try:
+                result = await execute_recipe(
+                    recipe_id=recipe["id"],
+                    trigger_data={"source": "cron", "time": current_time},
+                )
+                status = result.get("status", "unknown")
+                await _send_to_all(
+                    context,
+                    f"Cron recipe '{recipe['name']}' ran: {status}",
+                )
+            except Exception:
+                logger.exception("Cron recipe #%d failed", recipe["id"])
+                await _send_to_all(
+                    context,
+                    f"Cron recipe '{recipe['name']}' failed. Check logs.",
+                )
+
+    except Exception:
+        logger.exception("Cron recipe runner failed")

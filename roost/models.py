@@ -686,6 +686,127 @@ class OkrKeyResultUpdate(BaseModel):
     sort_order: int | None = None
 
 
+# ── Response Templates & Automation Recipes ─────────────────────────
+
+
+class TemplateCategory(str, Enum):
+    GREETING = "greeting"
+    QUALIFICATION = "qualification"
+    NURTURE = "nurture"
+    RE_ENGAGEMENT = "re_engagement"
+    CLOSING = "closing"
+    GENERAL = "general"
+
+
+class TriggerType(str, Enum):
+    CRON = "cron"
+    EVENT = "event"
+    MANUAL = "manual"
+
+
+class RiskTier(str, Enum):
+    READ_ONLY = "read_only"
+    INTERNAL_WRITE = "internal_write"
+    EXTERNAL_WRITE = "external_write"
+
+
+class RunStatus(str, Enum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    AWAITING_APPROVAL = "awaiting_approval"
+    SKIPPED = "skipped"
+
+
+class ResponseTemplateCreate(BaseModel):
+    name: str
+    category: TemplateCategory = TemplateCategory.GENERAL
+    intent_tags: list[str] = []
+    subject: str = ""
+    body: str
+    channel: str = "any"
+    sequence_group: str = ""
+    sequence_day: int = 0
+
+
+class ResponseTemplateUpdate(BaseModel):
+    name: str | None = None
+    category: TemplateCategory | None = None
+    intent_tags: list[str] | None = None
+    subject: str | None = None
+    body: str | None = None
+    channel: str | None = None
+    sequence_group: str | None = None
+    sequence_day: int | None = None
+    is_active: bool | None = None
+
+
+class ResponseTemplate(BaseModel):
+    id: int
+    name: str
+    category: str
+    intent_tags: list[str] = []
+    subject: str = ""
+    body: str
+    channel: str = "any"
+    sequence_group: str = ""
+    sequence_day: int = 0
+    is_active: bool = True
+    usage_count: int = 0
+    created_at: str
+    updated_at: str
+
+
+class RecipeCreate(BaseModel):
+    name: str
+    description: str = ""
+    trigger_type: TriggerType = TriggerType.MANUAL
+    trigger_config: str = ""
+    risk_tier: RiskTier = RiskTier.READ_ONLY
+    instructions: str
+    template_ids: list[int] = []
+
+
+class RecipeUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    trigger_type: TriggerType | None = None
+    trigger_config: str | None = None
+    risk_tier: RiskTier | None = None
+    instructions: str | None = None
+    template_ids: list[int] | None = None
+    enabled: bool | None = None
+
+
+class Recipe(BaseModel):
+    id: int
+    name: str
+    description: str = ""
+    trigger_type: str
+    trigger_config: str = ""
+    risk_tier: str = "read_only"
+    instructions: str
+    template_ids: list[int] = []
+    enabled: bool = True
+    last_run: str | None = None
+    run_count: int = 0
+    created_at: str
+
+
+class AutomationRun(BaseModel):
+    id: int
+    recipe_id: int
+    started_at: str
+    completed_at: str | None = None
+    status: str = "running"
+    trigger_data: dict = {}
+    intent_classified: dict = {}
+    template_selected_id: int | None = None
+    draft_output: str = ""
+    final_output: str = ""
+    actions_taken: list[dict] = []
+
+
 class ClaudeSessionCreate(BaseModel):
     name: str
     project_dir: str = "/home/dev/projects"

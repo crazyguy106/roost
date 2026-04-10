@@ -26,8 +26,8 @@ All four interfaces call the same service functions, emit the same events, and r
 
 ```
 Roost (Central Hub)
-├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (210 tools)
-├── SQLite (WAL) — tasks, projects, contacts, calendar, OAuth, time tracking
+├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (235+ tools)
+├── SQLite (WAL) — tasks, projects, contacts, calendar, OAuth, time tracking, templates, recipes
 │
 ├── Google Workspace (Dev VPS only)
 │   ├── Gmail — auto-labelling, action cycling, email-to-task, 5-min poller
@@ -52,6 +52,17 @@ Roost (Central Hub)
 │   ├── Single-shot generation — gemini_generate with output_file
 │   └── Utilities — summarize, clean text, compare, process documents
 │
+├── Messaging (WhatsApp + WeChat)
+│   ├── WhatsApp Cloud API — official Meta API, webhook inbound, text/template send
+│   ├── WeChat Official Account — Tencent API, XML webhook, customer service messages
+│   ├── AI CDR Pipeline — 4-layer Content Disarm & Reconstruct
+│   │   ├── Layer 1: Sanitize — regex strip prompt injection patterns
+│   │   ├── Layer 2: Frame — data delimiters, untrusted content warning
+│   │   ├── Layer 3: Detonate — tool-less AI call (no exploit surface)
+│   │   └── Layer 4: Validate — output must match fixed JSON schema
+│   ├── Response Templates — canned messages with {{variable}} placeholders
+│   └── Automation Recipes — user-defined rules with risk tier enforcement
+│
 ├── Notion — bidirectional sync (6 databases, push/pull/retry)
 ├── Otter.ai + Zapier + Dropbox — meeting transcription capture
 │
@@ -71,7 +82,7 @@ Roost (Central Hub)
                     ┌─────────────────────────────────────────────────┐
                     │         DEV VPS (Hub) — task.example.com      │
                     │                                                 │
-                    │  Roost: CLI + Web + Bot + MCP (210 tools)    │
+                    │  Roost: CLI + Web + Bot + MCP (235+ tools)    │
                     │  Claude Code: 4 persistent tmux sessions        │
                     │                                                 │
                     │                                                 │

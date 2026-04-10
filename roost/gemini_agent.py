@@ -42,6 +42,43 @@ MAX_ITERATIONS = 15
 TOOL_TIMEOUT = 10  # seconds per tool execution
 MAX_HISTORY_TURNS = 20
 
+# ── Tool scope tiers ────────────────────────────────────────────────
+# Controls which tools are available based on trust level of input.
+# TIER_FULL: all tools (default — trusted user input via Telegram/MCP)
+# TIER_INTERNAL_WRITE: read + internal write (no email, no external send)
+# TIER_READ_ONLY: read-only tools (for processing untrusted content)
+# TIER_NONE: no tools at all (used by AI CDR classifier)
+
+TIER_FULL = "full"
+TIER_INTERNAL_WRITE = "internal_write"
+TIER_READ_ONLY = "read_only"
+TIER_NONE = "none"
+
+# Tools allowed at each tier (cumulative — higher tiers include lower)
+_READ_ONLY_TOOLS = {
+    "read_file", "list_directory", "search_files",
+    "list_tasks", "get_task", "get_task_with_context",
+    "list_notes", "list_modules", "get_module",
+    "search_curriculum_docs",
+    "get_today_events", "get_week_events",
+    "search_emails", "get_today_briefing",
+    "list_skills", "get_preferences",
+}
+
+_INTERNAL_WRITE_TOOLS = _READ_ONLY_TOOLS | {
+    "write_file", "create_task", "update_task",
+    "create_note", "complete_task",
+    "set_preference",
+}
+
+# Full tier includes everything (no restriction)
+_TIER_ALLOWED: dict[str, set[str] | None] = {
+    TIER_FULL: None,  # None = all tools allowed
+    TIER_INTERNAL_WRITE: _INTERNAL_WRITE_TOOLS,
+    TIER_READ_ONLY: _READ_ONLY_TOOLS,
+    TIER_NONE: set(),  # No tools at all
+}
+
 
 def _path_allowed(path: str) -> bool:
     """Check if a file path is within allowed directories."""
@@ -950,8 +987,20 @@ def _build_tool_declarations(include_agent_tools: bool = False) -> list[types.To
     return [types.Tool(functionDeclarations=declarations)]
 
 
-def _execute_tool(name: str, args: dict[str, Any], user_id: str = "") -> dict[str, Any]:
-    """Execute a tool by name with arguments. Logs to command_log."""
+def _execute_tool(name: str, args: dict[str, Any], user_id: str = "",
+                   tool_scope: str = TIER_FULL) -> dict[str, Any]:
+    """Execute a tool by name with arguments. Logs to command_log.
+
+    Args:
+        tool_scope: Restrict available tools by tier. Default TIER_FULL
+                    allows everything. TIER_READ_ONLY blocks writes.
+    """
+    # Check tool scope
+    allowed = _TIER_ALLOWED.get(tool_scope)
+    if allowed is not None and name not in allowed:
+        logger.warning("Tool '%s' blocked by scope tier '%s'", name, tool_scope)
+        return {"error": f"Tool '{name}' not available in {tool_scope} mode"}
+
     handler = TOOL_HANDLERS.get(name) or AGENT_TOOL_HANDLERS.get(name)
     if not handler:
         return {"error": f"Unknown tool: {name}"}
@@ -1020,10 +1069,16 @@ class GeminiAgent:
     """Agentic Gemini with Roost function calling."""
 
     def __init__(self, system_prompt: str = "", session_id: str | None = None,
-                 include_agent_tools: bool = False):
+                 include_agent_tools: bool = False,
+                 tool_scope: str = TIER_FULL):
         self.client = genai.Client(api_key=GEMINI_API_KEY)
         self.model = GEMINI_MODEL
-        self.tools = _build_tool_declarations(include_agent_tools=include_agent_tools)
+        self.tool_scope = tool_scope
+        # TIER_NONE means no tools at all (used by AI CDR)
+        if tool_scope == TIER_NONE:
+            self.tools = None
+        else:
+            self.tools = _build_tool_declarations(include_agent_tools=include_agent_tools)
         self.system_prompt = system_prompt
         self.session_id = session_id
         self.history = _load_session(session_id)
@@ -1117,7 +1172,8 @@ class GeminiAgent:
                 args = dict(fc.args) if fc.args else {}
                 logger.info("Tool call: %s(%s)", fc.name, json.dumps(args, default=str)[:200])
 
-                result = _execute_tool(fc.name, args, user_id=user_id)
+                result = _execute_tool(fc.name, args, user_id=user_id,
+                                       tool_scope=self.tool_scope)
                 tool_call_count += 1
 
                 function_response_parts.append(

@@ -47,6 +47,7 @@ from roost.mcp import tools_stats             # noqa: E402, F401
 from roost.mcp import tools_scheduled_emails  # noqa: E402, F401
 from roost.mcp import tools_scrape            # noqa: E402, F401
 from roost.mcp import tools_text_cleanup      # noqa: E402, F401
+from roost.mcp import tools_recipes           # noqa: E402, F401
 
 # ── Google tools (GOOGLE_ENABLED) ───────────────────────────────────
 if GOOGLE_ENABLED:
