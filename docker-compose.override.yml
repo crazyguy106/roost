@@ -1,0 +1,5 @@
+services:
+  roost:
+    ports: !override
+      - "8090:8080"
+      - "2222:22"

@@ -1,0 +1,22 @@
+# Dry-run overlay for the public deployment shape.
+#
+# Brings up Caddy with self-signed TLS on :9443 instead of LE on :443,
+# so the public overlay can be smoke-tested locally without a real
+# domain. Layer ON TOP OF docker-compose.public.yml:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.public.yml \
+#     -f docker-compose.public.dryrun.yml up -d
+
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:9443:9443"
+    environment:
+      ROOST_DOMAIN: ":9443"
+      ROOST_ADMIN_EMAIL: "dryrun@example.com"
+    volumes: !override
+      - ./caddy/Caddyfile.dryrun:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config

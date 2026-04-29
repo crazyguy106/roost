@@ -1,0 +1,118 @@
+Roost — Third-Party Notices
+============================
+
+Roost is licensed under the MIT License (see LICENSE). It depends on
+third-party packages, each governed by its own license. The list below
+enumerates direct runtime and development dependencies declared in
+requirements/*.txt as of 2026-04-27. Transitive dependencies are not
+listed individually — run `pip-licenses` against an installed
+environment for an authoritative inventory.
+
+Categories below reflect the upstream project's stated license at the
+time of writing. Always defer to the package's own LICENSE file in
+case of any discrepancy.
+
+---
+
+Apache License 2.0
+------------------
+- fastmcp                       (Anthropic)
+- playwright                    (Microsoft)
+- google-genai                  (Google LLC)
+- google-api-python-client      (Google LLC)
+- google-auth-oauthlib          (Google LLC)
+- google-auth-httplib2          (Google LLC)
+- cryptography                  (Apache-2.0 / BSD-3-Clause dual)
+- pytest-asyncio
+- python-dateutil               (Apache-2.0 / BSD-3-Clause dual)
+
+MIT License
+-----------
+- fastapi                       (Sebastián Ramírez)
+- pydantic                      (Pydantic Services Inc.)
+- pydantic_core
+- pydantic-settings
+- annotated-types
+- typing_extensions
+- SQLAlchemy
+- aiosqlite
+- greenlet
+- PyYAML
+- pytz
+- uvloop
+- httptools
+- watchfiles
+- slowapi
+- markdownify
+- Markdown
+- pyzipper
+- discord.py
+- msal                          (Microsoft)
+- notion-client
+- slack-bolt                    (Slack)
+- slack-sdk                     (Slack)
+- faster-whisper
+- pytest
+- python-multipart
+- MarkupSafe                    (BSD-3-Clause; some modules MIT)
+
+BSD License (2-Clause / 3-Clause)
+---------------------------------
+- starlette
+- uvicorn
+- Jinja2
+- httpx
+- httpcore
+- h11
+- anyio
+- certifi                       (MPL-2.0; bundled CA list)
+- idna                          (BSD-3-Clause)
+- python-dotenv
+- itsdangerous
+- authlib
+- click
+- websockets
+- icalendar
+- trafilatura                   (Apache-2.0; verify per release)
+- respx
+
+ISC License
+-----------
+- matrix-nio
+
+LGPL-3.0-or-later
+-----------------
+- python-telegram-bot
+
+  Note: LGPL imposes obligations only on modified versions of the
+  library itself. Roost links to it as an unmodified dependency, which
+  is permitted under the LGPL without affecting Roost's MIT licensing.
+
+Mozilla Public License 2.0
+--------------------------
+- certifi (CA-bundle data; the certifi Python package itself is MPL-2.0)
+
+---
+
+Browser runtime
+---------------
+Roost connects to a Chromium instance via CDP (the chromium-sidecar
+Docker image). Chromium is a separate piece of software with its own
+license (BSD-3-Clause + LGPL components). Roost does not bundle or
+redistribute Chromium binaries — the sidecar is a runtime dependency
+pulled at deploy time.
+
+---
+
+How to regenerate this file
+---------------------------
+```
+pip install pip-licenses
+pip-licenses --format=plain --with-urls --order=license > NOTICES.detailed
+```
+
+The `NOTICES.detailed` output above is intentionally not committed —
+the list of transitive dependencies changes with every pin bump. This
+NOTICES file covers the direct dependencies Roost intentionally ships
+against; consumers redistributing built artefacts should regenerate
+the detailed inventory for their own environment.

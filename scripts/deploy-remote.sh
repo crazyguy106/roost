@@ -126,7 +126,7 @@ MS_TENANT_ID=common
 MS_ENABLED=false
 
 # Browser
-CDP_ENDPOINT=http://chromium:3000
+CDP_ENDPOINT=ws://chromium:3000
 ENVEOF
 chown "\$USERNAME:\$USERNAME" "\$ROOST_DIR/.env"
 chmod 600 "\$ROOST_DIR/.env"

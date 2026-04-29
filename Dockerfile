@@ -12,6 +12,9 @@ ARG ENABLE_AI=false
 ARG ENABLE_TELEGRAM=false
 ARG ENABLE_NOTION=false
 ARG ENABLE_INFRA=false
+ARG ENABLE_DISCORD=false
+ARG ENABLE_SLACK=false
+ARG ENABLE_MATRIX=false
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -73,6 +76,15 @@ RUN if [ "$ENABLE_NOTION" = "true" ] && [ -f requirements/notion.txt ]; then \
     fi
 RUN if [ "$ENABLE_INFRA" = "true" ] && [ -f requirements/infra.txt ]; then \
         pip install --no-cache-dir -r requirements/infra.txt; \
+    fi
+RUN if [ "$ENABLE_DISCORD" = "true" ] && [ -f requirements/discord.txt ]; then \
+        pip install --no-cache-dir -r requirements/discord.txt; \
+    fi
+RUN if [ "$ENABLE_SLACK" = "true" ] && [ -f requirements/slack.txt ]; then \
+        pip install --no-cache-dir -r requirements/slack.txt; \
+    fi
+RUN if [ "$ENABLE_MATRIX" = "true" ] && [ -f requirements/matrix.txt ]; then \
+        pip install --no-cache-dir -r requirements/matrix.txt; \
     fi
 
 # Copy source code

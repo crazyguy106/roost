@@ -1,0 +1,68 @@
+# Standalone test compose — full stack (roost + chromium) remapped to alt ports.
+# Use: docker compose -f docker-compose.test.yml up -d
+# Tear down: docker compose -f docker-compose.test.yml down -v
+services:
+  roost:
+    image: roost-roost:latest
+    container_name: roost-test
+    ports:
+      - "127.0.0.1:8090:8080"
+      - "127.0.0.1:2223:22"
+    volumes:
+      - roost-test-data:/app/data
+      - roost-test-config:/app/config
+    env_file:
+      - .env
+    environment:
+      CDP_ENDPOINT: "ws://chromium:3000"
+    restart: unless-stopped
+    depends_on:
+      chromium:
+        condition: service_started
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+      - SYS_CHROOT
+      - DAC_OVERRIDE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  chromium:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: roost-test-chromium
+    restart: unless-stopped
+    environment:
+      CONNECTION_TIMEOUT: "600000"
+      MAX_CONCURRENT_SESSIONS: "5"
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/json/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+volumes:
+  roost-test-data:
+  roost-test-config:

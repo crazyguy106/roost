@@ -1,0 +1,84 @@
+# =============================================================================
+# docker-compose.lite.yml — Roost Lite
+#
+# Slimmed local-only stack for first-time evaluation. No chromium sidecar,
+# no public webhooks, ports bound to localhost only.
+#
+# What Lite mode gives up:
+#   - JS-rendered scraping (scrape_js returns "unavailable")
+#   - WhatsApp/WeChat inbound webhooks (needs a public URL)
+#   - Lower resource ceilings (suitable for a laptop)
+#
+# What still works:
+#   - Everything else: AI agent, tasks, notes, templates, recipes,
+#     Telegram (outbound), static-page scraping, MCP server
+#
+# Usage:
+#   cp env-templates/gemini-minimal.env .env
+#   $EDITOR .env                              # fill in GEMINI_API_KEY
+#   docker compose -f docker-compose.lite.yml up -d
+#   open http://127.0.0.1:8080
+#
+# To move from Lite to full compose later, stop Lite and switch:
+#   docker compose -f docker-compose.lite.yml down
+#   docker compose up -d
+# =============================================================================
+
+services:
+  roost:
+    build:
+      context: .
+      args:
+        ENABLE_GOOGLE: "false"
+        ENABLE_MICROSOFT: "false"
+        ENABLE_AI: "true"
+        ENABLE_TELEGRAM: "false"
+        ENABLE_NOTION: "false"
+        ENABLE_INFRA: "false"
+        ENABLE_DISCORD: "false"
+        ENABLE_SLACK: "false"
+        ENABLE_MATRIX: "false"
+    # Bind to localhost only — not exposed on the LAN
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - roost-lite-data:/app/data
+      - roost-lite-config:/app/config
+    env_file:
+      - .env
+    environment:
+      # Disable the CDP endpoint so scrape_js fails fast instead of hanging
+      CDP_ENDPOINT: ""
+    restart: unless-stopped
+    # Kernel-level hardening — same baseline as full compose
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    # Relaxed resource limits for laptops
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+# Separate volume names so Lite and full compose don't collide on the same host
+volumes:
+  roost-lite-data:
+  roost-lite-config:

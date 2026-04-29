@@ -1,0 +1,35 @@
+# Caddyfile for local dry-run validation only.
+# Listens on localhost:9443 with self-signed certs (tls internal) so the
+# public overlay can be exercised without a real domain or LE issuance.
+# Production deployments use the regular ./caddy/Caddyfile.
+
+{
+    auto_https disable_redirects
+    local_certs
+}
+
+localhost:9443, caddy:9443 {
+    tls internal
+
+    encode zstd gzip
+
+    reverse_proxy roost:8080 {
+        flush_interval -1
+        transport http {
+            read_timeout  600s
+            write_timeout 600s
+        }
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

@@ -1,0 +1,59 @@
+# Public-facing overlay: adds a Caddy sidecar that terminates TLS and
+# fronts both Roost (`/`) and the chromium devtools proxy (`/sidecar`).
+#
+# Usage:
+#   1. Set ROOST_DOMAIN=roost.example.com in .env
+#   2. Set ROOST_ADMIN_EMAIL=you@example.com (Let's Encrypt account)
+#   3. Point your DNS A record at the VPS public IP
+#   4. docker compose -f docker-compose.yml -f docker-compose.public.yml up -d
+#
+# Caddy will auto-issue + auto-renew Let's Encrypt certs. Roost itself
+# stops binding 8080 on the host — only Caddy is publicly reachable.
+
+services:
+  roost:
+    # Only expose Roost internally; Caddy fronts it.
+    ports: !reset []
+    environment:
+      # When fronted by Caddy, build the live debug URL against the
+      # public domain + /sidecar proxy path.
+      SIDECAR_PUBLIC_URL: "https://${ROOST_DOMAIN}/sidecar"
+      # Trust the proxy's X-Forwarded-* headers for redirects.
+      WEB_BEHIND_PROXY: "true"
+
+  chromium:
+    # No public port — Caddy reaches chromium over the internal docker
+    # network only, via the /sidecar proxy in the Roost app.
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      ROOST_DOMAIN: "${ROOST_DOMAIN}"
+      ROOST_ADMIN_EMAIL: "${ROOST_ADMIN_EMAIL}"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      roost:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+  caddy-config:

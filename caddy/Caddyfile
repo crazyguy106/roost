@@ -1,0 +1,39 @@
+# Caddy config for the Roost public overlay.
+# ROOST_DOMAIN and ROOST_ADMIN_EMAIL are injected via the docker
+# environment by docker-compose.public.yml.
+
+{
+    email {$ROOST_ADMIN_EMAIL}
+}
+
+{$ROOST_DOMAIN} {
+    encode zstd gzip
+
+    # WebSocket upgrades (chromium devtools CDP via /sidecar) need to be
+    # passed through unchanged. Caddy's reverse_proxy handles this
+    # automatically, but we set timeouts generously since RPA flows can
+    # idle for minutes while a user does Singpass.
+    reverse_proxy roost:8080 {
+        flush_interval -1
+        transport http {
+            read_timeout  600s
+            write_timeout 600s
+        }
+    }
+
+    # Security headers — Roost ships its own SecurityHeadersMiddleware
+    # but Caddy adds a defence-in-depth layer for anything the app
+    # forgets.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Don't leak server identity
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

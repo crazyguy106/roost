@@ -9,12 +9,20 @@ services:
         ENABLE_TELEGRAM: "false"
         ENABLE_NOTION: "false"
         ENABLE_INFRA: "false"
+        ENABLE_DISCORD: "false"
+        ENABLE_SLACK: "false"
+        ENABLE_MATRIX: "false"
     ports:
       - "8080:8080"
       - "2222:22"
     volumes:
       - roost-data:/app/data
       - roost-config:/app/config
+      # Bind-mount .env so the setup wizard's writes (WEB_PASSWORD,
+      # ROOST_DOMAIN, SIDECAR_PUBLIC_URL) land back on the host file
+      # that compose reads via env_file. Without this, wizard changes
+      # are stranded in the container's writable layer and lost on rebuild.
+      - ./.env:/app/.env
     env_file:
       - .env
     restart: unless-stopped
@@ -58,6 +66,14 @@ services:
   chromium:
     image: ghcr.io/browserless/chromium:latest
     restart: unless-stopped
+    # Loopback-only publish so the user can open the live debug URL when
+    # an `await_user_session` step pauses (Singpass logins etc.). Safe by
+    # default for laptop deployments. For cloud deployments either:
+    #   (a) remove this `ports:` block and tunnel via SSH (`-L 3000:chromium:3000`)
+    #   (b) front it with your own reverse proxy + auth, then set
+    #       SIDECAR_PUBLIC_URL=https://your.domain in .env
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       # Run without sandbox (container provides isolation)
       CONNECTION_TIMEOUT: "600000"
