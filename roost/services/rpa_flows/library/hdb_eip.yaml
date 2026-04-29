@@ -1,0 +1,63 @@
+# HDB Ethnic Integration Policy / SPR Quota Check
+#
+# Public eService — no Singpass needed. Used by property agents BEFORE
+# accepting an HDB resale offer to confirm the buyer's ethnic group + PR
+# status doesn't push the block past its EIP/SPR cap.
+#
+# Inputs (params):
+#   block_no        e.g. "123A"
+#   street_name     e.g. "ANG MO KIO AVE 4"
+#   ethnic_group    chinese | malay | indian_others
+#   citizenship     citizen | spr_first_gen | spr_second_gen
+#
+# Output: page screenshot + downloaded eligibility result PDF (if HDB
+# offers one). $var:last_screenshot points at the captured PNG.
+#
+# NOTE on selectors: HDB updates this form periodically. Before the first
+# run on a fresh deploy, use `rpa_inspect_page` and `rpa_test_step` to
+# verify the four form-field selectors below match the current DOM.
+
+portal: hdb_eip
+name: HDB EIP/SPR Quota Check
+login_url: https://services2.hdb.gov.sg/web/fi10/emap.html
+otp_config: {}
+enabled: true
+
+steps:
+  - op: goto
+    url: $param:login_url
+    wait_until: domcontentloaded
+
+  - op: wait_for
+    selector: "form#eipForm, form[name='eipForm']"
+    timeout_ms: 30000
+
+  - op: fill
+    selector: "input[name='blockNo']"
+    value: $param:block_no
+
+  - op: fill
+    selector: "input[name='streetName']"
+    value: $param:street_name
+
+  - op: select_option
+    selector: "select[name='ethnicGroup']"
+    value: $param:ethnic_group
+
+  - op: select_option
+    selector: "select[name='citizenship']"
+    value: $param:citizenship
+
+  - op: click
+    selector: "button[type='submit'], input[type='submit']"
+
+  - op: wait_for
+    selector: "div.results, div#searchResults, table.eip-result"
+    timeout_ms: 30000
+
+  - op: screenshot
+    full_page: true
+    name: hdb_eip_result
+
+  - op: log
+    message: HDB EIP quota check captured for block $param:block_no

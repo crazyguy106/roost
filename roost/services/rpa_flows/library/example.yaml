@@ -1,0 +1,61 @@
+# Annotated example flow — copy this as a starting point for a new portal.
+#
+# Files in this directory are seeded as global-default configs on boot, but
+# only if no config exists yet for the portal. To force-overwrite the DB
+# from a file, use rpa_import_flow(path).
+#
+# Validate locally with:  rpa_validate_flow("/path/to/your.yaml")
+
+portal: example
+name: Example Portal (template)
+login_url: https://example.com/login
+
+# `enabled: false` is the default for shipped templates — selectors below
+# are placeholders. Verify on the live portal, then flip to true.
+enabled: false
+
+otp_config:
+  default_source: telegram   # telegram | email
+
+steps:
+  # 1. Open the login page. `$param:KEY` reads from the dict passed to rpa_run.
+  - op: goto
+    url: $param:login_url
+
+  # 2. Fill credentials. `$cred:KEY` reads from the encrypted credential store
+  #    (set via rpa_set_credential before running).
+  - op: fill
+    selector: input[name='username']
+    value: $cred:example_user
+  - op: fill
+    selector: input[name='password']
+    value: $cred:example_password
+
+  - op: click
+    selector: button[type='submit']
+
+  # 3. Wait for OTP field, then ask Telegram for the code, then submit.
+  - op: wait_for
+    selector: input[name='otp']
+  - op: get_otp
+    source: telegram
+    prompt: Enter the example.com OTP
+  - op: fill
+    selector: input[name='otp']
+    value: $otp
+  - op: click
+    selector: button[type='submit']
+
+  # 4. Wait for the post-login landing element so you know you're in.
+  - op: wait_for
+    selector: nav[aria-label='Account']
+
+  # 5. Download a single artefact.
+  - op: download_one
+    trigger_selector: a.download-statement
+    extract: false
+
+  # 6. Upload to Drive (requires GOOGLE_ENABLED + drive scope).
+  - op: upload_drive
+    remote_path: Roost/Example/$param:date/
+    source: last_download

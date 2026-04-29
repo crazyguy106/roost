@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Board — Roost{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">Task Board</h1>
+    <div class="flex gap-2 items-center">
+        <select id="project-filter" class="select select-sm select-bordered"
+                onchange="filterProject(this.value)">
+            <option value="">All Projects</option>
+            {% for p in project_names %}
+            <option value="{{ p }}" {% if p == selected_project %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+        <a href="/tasks" class="btn btn-sm btn-ghost">List View</a>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4" style="min-height:60vh;">
+    {% for status, label, badge_class in [("todo", "To Do", "badge-warning"), ("in_progress", "In Progress", "badge-info"), ("done", "Done", "badge-success")] %}
+    <div class="bg-base-200 rounded-lg p-3"
+         ondragover="event.preventDefault(); this.classList.add('ring-2','ring-primary')"
+         ondragleave="this.classList.remove('ring-2','ring-primary')"
+         ondrop="handleDrop(event, '{{ status }}'); this.classList.remove('ring-2','ring-primary')">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-sm uppercase tracking-wide opacity-70">{{ label }}</h2>
+            <span class="badge {{ badge_class }} badge-sm">{{ columns[status]|length }}</span>
+        </div>
+        <div class="space-y-2 min-h-[100px]" id="col-{{ status }}">
+            {% for task in columns[status] %}
+            <div class="card bg-base-100 shadow-sm cursor-grab active:cursor-grabbing"
+                 draggable="true"
+                 ondragstart="event.dataTransfer.setData('text/plain', '{{ task.id }}')"
+                 id="task-{{ task.id }}">
+                <div class="card-body p-3">
+                    <div class="flex items-start justify-between">
+                        <a href="/tasks/{{ task.id }}" class="font-medium text-sm hover:underline">
+                            {{ task.title }}
+                        </a>
+                        <span class="text-xs opacity-50">#{{ task.id }}</span>
+                    </div>
+                    {% if task.project %}
+                    <span class="badge badge-ghost badge-xs mt-1">{{ task.project }}</span>
+                    {% endif %}
+                    {% if task.priority %}
+                    <div class="flex items-center gap-1 mt-1">
+                        {% if task.priority == 'high' or task.priority == 'critical' %}
+                        <span class="badge badge-error badge-xs">{{ task.priority }}</span>
+                        {% elif task.priority == 'medium' %}
+                        <span class="badge badge-warning badge-xs">{{ task.priority }}</span>
+                        {% else %}
+                        <span class="badge badge-ghost badge-xs">{{ task.priority }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if task.deadline %}
+                    <span class="text-xs opacity-60 mt-1">Due: {{ task.deadline[:10] }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function filterProject(project) {
+    const url = new URL(window.location);
+    if (project) {
+        url.searchParams.set('project', project);
+    } else {
+        url.searchParams.delete('project');
+    }
+    window.location = url;
+}
+
+async function handleDrop(event, newStatus) {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData('text/plain');
+    if (!taskId) return;
+
+    try {
+        const resp = await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({status: newStatus}),
+        });
+
+        if (resp.ok) {
+            // Move the card DOM element to the new column
+            const card = document.getElementById(`task-${taskId}`);
+            const col = document.getElementById(`col-${newStatus}`);
+            if (card && col) {
+                col.prepend(card);
+                // Update column counts
+                updateCounts();
+            }
+        } else {
+            console.error('Failed to update task:', await resp.text());
+        }
+    } catch (err) {
+        console.error('Drop handler error:', err);
+    }
+}
+
+function updateCounts() {
+    ['todo', 'in_progress', 'done'].forEach(status => {
+        const col = document.getElementById(`col-${status}`);
+        const badge = col?.parentElement?.querySelector('.badge');
+        if (col && badge) {
+            badge.textContent = col.children.length;
+        }
+    });
+}
+</script>
+{% endblock %}

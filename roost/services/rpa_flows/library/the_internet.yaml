@@ -1,0 +1,54 @@
+# the-internet.herokuapp.com — Sauce Labs' open practice portal.
+#
+# This is the recommended portal for verifying a fresh Roost install: no
+# real credentials, no OTP, no anti-bot, just a deterministic login and
+# file-download flow. If this works end-to-end, your CDP sidecar,
+# browser_service, and interpreter are all wired up correctly.
+#
+# Credentials are baked into the published login page (tomsmith /
+# SuperSecretPassword!), but we still go through `rpa_set_credential` so the
+# flow exercises the real placeholder path.
+#
+# Setup:
+#   rpa_set_credential(portal="the_internet", field="user", value="tomsmith")
+#   rpa_set_credential(portal="the_internet", field="password",
+#       value="SuperSecretPassword!")
+#   rpa_run("the_internet", {})
+
+portal: the_internet
+name: The Internet (Sauce Labs practice portal)
+login_url: https://the-internet.herokuapp.com/login
+enabled: true   # safe — public practice site
+
+steps:
+  - op: goto
+    url: $param:login_url
+    wait_until: domcontentloaded
+
+  - op: fill
+    selector: input#username
+    value: $cred:the_internet_user
+  - op: fill
+    selector: input#password
+    value: $cred:the_internet_password
+
+  - op: click
+    selector: button[type='submit']
+
+  # Confirms login landed on /secure
+  - op: wait_for
+    selector: a[href='/logout']
+
+  - op: log
+    message: logged into the_internet successfully
+
+  # Navigate to the public file-download page and grab the first file.
+  - op: goto
+    url: https://the-internet.herokuapp.com/download
+  - op: wait_for
+    selector: div.example a
+  - op: download_one
+    trigger_selector: div.example a:first-of-type
+
+  - op: log
+    message: downloaded $var:last_download

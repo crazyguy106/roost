@@ -1,0 +1,48 @@
+# AIA Singapore broker portal — TEMPLATE.
+#
+# Selectors below are PLACEHOLDERS. Verify on the live portal before flipping
+# `enabled: true`. Open the portal in DevTools, copy stable selectors
+# (prefer name= / id= / data-* attributes over nth-child paths), then run
+# `rpa_test_step(portal="aia", step_index=N)` to iterate.
+
+portal: aia
+name: AIA Singapore Broker Portal
+login_url: https://www.aia.com.sg/portal/login
+enabled: false
+
+otp_config:
+  default_source: telegram
+
+steps:
+  - op: goto
+    url: $param:login_url
+  - op: fill
+    selector: input[name='username']
+    value: $cred:aia_user
+  - op: fill
+    selector: input[name='password']
+    value: $cred:aia_password
+  - op: click
+    selector: button[type='submit']
+  - op: wait_for
+    selector: input[name='otp']
+  - op: get_otp
+    source: telegram
+    prompt: Enter the AIA OTP
+  - op: fill
+    selector: input[name='otp']
+    value: $otp
+  - op: click
+    selector: button[type='submit']
+  - op: wait_for
+    selector: table.policies
+  - op: download_each
+    item_selector: tr.policy-row
+    trigger_selector_within: a.download
+    policy_attr: data-policy-no
+    extract: true
+    password_cred_pattern: zip_password_aia_{policy}
+    prompt_if_missing: true
+  - op: upload_drive
+    remote_path: Roost/Insurance/AIA/$param:date/
+    source: last_extracted

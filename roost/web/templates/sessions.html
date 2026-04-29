@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Sessions — Roost{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto py-6 px-4">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">Claude Sessions</h1>
+        <div class="flex items-center gap-2">
+            {% if ttyd_status and ttyd_status.running %}
+            <span class="badge badge-success badge-sm gap-1">ttyd running</span>
+            {% else %}
+            <span class="badge badge-ghost badge-sm gap-1">ttyd not running</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Create new session -->
+    <div class="card bg-base-200 mb-6">
+        <div class="card-body p-4">
+            <h3 class="font-semibold text-sm mb-2">New Session</h3>
+            <form method="POST" action="/sessions/create" class="flex gap-2 flex-wrap">
+                <input type="text" name="name" placeholder="Session name" required
+                       class="input input-bordered input-sm flex-1 min-w-[200px]">
+                <input type="text" name="project_dir" value="/home/dev/projects" placeholder="Project directory"
+                       class="input input-bordered input-sm w-[280px] font-mono text-xs">
+                <button type="submit" class="btn btn-primary btn-sm">Create</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Active sessions -->
+    {% set active_sessions = sessions | selectattr("status", "equalto", "active") | list %}
+    {% set closed_sessions = sessions | selectattr("status", "equalto", "closed") | list %}
+
+    {% if active_sessions %}
+    <h2 class="text-sm font-semibold opacity-60 mb-2">Active ({{ active_sessions|length }})</h2>
+    {% for s in active_sessions %}
+    <div class="card bg-base-200 mb-2 {% if active_session and active_session.id == s.id %}ring-2 ring-primary{% endif %}">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold">{{ s.name }}</span>
+                        <span class="badge badge-success badge-xs">active</span>
+                        {% if s.tmux_window is not none %}
+                        <span class="badge badge-ghost badge-xs font-mono">{{ s.tmux_session }}:{{ s.tmux_window }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-xs opacity-50 mt-1 font-mono">{{ s.project_dir }}</div>
+                    <div class="text-xs opacity-40 mt-0.5">
+                        Created {{ s.created_at }}
+                        {% if s.last_connected_at %} · Last connected {{ s.last_connected_at }}{% endif %}
+                    </div>
+                </div>
+                <div class="flex gap-1">
+                    <form method="POST" action="/sessions/{{ s.id }}/connect">
+                        <button class="btn btn-sm btn-primary">Connect</button>
+                    </form>
+                    <form method="POST" action="/sessions/{{ s.id }}/close">
+                        <button class="btn btn-sm btn-error btn-outline" onclick="return confirm('Close this session?')">Close</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if closed_sessions %}
+    <h2 class="text-sm font-semibold opacity-60 mb-2 mt-6">Closed ({{ closed_sessions|length }})</h2>
+    {% for s in closed_sessions %}
+    <div class="card bg-base-200 mb-2 opacity-60">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold">{{ s.name }}</span>
+                        <span class="badge badge-ghost badge-xs">closed</span>
+                    </div>
+                    <div class="text-xs opacity-50 mt-1 font-mono">{{ s.project_dir }}</div>
+                    <div class="text-xs opacity-40 mt-0.5">{{ s.created_at }} · Closed {{ s.updated_at }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if not sessions %}
+    <div class="text-center py-10 opacity-50">No sessions yet. Create one above.</div>
+    {% endif %}
+</div>
+{% endblock %}

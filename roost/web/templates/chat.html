@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}Chat — Roost{% endblock %}
+{% block content %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 16px);
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 16px;
+    }
+    .chat-header {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .msg {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        word-wrap: break-word;
+    }
+    .msg-user {
+        align-self: flex-end;
+        background: oklch(0.45 0.15 260);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+    .msg-assistant {
+        align-self: flex-start;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+    }
+    .msg-system {
+        align-self: center;
+        background: oklch(0.3 0.05 50);
+        border: 1px solid oklch(0.4 0.1 50);
+        color: oklch(0.85 0.1 50);
+        font-size: 0.8rem;
+        padding: 8px 12px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .msg-assistant pre {
+        background: oklch(0.15 0 0);
+        padding: 8px 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 6px 0;
+        font-size: 0.8rem;
+    }
+    .msg-assistant code {
+        font-size: 0.82rem;
+    }
+    .msg-assistant p { margin: 4px 0; }
+    .chat-input-area {
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .chat-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: end;
+    }
+    #chatInput {
+        flex: 1;
+        min-height: 42px;
+        max-height: 150px;
+        resize: none;
+        font-size: 0.9rem;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        outline: none;
+        line-height: 1.4;
+    }
+    #chatInput:focus { border-color: oklch(0.55 0.15 260); }
+    #sendBtn {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: oklch(0.55 0.2 260);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: opacity 0.15s;
+    }
+    #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #sendBtn svg { width: 18px; height: 18px; stroke: #fff; fill: none; }
+    .thinking {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-dim);
+        font-size: 0.8rem;
+        padding: 8px 14px;
+    }
+    .thinking-dots span {
+        display: inline-block;
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        animation: dot-pulse 1.4s infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes dot-pulse {
+        0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+        40% { opacity: 1; transform: scale(1); }
+    }
+    .confirm-box {
+        background: oklch(0.25 0.05 50);
+        border: 1px solid oklch(0.4 0.12 50);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-top: 8px;
+    }
+    .confirm-box .confirm-title {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: oklch(0.9 0.12 50);
+        margin-bottom: 6px;
+    }
+    .confirm-box .confirm-tool {
+        font-family: monospace;
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+        word-break: break-all;
+    }
+    .confirm-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .confirm-row input {
+        width: 120px;
+        font-size: 0.85rem;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        text-align: center;
+        letter-spacing: 4px;
+        font-family: monospace;
+    }
+    .provider-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: oklch(0.3 0.05 260);
+        color: oklch(0.7 0.1 260);
+    }
+</style>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div style="display: flex; align-items: center; justify-content: between; gap: 12px;">
+            <h1 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Chat</h1>
+            <span class="provider-badge" id="providerBadge">{{ provider or "not configured" }}</span>
+            {% if not agent_enabled %}
+            <span class="badge badge-error badge-sm">Agent disabled</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+        {% if not agent_enabled %}
+        <div class="msg msg-system">
+            AI agent is disabled. Set AGENT_ENABLED=true and configure a provider in Settings.
+        </div>
+        {% else %}
+        <div class="msg msg-assistant" style="max-width: 95%;">
+            <p style="margin: 0 0 8px 0; font-weight: 600;">Welcome to Roost Chat</p>
+            <p style="margin: 0 0 10px 0; opacity: 0.8; font-size: 0.85rem;">I can help with your tasks, calendar, email, and more. Try something like:</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button class="btn btn-xs btn-ghost" style="border: 1px solid var(--border); font-size: 0.78rem;" onclick="useExample(this)">What's on my calendar today?</button>
+                <button class="btn btn-xs btn-ghost" style="border: 1px solid var(--border); font-size: 0.78rem;" onclick="useExample(this)">Show my tasks</button>
+                <button class="btn btn-xs btn-ghost" style="border: 1px solid var(--border); font-size: 0.78rem;" onclick="useExample(this)">Any unread emails?</button>
+                <button class="btn btn-xs btn-ghost" style="border: 1px solid var(--border); font-size: 0.78rem;" onclick="useExample(this)">Add a task: review proposal by Friday</button>
+                <button class="btn btn-xs btn-ghost" style="border: 1px solid var(--border); font-size: 0.78rem;" onclick="useExample(this)">What's due this week?</button>
+            </div>
+            <p style="margin: 10px 0 0 0; opacity: 0.5; font-size: 0.75rem;">Actions that modify external systems (email, files, deployments) require OTP confirmation via Telegram.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="chat-input-area">
+        <div class="chat-input-row">
+            <textarea id="chatInput" rows="1" placeholder="Type a message..."
+                      {% if not agent_enabled %}disabled{% endif %}></textarea>
+            <button id="sendBtn" title="Send" {% if not agent_enabled %}disabled{% endif %}>
+                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const messagesEl = document.getElementById('chatMessages');
+const inputEl = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+let sending = false;
+
+// Auto-resize textarea
+inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 150) + 'px';
+});
+
+// Enter to send (Shift+Enter for newline)
+inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+sendBtn.addEventListener('click', sendMessage);
+
+function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addMessage(text, type) {
+    const div = document.createElement('div');
+    div.className = `msg msg-${type}`;
+    if (type === 'assistant') {
+        div.innerHTML = renderMarkdown(text);
+    } else {
+        div.textContent = text;
+    }
+    messagesEl.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+function addThinking() {
+    const div = document.createElement('div');
+    div.className = 'thinking';
+    div.id = 'thinking';
+    div.innerHTML = '<div class="thinking-dots"><span></span><span></span><span></span></div> Thinking...';
+    messagesEl.appendChild(div);
+    scrollToBottom();
+    return div;
+}
+
+function removeThinking() {
+    const el = document.getElementById('thinking');
+    if (el) el.remove();
+}
+
+function addConfirmation(actions) {
+    for (const action of actions) {
+        const div = document.createElement('div');
+        div.className = 'confirm-box';
+        div.innerHTML = `
+            <div class="confirm-title">Action requires Telegram OTP</div>
+            <div class="confirm-tool">${action.tool_name}: ${action.description || ''}</div>
+            <div class="confirm-row">
+                <input type="text" maxlength="6" placeholder="OTP" id="otp-${action.action_id}"
+                       pattern="[0-9]*" inputmode="numeric" autocomplete="off">
+                <button class="btn btn-sm btn-warning"
+                        onclick="confirmAction(${action.action_id})">Confirm</button>
+                <button class="btn btn-sm btn-ghost"
+                        onclick="cancelAction(${action.action_id}, this)">Cancel</button>
+            </div>
+        `;
+        messagesEl.appendChild(div);
+    }
+    scrollToBottom();
+}
+
+async function confirmAction(actionId) {
+    const input = document.getElementById(`otp-${actionId}`);
+    const otp = input?.value?.trim();
+    if (!otp || otp.length !== 6) {
+        input.style.borderColor = 'oklch(0.6 0.2 25)';
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/chat/confirm', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action_id: actionId, otp}),
+        });
+        const data = await resp.json();
+
+        // Remove the confirm box
+        input.closest('.confirm-box').remove();
+
+        if (data.ok) {
+            addMessage(`Action confirmed: ${data.tool_name}\n\nResult: ${JSON.stringify(data.result, null, 2)}`, 'assistant');
+        } else {
+            addMessage(data.error || 'Confirmation failed', 'system');
+        }
+    } catch (err) {
+        addMessage(`Confirmation error: ${err.message}`, 'system');
+    }
+}
+
+async function cancelAction(actionId, btn) {
+    try {
+        await fetch('/api/chat/cancel', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action_id: actionId}),
+        });
+        btn.closest('.confirm-box').remove();
+        addMessage('Action cancelled.', 'system');
+    } catch (err) {
+        addMessage(`Cancel error: ${err.message}`, 'system');
+    }
+}
+
+async function sendMessage() {
+    if (sending) return;
+
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+
+    addMessage(text, 'user');
+    const thinkingEl = addThinking();
+
+    try {
+        const resp = await fetch('/api/chat/message', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: text}),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({error: resp.statusText}));
+            removeThinking();
+            addMessage(err.error || `Error: ${resp.status}`, 'system');
+            return;
+        }
+
+        // Read SSE stream
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let responseDiv = null;
+
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, {stream: true});
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Keep incomplete line
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6);
+                if (payload === '[DONE]') continue;
+
+                try {
+                    const event = JSON.parse(payload);
+
+                    if (event.type === 'thinking') {
+                        thinkingEl.querySelector('.thinking-dots + *')?.remove();
+                        thinkingEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div> ${event.text}`;
+                    }
+
+                    if (event.type === 'confirmation_required') {
+                        removeThinking();
+                        addConfirmation(event.actions);
+                    }
+
+                    if (event.type === 'response') {
+                        removeThinking();
+                        addMessage(event.text, 'assistant');
+                    }
+
+                    if (event.type === 'error') {
+                        removeThinking();
+                        addMessage(event.text, 'system');
+                    }
+                } catch (e) {
+                    // Skip malformed JSON
+                }
+            }
+        }
+
+        // Clean up if no response came through
+        removeThinking();
+    } catch (err) {
+        removeThinking();
+        addMessage(`Network error: ${err.message}`, 'system');
+    } finally {
+        sending = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+    }
+}
+
+// Basic markdown rendering
+function renderMarkdown(text) {
+    if (!text) return '';
+    return text
+        // Code blocks
+        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+}
+
+// Click example prompt button
+function useExample(btn) {
+    inputEl.value = btn.textContent;
+    inputEl.focus();
+    sendMessage();
+}
+
+// Focus input on load
+inputEl.focus();
+</script>
+{% endblock %}

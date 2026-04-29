@@ -1,0 +1,46 @@
+# Great Eastern broker portal — TEMPLATE. Selectors are placeholders.
+# See docs/rpa-authoring.md for how to fill these in.
+
+portal: great_eastern
+name: Great Eastern Broker Portal
+login_url: https://www.greateasternlife.com/sg/en/login
+enabled: false
+
+otp_config:
+  default_source: email
+
+steps:
+  - op: goto
+    url: $param:login_url
+  - op: fill
+    selector: input[name='username']
+    value: $cred:great_eastern_user
+  - op: fill
+    selector: input[name='password']
+    value: $cred:great_eastern_password
+  - op: click
+    selector: button[type='submit']
+  - op: wait_for
+    selector: input[name='otp']
+  - op: get_otp
+    source: email
+    query: from:noreply@greateasternlife.com newer_than:5m
+    regex: \b(\d{6})\b
+    timeout: 180
+  - op: fill
+    selector: input[name='otp']
+    value: $otp
+  - op: click
+    selector: button[type='submit']
+  - op: wait_for
+    selector: section.dashboard
+  - op: download_each
+    item_selector: tr.policy-row
+    trigger_selector_within: a.download
+    policy_attr: data-policy
+    extract: true
+    password_cred_pattern: zip_password_great_eastern_{policy}
+    prompt_if_missing: true
+  - op: upload_drive
+    remote_path: Roost/Insurance/GreatEastern/$param:date/
+    source: last_extracted

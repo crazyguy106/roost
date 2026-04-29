@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}RPA Runs — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">RPA Runs</h1>
+    <button class="btn btn-sm btn-ghost" onclick="loadRuns()">Refresh</button>
+</div>
+
+<div id="rpa-awaiting" class="mb-6"></div>
+
+<div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-4">
+        <h2 class="text-base font-semibold mb-3">Recent runs</h2>
+        <div id="rpa-runs"></div>
+    </div>
+</div>
+
+<script>
+async function loadRuns() {
+    try {
+        const r = await fetch("/api/rpa/runs?limit=30");
+        const data = await r.json();
+        // Surface anything the user can drive: explicit awaiting_input prompts
+        // OR running flows paused on `await_user_session` (which keeps status
+        // as "running" but populates live_url).
+        renderAwaiting(data.runs.filter(x => x.status === "awaiting_input" || x.live_url));
+        renderHistory(data.runs);
+    } catch (e) {
+        document.getElementById("rpa-runs").textContent = "Failed to load runs.";
+    }
+}
+
+function renderAwaiting(runs) {
+    const root = document.getElementById("rpa-awaiting");
+    if (!runs.length) { root.innerHTML = ""; return; }
+    root.innerHTML = runs.map(run => `
+        <div class="alert alert-warning shadow-sm flex items-start justify-between gap-3 mb-3">
+            <div class="flex-1 min-w-0">
+                <div class="font-semibold mb-1">Run #${run.id} · ${escapeHtml(run.portal_slug || "")} · awaiting ${escapeHtml(run.prompt_kind || "input")}</div>
+                <div class="text-sm opacity-80">${escapeHtml(run.prompt_text || "(no prompt)")}</div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                ${run.live_url ? `<a class="btn btn-sm btn-primary" href="${run.live_url}" target="_blank" rel="noopener">Take over browser</a>` : ""}
+                <button class="btn btn-sm btn-outline btn-error" onclick="cancelRun(${run.id})">Cancel</button>
+            </div>
+        </div>
+    `).join("");
+}
+
+function renderHistory(runs) {
+    const root = document.getElementById("rpa-runs");
+    if (!runs.length) { root.innerHTML = `<div class="text-sm opacity-70">No runs yet.</div>`; return; }
+    root.innerHTML = `
+        <table class="table table-sm">
+            <thead><tr><th>#</th><th>Portal</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+                ${runs.map(r => `
+                    <tr>
+                        <td>${r.id}</td>
+                        <td>${escapeHtml(r.portal_slug || "")}</td>
+                        <td><span class="badge badge-sm ${statusClass(r.status)}">${escapeHtml(r.status || "")}</span></td>
+                        <td class="text-xs opacity-70">${escapeHtml(r.updated_at || "")}</td>
+                        <td>${r.status === "running" || r.status === "awaiting_input" ? `<button class="btn btn-xs btn-ghost" onclick="cancelRun(${r.id})">Cancel</button>` : ""}</td>
+                    </tr>
+                `).join("")}
+            </tbody>
+        </table>
+    `;
+}
+
+function statusClass(s) {
+    return {
+        "running": "badge-info",
+        "awaiting_input": "badge-warning",
+        "completed": "badge-success",
+        "failed": "badge-error",
+        "cancelled": "badge-ghost",
+    }[s] || "badge-ghost";
+}
+
+function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+        ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function cancelRun(id) {
+    if (!confirm(`Cancel run #${id}?`)) return;
+    await fetch(`/api/rpa/runs/${id}/cancel`, {method: "POST"});
+    loadRuns();
+}
+
+loadRuns();
+setInterval(loadRuns, 5000);
+</script>
+{% endblock %}
