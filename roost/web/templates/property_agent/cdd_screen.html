@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}CDD Screen — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">CDD Screening</h1>
+        <p class="text-sm opacity-70">Sanctions / PEP / adverse-media. Required under CEA PC 01-21 / 02-23. Re-screen every {{ refresh_days }} days.</p>
+    </div>
+</div>
+
+{% if not enabled %}
+<div class="alert alert-warning mb-4">
+    CDD adapter is disabled. Set <code>CDD_ENABLED=true</code> and <code>CDD_API_KEY</code> in your <code>.env</code> (vendor: <code>{{ vendor }}</code>).
+</div>
+{% endif %}
+
+<div class="card" style="max-width: 920px;">
+    <form id="cdd-form" class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+        <label class="form-control">
+            <span class="label-text text-xs opacity-70">Full legal name *</span>
+            <input class="input input-bordered" type="text" name="name" required placeholder="As on NRIC / passport">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs opacity-70">Date of birth</span>
+            <input class="input input-bordered" type="date" name="dob">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs opacity-70">Nationality (ISO alpha-2)</span>
+            <input class="input input-bordered" type="text" name="nationality" placeholder="SG" maxlength="2">
+        </label>
+        <label class="form-control">
+            <span class="label-text text-xs opacity-70">NRIC / FIN / passport</span>
+            <input class="input input-bordered" type="text" name="id_number" placeholder="for audit reference">
+        </label>
+    </form>
+    <div class="mt-3"><button class="btn btn-primary" onclick="runScreen()" {% if not enabled %}disabled{% endif %}>Screen</button></div>
+    <div id="cdd-result" class="mt-4"></div>
+</div>
+
+<script>
+function riskClass(score) {
+    if (score >= 0.7) return 'badge-error';
+    if (score >= 0.3) return 'badge-warning';
+    if (score > 0) return 'badge-info';
+    return 'badge-success';
+}
+
+async function runScreen() {
+    const f = document.getElementById('cdd-form');
+    const data = Object.fromEntries(new FormData(f).entries());
+    if (!data.name || !data.name.trim()) {
+        document.getElementById('cdd-result').innerHTML =
+            '<div class="alert alert-error">Name is required.</div>';
+        return;
+    }
+    document.getElementById('cdd-result').innerHTML = '<div class="alert">Screening…</div>';
+    const res = await fetch('/api/property-agent/cdd/screen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    const out = await res.json();
+    if (out.error) {
+        document.getElementById('cdd-result').innerHTML =
+            '<div class="alert alert-error">' + out.error + '</div>';
+        return;
+    }
+    const verdict = out.matched
+        ? '<span class="badge badge-error">Match found</span>'
+        : '<span class="badge badge-success">No match</span>';
+    const risk = '<span class="badge ' + riskClass(out.risk_score) + '">Risk ' + out.risk_score.toFixed(2) + '</span>';
+    let hits = '';
+    if (out.hits && out.hits.length) {
+        hits = '<table class="table table-sm w-full mt-3"><thead><tr>' +
+               '<th>Name</th><th>Types</th><th>Status</th><th>Score</th><th>Sources</th>' +
+               '</tr></thead><tbody>' +
+               out.hits.map(h =>
+                   '<tr><td>' + h.name + '</td>' +
+                   '<td style="font-size:12px;">' + (h.types || []).join(', ') + '</td>' +
+                   '<td><span class="badge badge-sm">' + h.match_status + '</span></td>' +
+                   '<td>' + (h.score || 0).toFixed(2) + '</td>' +
+                   '<td style="font-size:11px;">' + (h.sources || []).join(', ') + '</td></tr>'
+               ).join('') + '</tbody></table>';
+    }
+    document.getElementById('cdd-result').innerHTML =
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + verdict + ' ' + risk +
+        ' <span style="font-size:12px;opacity:0.7;">vendor: ' + out.vendor +
+        ' &middot; ref: ' + (out.search_id || '—') +
+        ' &middot; expires ' + new Date(out.expires_at).toLocaleDateString() + '</span></div>' +
+        hits;
+}
+</script>
+{% endblock %}

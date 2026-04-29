@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Stamp Duty — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">Singapore Stamp Duty Calculator</h1>
+        <p class="text-sm opacity-70">BSD + ABSD + SSD + Lease duty. Rates effective from 27 April 2023.</p>
+    </div>
+</div>
+
+<div class="grid gap-5" style="grid-template-columns: minmax(0, 1fr); max-width: 920px;">
+    <!-- BUYER (BSD + ABSD) -->
+    <div class="card">
+        <h2 class="text-lg font-bold mb-3">Buyer's Stamp Duty + ABSD</h2>
+        <form id="bsd-form" class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Purchase price (SGD)</span>
+                <input class="input input-bordered" type="number" name="price" min="0" step="1000" value="1500000" required>
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Buyer profile</span>
+                <select class="select select-bordered" name="profile">
+                    <option value="sc">Singapore Citizen</option>
+                    <option value="spr" selected>SPR</option>
+                    <option value="foreign">Foreigner</option>
+                    <option value="entity">Entity</option>
+                    <option value="trustee">Trustee</option>
+                </select>
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Property count (incl. this)</span>
+                <input class="input input-bordered" type="number" name="property_count" min="1" max="10" value="2">
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Type</span>
+                <select class="select select-bordered" name="residential">
+                    <option value="true" selected>Residential</option>
+                    <option value="false">Non-residential</option>
+                </select>
+            </label>
+            <label class="form-control" style="display: flex; align-items: end; gap: 6px;">
+                <span></span>
+                <span style="display: flex; align-items: center; gap: 6px;">
+                    <input type="checkbox" name="fta_exempt" class="checkbox">
+                    <span class="text-sm">FTA-exempt foreigner</span>
+                </span>
+            </label>
+        </form>
+        <div class="mt-3"><button class="btn btn-primary" type="button" onclick="calcBuyer()">Calculate</button></div>
+        <div id="bsd-result" class="mt-4"></div>
+    </div>
+
+    <!-- SELLER (SSD) -->
+    <div class="card">
+        <h2 class="text-lg font-bold mb-3">Seller's Stamp Duty</h2>
+        <form id="ssd-form" class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Sale price (SGD)</span>
+                <input class="input input-bordered" type="number" name="price" min="0" step="1000" value="1500000">
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Holding period (months)</span>
+                <input class="input input-bordered" type="number" name="holding_period_months" min="0" value="18">
+            </label>
+        </form>
+        <div class="mt-3"><button class="btn btn-primary" type="button" onclick="calcSeller()">Calculate</button></div>
+        <div id="ssd-result" class="mt-4"></div>
+    </div>
+
+    <!-- LEASE -->
+    <div class="card">
+        <h2 class="text-lg font-bold mb-3">Tenancy / Lease Duty</h2>
+        <form id="lease-form" class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Annual rent (SGD)</span>
+                <input class="input input-bordered" type="number" name="annual_rent" min="0" step="100" value="36000">
+            </label>
+            <label class="form-control">
+                <span class="label-text text-xs opacity-70">Lease term (months)</span>
+                <input class="input input-bordered" type="number" name="lease_term_months" min="1" value="24">
+            </label>
+        </form>
+        <div class="mt-3"><button class="btn btn-primary" type="button" onclick="calcLease()">Calculate</button></div>
+        <div id="lease-result" class="mt-4"></div>
+    </div>
+</div>
+
+<script>
+function fmt(n) { return n.toLocaleString('en-SG', { style: 'currency', currency: 'SGD', maximumFractionDigits: 0 }); }
+
+function showResult(elId, html, isError) {
+    document.getElementById(elId).innerHTML =
+        '<div class="' + (isError ? 'alert alert-error' : 'alert alert-success') + '">' + html + '</div>';
+}
+
+async function postJson(url, payload) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    return res.json();
+}
+
+async function calcBuyer() {
+    const f = document.getElementById('bsd-form');
+    const data = Object.fromEntries(new FormData(f).entries());
+    data.price = parseFloat(data.price);
+    data.property_count = parseInt(data.property_count, 10);
+    data.residential = data.residential === 'true';
+    data.fta_exempt = !!f.fta_exempt.checked;
+    const out = await postJson('/api/property-agent/stamp-duty/buyer', data);
+    if (out.error) return showResult('bsd-result', out.error, true);
+    const notes = (out.notes || []).map(n => '<li>' + n + '</li>').join('');
+    showResult('bsd-result',
+        '<div><strong>BSD:</strong> ' + fmt(out.bsd) + '<br>' +
+        '<strong>ABSD:</strong> ' + fmt(out.absd) + '<br>' +
+        '<strong>Total:</strong> ' + fmt(out.total) + '</div>' +
+        '<ul style="margin-top: 6px; font-size: 12px; opacity: 0.8;">' + notes + '</ul>'
+    );
+}
+
+async function calcSeller() {
+    const f = document.getElementById('ssd-form');
+    const data = Object.fromEntries(new FormData(f).entries());
+    data.price = parseFloat(data.price);
+    data.holding_period_months = parseInt(data.holding_period_months, 10);
+    const out = await postJson('/api/property-agent/stamp-duty/seller', data);
+    if (out.error) return showResult('ssd-result', out.error, true);
+    showResult('ssd-result',
+        '<strong>SSD:</strong> ' + fmt(out.ssd) + ' &middot; <strong>Tier:</strong> ' + out.tier
+    );
+}
+
+async function calcLease() {
+    const f = document.getElementById('lease-form');
+    const data = Object.fromEntries(new FormData(f).entries());
+    data.annual_rent = parseFloat(data.annual_rent);
+    data.lease_term_months = parseInt(data.lease_term_months, 10);
+    const out = await postJson('/api/property-agent/stamp-duty/lease', data);
+    if (out.error) return showResult('lease-result', out.error, true);
+    showResult('lease-result',
+        '<strong>Lease duty:</strong> ' + fmt(out.duty) + '<br>' +
+        '<span style="font-size: 12px; opacity: 0.8;">Basis: ' + out.basis + '</span>'
+    );
+}
+</script>
+{% endblock %}

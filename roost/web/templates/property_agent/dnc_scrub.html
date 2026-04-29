@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}DNC Scrub — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">PDPC DNC Scrub</h1>
+        <p class="text-sm opacity-70">Scrub Singapore phone numbers against the Do-Not-Call registry. Result valid 21 days.</p>
+    </div>
+</div>
+
+{% if not enabled %}
+<div class="alert alert-warning mb-4">
+    DNC adapter is disabled. Set <code>DNC_ENABLED=true</code>, <code>DNC_API_KEY</code>, and <code>DNC_ORG_ID</code> in your <code>.env</code>.
+</div>
+{% endif %}
+
+<div class="card" style="max-width: 920px;">
+    <h2 class="text-lg font-bold mb-2">Numbers to scrub</h2>
+    <p class="text-xs opacity-70 mb-2">One per line. Any common SG format: <code>+6591234567</code>, <code>91234567</code>, <code>9123 4567</code>.</p>
+    <textarea id="numbers" class="textarea textarea-bordered" rows="8" style="width: 100%; font-family: monospace;" placeholder="91234567&#10;+6598765432"></textarea>
+
+    <div class="mt-3" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+        <span class="text-sm opacity-80">Registers:</span>
+        <label class="text-sm" style="display:inline-flex;align-items:center;gap:4px;">
+            <input type="checkbox" class="checkbox checkbox-sm" name="r" value="DNC_NoVoiceCall" checked> Voice
+        </label>
+        <label class="text-sm" style="display:inline-flex;align-items:center;gap:4px;">
+            <input type="checkbox" class="checkbox checkbox-sm" name="r" value="DNC_NoTextMessage" checked> SMS
+        </label>
+        <label class="text-sm" style="display:inline-flex;align-items:center;gap:4px;">
+            <input type="checkbox" class="checkbox checkbox-sm" name="r" value="DNC_NoFax"> Fax
+        </label>
+    </div>
+
+    <div class="mt-3"><button class="btn btn-primary" onclick="runScrub()" {% if not enabled %}disabled{% endif %}>Scrub now</button></div>
+    <div id="scrub-result" class="mt-4"></div>
+</div>
+
+<script>
+async function runScrub() {
+    const raw = document.getElementById('numbers').value;
+    const numbers = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!numbers.length) {
+        document.getElementById('scrub-result').innerHTML =
+            '<div class="alert alert-error">Enter at least one number.</div>';
+        return;
+    }
+    const registers = [...document.querySelectorAll('input[name="r"]:checked')].map(c => c.value);
+
+    const res = await fetch('/api/property-agent/dnc/scrub', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numbers, registers }),
+    });
+    const out = await res.json();
+    if (out.error) {
+        document.getElementById('scrub-result').innerHTML =
+            '<div class="alert alert-error">' + out.error + '</div>';
+        return;
+    }
+    const rows = (out.results || []).map(r => {
+        const cls = r.allowed ? 'badge-success' : 'badge-error';
+        const status = r.allowed ? '✓ Allowed' : '✗ Blocked';
+        const blocked = r.registers_blocked.length ? r.registers_blocked.join(', ') : '—';
+        return '<tr><td>' + r.input + '</td><td>' + r.number + '</td>' +
+               '<td><span class="badge ' + cls + '">' + status + '</span></td>' +
+               '<td style="font-size:12px;">' + blocked + '</td></tr>';
+    }).join('');
+    document.getElementById('scrub-result').innerHTML =
+        '<div class="alert alert-info" style="font-size:12px;">' +
+        'Scrubbed ' + new Date(out.scrubbed_at).toLocaleString() +
+        ' &middot; Valid until ' + new Date(out.expires_at).toLocaleDateString() +
+        ' &middot; Registers: ' + out.registers_checked.join(', ') +
+        '</div>' +
+        '<table class="table table-sm w-full mt-3"><thead><tr>' +
+        '<th>Input</th><th>Normalised</th><th>Status</th><th>Blocked on</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+</script>
+{% endblock %}
