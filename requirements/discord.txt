@@ -1,0 +1,2 @@
+# Discord bot adapter
+discord.py>=2.3,<3

@@ -1,0 +1,2 @@
+# Matrix bot adapter
+matrix-nio>=0.24,<1

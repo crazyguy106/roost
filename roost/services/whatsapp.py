@@ -11,6 +11,8 @@ import hashlib
 import hmac
 import json
 import logging
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -142,6 +144,152 @@ def send_template_message(
     except Exception as e:
         logger.exception("WhatsApp template send failed")
         return {"error": str(e)}
+
+
+def upload_media(path: str | Path, mime_type: str | None = None) -> dict:
+    """Upload a local file to WhatsApp's media store.
+
+    Returns {"ok": True, "media_id": "..."} or {"error": "..."}.
+    The returned media_id is reusable for 30 days and lets us send the
+    media multiple times without re-uploading.
+    """
+    if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        return {"error": "WhatsApp not configured"}
+
+    p = Path(path)
+    if not p.is_file():
+        return {"error": f"file not found: {p}"}
+    if mime_type is None:
+        mime_type, _ = mimetypes.guess_type(str(p))
+        mime_type = mime_type or "application/octet-stream"
+
+    url = f"{BASE_URL}/{WHATSAPP_PHONE_NUMBER_ID}/media"
+    headers = {"Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}"}
+    try:
+        with httpx.Client(timeout=120) as client, p.open("rb") as fh:
+            files = {"file": (p.name, fh, mime_type)}
+            data = {"messaging_product": "whatsapp", "type": mime_type}
+            resp = client.post(url, headers=headers, data=data, files=files)
+            resp.raise_for_status()
+            payload = resp.json()
+            media_id = payload.get("id", "")
+            if not media_id:
+                return {"error": "no media id returned", "details": payload}
+            logger.info("WhatsApp media uploaded: %s -> %s", p.name, media_id)
+            return {"ok": True, "media_id": media_id, "mime_type": mime_type}
+    except httpx.HTTPStatusError as e:
+        details = e.response.json() if e.response.content else {}
+        return {"error": f"WhatsApp upload {e.response.status_code}", "details": details}
+    except Exception as e:
+        logger.exception("WhatsApp media upload failed")
+        return {"error": str(e)}
+
+
+def _send_media_message(
+    to: str,
+    media_type: str,
+    *,
+    path: str | Path | None = None,
+    link: str | None = None,
+    media_id: str | None = None,
+    caption: str | None = None,
+    filename: str | None = None,
+) -> dict:
+    """Shared implementation for send_document / send_image.
+
+    Pick exactly one of `path` (local file, will be uploaded), `media_id`
+    (already-uploaded reference), or `link` (publicly fetchable URL).
+    """
+    if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        return {"error": "WhatsApp not configured"}
+
+    if media_type not in ("document", "image"):
+        return {"error": f"unsupported media_type {media_type!r}"}
+
+    media_obj: dict[str, Any] = {}
+    if path:
+        upload = upload_media(path)
+        if upload.get("error"):
+            return upload
+        media_obj["id"] = upload["media_id"]
+        if media_type == "document" and not filename:
+            filename = Path(path).name
+    elif media_id:
+        media_obj["id"] = media_id
+    elif link:
+        media_obj["link"] = link
+    else:
+        return {"error": "one of path|media_id|link required"}
+
+    if caption:
+        media_obj["caption"] = caption[:1024]
+    if filename and media_type == "document":
+        media_obj["filename"] = filename
+
+    url = f"{BASE_URL}/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to.lstrip("+"),
+        "type": media_type,
+        media_type: media_obj,
+    }
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            msg_id = data.get("messages", [{}])[0].get("id", "")
+            logger.info("WhatsApp %s sent to %s: msg_id=%s", media_type, to, msg_id)
+            return {"ok": True, "message_id": msg_id, "media_id": media_obj.get("id", "")}
+    except httpx.HTTPStatusError as e:
+        details = e.response.json() if e.response.content else {}
+        logger.error("WhatsApp %s send error: %s %s", media_type, e.response.status_code, details)
+        return {"error": f"WhatsApp API {e.response.status_code}", "details": details}
+    except Exception as e:
+        logger.exception("WhatsApp %s send failed", media_type)
+        return {"error": str(e)}
+
+
+def send_document(
+    to: str,
+    path: str | Path | None = None,
+    *,
+    link: str | None = None,
+    media_id: str | None = None,
+    caption: str | None = None,
+    filename: str | None = None,
+) -> dict:
+    """Send a PDF / docx / spreadsheet via WhatsApp.
+
+    Pass exactly one source: `path` (local file → uploaded automatically),
+    `media_id` (already uploaded), or `link` (publicly reachable URL).
+    """
+    return _send_media_message(
+        to, "document",
+        path=path, link=link, media_id=media_id,
+        caption=caption, filename=filename,
+    )
+
+
+def send_image(
+    to: str,
+    path: str | Path | None = None,
+    *,
+    link: str | None = None,
+    media_id: str | None = None,
+    caption: str | None = None,
+) -> dict:
+    """Send a JPG / PNG via WhatsApp. See send_document for source semantics."""
+    return _send_media_message(
+        to, "image",
+        path=path, link=link, media_id=media_id, caption=caption,
+    )
 
 
 def mark_as_read(message_id: str) -> dict:
