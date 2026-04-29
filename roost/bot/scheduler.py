@@ -107,6 +107,19 @@ def init_scheduler(app: Application) -> None:
     jq.run_repeating(_run_cron_recipes, interval=60, first=45, name="cron_recipes")
     logger.info("Scheduled cron recipe runner (every 60s)")
 
+    # 11. Proactive monitoring — risk alerts and calendar prep
+    try:
+        from roost.config import PROACTIVE_ENABLED, PROACTIVE_RISK_INTERVAL
+        if PROACTIVE_ENABLED:
+            jq.run_repeating(_proactive_risk_monitor, interval=PROACTIVE_RISK_INTERVAL,
+                             first=120, name="proactive_risk")
+            logger.info("Proactive risk monitor (every %ds)", PROACTIVE_RISK_INTERVAL)
+            jq.run_repeating(_proactive_calendar_prep, interval=600,
+                             first=60, name="proactive_calendar")
+            logger.info("Proactive calendar prep (every 10 min)")
+    except Exception:
+        logger.debug("Proactive monitoring setup failed", exc_info=True)
+
     logger.info("Scheduler initialized")
 
 
@@ -516,3 +529,41 @@ async def _run_cron_recipes(context) -> None:
 
     except Exception:
         logger.exception("Cron recipe runner failed")
+
+
+# ── Proactive monitoring ────────────────────────────────────────────
+
+async def _proactive_risk_monitor(context) -> None:
+    """Periodic risk monitoring — alert on risky agent behaviour patterns."""
+    try:
+        from roost.services.proactive import check_risk_patterns
+        alerts = check_risk_patterns()
+
+        for alert in alerts:
+            severity_icon = {"high": "\u26a0\ufe0f", "medium": "\u26a1", "info": "\u2139\ufe0f"}.get(
+                alert.get("severity", "info"), "\u2139\ufe0f"
+            )
+            text = f"{severity_icon} *{alert['title']}*\n{alert['message']}"
+            await _send_to_all(context, text)
+
+    except Exception:
+        logger.debug("Proactive risk monitor failed", exc_info=True)
+
+
+async def _proactive_calendar_prep(context) -> None:
+    """Calendar preparation — alert before upcoming meetings."""
+    try:
+        from roost.config import PROACTIVE_CALENDAR_PREP
+        from roost.services.proactive import check_upcoming_meetings
+        alerts = check_upcoming_meetings(minutes_ahead=PROACTIVE_CALENDAR_PREP)
+
+        for alert in alerts:
+            parts = [f"\ud83d\udcc5 *{alert['title']}*", alert['message']]
+            participants = alert.get("participants", [])
+            if participants:
+                parts.append(f"Participants: {', '.join(participants[:5])}")
+            text = "\n".join(parts)
+            await _send_to_all(context, text)
+
+    except Exception:
+        logger.debug("Proactive calendar prep failed", exc_info=True)

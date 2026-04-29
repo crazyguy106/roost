@@ -11,6 +11,8 @@
         <a class="tab" role="tab" data-tab="flags" onclick="switchTab('flags', this)">Feature Flags</a>
         <a class="tab" role="tab" data-tab="personality" onclick="switchTab('personality', this)">Personality</a>
         <a class="tab" role="tab" data-tab="charter" onclick="switchTab('charter', this)">Charter</a>
+        <a class="tab" role="tab" data-tab="crm" onclick="switchTab('crm', this)">CRM</a>
+        <a class="tab" role="tab" data-tab="deployment" onclick="switchTab('deployment', this)">Deployment</a>
     </div>
 
     <!-- Restart banner -->
@@ -59,10 +61,12 @@
                 <div class="flex items-center justify-between mb-3">
                     <div>
                         <h3 class="font-semibold">Telegram Bot</h3>
-                        <p class="text-xs opacity-60">Your agent's chat interface</p>
+                        <p class="text-xs opacity-60">Your agent's chat interface + OTP confirmation channel</p>
                     </div>
                     <span id="status-telegram" class="badge badge-ghost badge-sm">checking...</span>
                 </div>
+
+                <!-- Bot Token -->
                 <div class="form-control mb-2">
                     <label class="label py-1">
                         <span class="label-text text-xs font-medium">Bot Token</span>
@@ -79,6 +83,223 @@
                     </div>
                     <div class="text-xs mt-1 hidden" id="result-telegram"></div>
                 </div>
+
+                <!-- BotFather Setup Guide -->
+                <details class="mt-3 mb-3">
+                    <summary class="text-xs font-medium cursor-pointer opacity-70 hover:opacity-100">
+                        How to create a Telegram bot (step-by-step)
+                    </summary>
+                    <div class="mt-2 p-3 rounded-lg bg-base-300 text-xs space-y-2">
+                        <p><strong>1.</strong> Open Telegram and search for <code>@BotFather</code></p>
+                        <p><strong>2.</strong> Send <code>/newbot</code> and follow the prompts:</p>
+                        <ul class="list-disc list-inside ml-4 space-y-1 opacity-80">
+                            <li>Choose a display name (e.g. "My Roost Assistant")</li>
+                            <li>Choose a username ending in "bot" (e.g. "myroost_bot")</li>
+                        </ul>
+                        <p><strong>3.</strong> BotFather will give you a token like <code>123456789:ABCdef...</code></p>
+                        <p><strong>4.</strong> Paste that token in the field above and click Save</p>
+                        <p><strong>5.</strong> After saving, link your Telegram account below so the bot knows who you are</p>
+                        <div class="divider my-1 opacity-30"></div>
+                        <p class="opacity-60">Optional: send <code>/setdescription</code> and <code>/setabouttext</code> to BotFather to customize your bot's profile.</p>
+                    </div>
+                </details>
+
+                <!-- Telegram Account Linking -->
+                <div class="divider text-xs opacity-40 my-2">Account Linking</div>
+                <div id="telegramLinkSection">
+                    <p class="text-xs opacity-60 mb-2">
+                        Link your Telegram account to receive OTP confirmations when using web chat.
+                        This connects your web login to your Telegram user ID.
+                    </p>
+                    <div id="telegramLinkStatus" class="mb-2">
+                        <span class="text-xs opacity-50">Checking link status...</span>
+                    </div>
+                    <div id="telegramLinkActions"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messaging Adapters -->
+        <div class="card bg-base-200 mb-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="font-semibold">Messaging Adapters</h3>
+                        <p class="text-xs opacity-60">Connect additional chat platforms — each requires a Docker rebuild</p>
+                    </div>
+                </div>
+                <p class="text-xs opacity-50 mb-3">
+                    These adapters run inside the Docker container. After saving credentials,
+                    rebuild with the platform's build flag enabled (e.g. <code>ENABLE_DISCORD=true</code>).
+                </p>
+
+                <!-- Discord -->
+                <details class="mb-2">
+                    <summary class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-base-300">
+                        <span class="font-medium text-sm">Discord Bot</span>
+                        <span id="status-discord" class="badge badge-ghost badge-sm">checking...</span>
+                    </summary>
+                    <div class="p-3 space-y-2">
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Bot Token</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-DISCORD_BOT_TOKEN"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-DISCORD_BOT_TOKEN" placeholder="Discord bot token">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('DISCORD_BOT_TOKEN')">Save</button>
+                            </div>
+                        </div>
+                        <details class="mt-1">
+                            <summary class="text-xs opacity-60 cursor-pointer">Setup instructions</summary>
+                            <div class="mt-1 p-2 rounded bg-base-300 text-xs space-y-1">
+                                <p><strong>1.</strong> Go to <code>discord.com/developers/applications</code></p>
+                                <p><strong>2.</strong> Create New Application, then go to Bot tab</p>
+                                <p><strong>3.</strong> Click "Reset Token" and copy it here</p>
+                                <p><strong>4.</strong> Enable "Message Content Intent" under Privileged Gateway Intents</p>
+                                <p><strong>5.</strong> Invite bot to your server via OAuth2 > URL Generator (scopes: bot; permissions: Send Messages, Read Messages)</p>
+                                <p><strong>6.</strong> Rebuild Docker with <code>ENABLE_DISCORD=true</code></p>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+
+                <!-- Slack -->
+                <details class="mb-2">
+                    <summary class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-base-300">
+                        <span class="font-medium text-sm">Slack Bot</span>
+                        <span id="status-slack" class="badge badge-ghost badge-sm">checking...</span>
+                    </summary>
+                    <div class="p-3 space-y-2">
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Bot Token (xoxb-...)</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-SLACK_BOT_TOKEN"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-SLACK_BOT_TOKEN" placeholder="xoxb-...">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('SLACK_BOT_TOKEN')">Save</button>
+                            </div>
+                        </div>
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">App Token (xapp-...)</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-SLACK_APP_TOKEN"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-SLACK_APP_TOKEN" placeholder="xapp-...">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('SLACK_APP_TOKEN')">Save</button>
+                            </div>
+                        </div>
+                        <details class="mt-1">
+                            <summary class="text-xs opacity-60 cursor-pointer">Setup instructions</summary>
+                            <div class="mt-1 p-2 rounded bg-base-300 text-xs space-y-1">
+                                <p><strong>1.</strong> Go to <code>api.slack.com/apps</code> and create a new app</p>
+                                <p><strong>2.</strong> Enable Socket Mode and generate an App Token (xapp-...)</p>
+                                <p><strong>3.</strong> Under OAuth & Permissions, add scopes: <code>chat:write</code>, <code>app_mentions:read</code>, <code>im:history</code></p>
+                                <p><strong>4.</strong> Install to workspace and copy the Bot Token (xoxb-...)</p>
+                                <p><strong>5.</strong> Under Event Subscriptions, subscribe to: <code>app_mention</code>, <code>message.im</code></p>
+                                <p><strong>6.</strong> Rebuild Docker with <code>ENABLE_SLACK=true</code></p>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+
+                <!-- Signal -->
+                <details class="mb-2">
+                    <summary class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-base-300">
+                        <span class="font-medium text-sm">Signal Bot</span>
+                        <span id="status-signal" class="badge badge-ghost badge-sm">checking...</span>
+                    </summary>
+                    <div class="p-3 space-y-2">
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">signal-cli API URL</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-SIGNAL_API_URL"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="text" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-SIGNAL_API_URL" placeholder="http://localhost:8080">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('SIGNAL_API_URL')">Save</button>
+                            </div>
+                        </div>
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Bot Phone Number</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-SIGNAL_PHONE_NUMBER"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="text" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-SIGNAL_PHONE_NUMBER" placeholder="+1234567890">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('SIGNAL_PHONE_NUMBER')">Save</button>
+                            </div>
+                        </div>
+                        <details class="mt-1">
+                            <summary class="text-xs opacity-60 cursor-pointer">Setup instructions</summary>
+                            <div class="mt-1 p-2 rounded bg-base-300 text-xs space-y-1">
+                                <p><strong>1.</strong> Run <code>signal-cli-rest-api</code> as a Docker container alongside Roost</p>
+                                <p><strong>2.</strong> Register a phone number with Signal via the API</p>
+                                <p><strong>3.</strong> Enter the API URL and phone number above</p>
+                                <p><strong>4.</strong> No Docker rebuild needed (uses httpx, already included)</p>
+                            </div>
+                        </details>
+                    </div>
+                </details>
+
+                <!-- Matrix -->
+                <details class="mb-2">
+                    <summary class="flex items-center justify-between cursor-pointer p-2 rounded hover:bg-base-300">
+                        <span class="font-medium text-sm">Matrix Bot</span>
+                        <span id="status-matrix" class="badge badge-ghost badge-sm">checking...</span>
+                    </summary>
+                    <div class="p-3 space-y-2">
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Homeserver URL</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-MATRIX_HOMESERVER"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="text" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-MATRIX_HOMESERVER" placeholder="https://matrix.org">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('MATRIX_HOMESERVER')">Save</button>
+                            </div>
+                        </div>
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Bot User ID (@bot:server)</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-MATRIX_USER_ID"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="text" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-MATRIX_USER_ID" placeholder="@roost:matrix.org">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('MATRIX_USER_ID')">Save</button>
+                            </div>
+                        </div>
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs font-medium">Access Token</span>
+                                <span class="label-text-alt text-xs opacity-50" id="masked-MATRIX_ACCESS_TOKEN"></span>
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="password" class="input input-sm input-bordered flex-1 font-mono text-xs"
+                                       id="input-MATRIX_ACCESS_TOKEN" placeholder="syt_...">
+                                <button class="btn btn-sm btn-primary" onclick="saveCredential('MATRIX_ACCESS_TOKEN')">Save</button>
+                            </div>
+                        </div>
+                        <details class="mt-1">
+                            <summary class="text-xs opacity-60 cursor-pointer">Setup instructions</summary>
+                            <div class="mt-1 p-2 rounded bg-base-300 text-xs space-y-1">
+                                <p><strong>1.</strong> Create a bot account on your Matrix homeserver</p>
+                                <p><strong>2.</strong> Generate an access token (e.g. via Element > Settings > Help > Access Token)</p>
+                                <p><strong>3.</strong> Enter homeserver URL, user ID, and token above</p>
+                                <p><strong>4.</strong> Rebuild Docker with <code>ENABLE_MATRIX=true</code></p>
+                            </div>
+                        </details>
+                    </div>
+                </details>
             </div>
         </div>
 
@@ -286,6 +507,44 @@
             </div>
         </div>
     </div>
+
+    <!-- ============ CRM TAB ============ -->
+    <div id="tab-crm" style="display: none;">
+        <div class="card bg-base-100 border border-base-300 mb-4">
+            <div class="card-body">
+                <h2 class="card-title text-lg">Active CRM</h2>
+                <p class="text-sm opacity-70 mb-3">Recipes and MCP <code>crm_*</code> tools route to whichever CRM is selected here.</p>
+                <div class="flex gap-2 items-center">
+                    <select id="crm-provider-select" class="select select-bordered select-sm">
+                        <option value="local">Roost Local Contacts</option>
+                        <option value="attio">Attio</option>
+                        <option value="hubspot">HubSpot</option>
+                        <option value="zoho">Zoho CRM</option>
+                        <option value="salesforce">Salesforce</option>
+                        <option value="pipedrive">Pipedrive</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="setCrmProvider()">Activate</button>
+                    <button class="btn btn-sm btn-outline" onclick="testCrm()">Test connection</button>
+                    <span id="crm-test-result" class="text-xs ml-2"></span>
+                </div>
+            </div>
+        </div>
+
+        <div id="crm-providers"></div>
+    </div>
+
+    <!-- Deployment tab -->
+    <div id="tab-deployment" style="display: none;">
+        <div class="card bg-base-100 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="text-base font-semibold mb-2">Where Roost is running</h2>
+                <p class="text-sm opacity-70 mb-3">Read-only — read from environment at startup. To change, edit <code>.env</code> and re-run <code>docker compose up -d</code>. See <a class="link" href="https://github.com/anthropics/roost/blob/main/docs/deployment.md" target="_blank">deployment shapes</a>.</p>
+                <div id="deployment-status" class="text-sm">
+                    <span class="loading loading-spinner loading-xs"></span> loading…
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -296,10 +555,40 @@
 function switchTab(tab, el) {
     document.querySelectorAll('#settingsTabs .tab').forEach(t => t.classList.remove('tab-active'));
     el.classList.add('tab-active');
-    ['integrations', 'flags', 'personality', 'charter'].forEach(t => {
+    ['integrations', 'flags', 'personality', 'charter', 'crm', 'deployment'].forEach(t => {
         const panel = document.getElementById('tab-' + t);
         if (panel) panel.style.display = t === tab ? '' : 'none';
     });
+    if (tab === 'crm') loadCrm();
+    if (tab === 'deployment') loadDeployment();
+}
+
+async function loadDeployment() {
+    const host = document.getElementById('deployment-status');
+    try {
+        const r = await fetch('/api/settings/deployment');
+        const d = await r.json();
+        const reach = d.sidecar_reachable
+            ? `<span class="badge badge-sm badge-success">reachable</span>`
+            : `<span class="badge badge-sm badge-error">unreachable</span>`;
+        host.innerHTML = `
+            <table class="table table-sm">
+                <tbody>
+                    <tr><td class="opacity-70">Shape</td><td><strong>${escHtml(d.shape_label)}</strong></td></tr>
+                    <tr><td class="opacity-70">Public sidecar URL</td><td><code>${escHtml(d.sidecar_public_url)}</code></td></tr>
+                    <tr><td class="opacity-70">Internal sidecar URL</td><td><code>${escHtml(d.sidecar_internal_url)}</code> ${reach} <span class="text-xs opacity-60">${escHtml(d.sidecar_detail || '')}</span></td></tr>
+                    <tr><td class="opacity-70">ROOST_DOMAIN</td><td>${d.roost_domain ? `<code>${escHtml(d.roost_domain)}</code>` : '<span class="opacity-50">not set</span>'}</td></tr>
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        host.innerHTML = `<div class="text-error">Failed to load: ${escHtml(String(e))}</div>`;
+    }
+}
+
+function escHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c =>
+        ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
 // ── Credentials ────────────────────────────────────────────────
@@ -532,8 +821,165 @@ async function saveProviderCharter() {
     }
 }
 
+// ── Telegram Linking ──────────────────────────────────────────
+async function loadTelegramLinkStatus() {
+    const statusEl = document.getElementById('telegramLinkStatus');
+    const actionsEl = document.getElementById('telegramLinkActions');
+    try {
+        const resp = await fetch('/api/settings/telegram/status');
+        if (resp.status === 401) {
+            statusEl.innerHTML = '<span class="text-xs opacity-50">Log in to link your Telegram account.</span>';
+            actionsEl.innerHTML = '';
+            return;
+        }
+        const data = await resp.json();
+        if (data.linked) {
+            statusEl.innerHTML =
+                '<div class="flex items-center gap-2">' +
+                '<span class="badge badge-success badge-sm">Linked</span>' +
+                '<span class="text-xs opacity-60">Telegram ID: ' + data.telegram_id + '</span>' +
+                '</div>';
+            actionsEl.innerHTML =
+                '<button class="btn btn-sm btn-ghost btn-error" onclick="unlinkTelegram()">Unlink</button>';
+        } else {
+            statusEl.innerHTML =
+                '<span class="badge badge-ghost badge-sm">Not linked</span>' +
+                (data.pending_code ? '<span class="text-xs text-warning ml-2">Code pending — check Telegram</span>' : '');
+            actionsEl.innerHTML =
+                '<button class="btn btn-sm btn-primary" onclick="generateLinkCode()">Generate Link Code</button>';
+        }
+    } catch (e) {
+        statusEl.innerHTML = '<span class="text-xs text-error">Failed to check status</span>';
+    }
+}
+
+async function generateLinkCode() {
+    const actionsEl = document.getElementById('telegramLinkActions');
+    actionsEl.innerHTML = '<span class="loading loading-spinner loading-sm"></span>';
+    try {
+        const resp = await fetch('/api/settings/telegram/link', {method: 'POST'});
+        const data = await resp.json();
+        if (data.ok) {
+            actionsEl.innerHTML =
+                '<div class="p-3 rounded-lg bg-base-300 space-y-2">' +
+                '<p class="text-xs font-medium">Send this message to your Telegram bot:</p>' +
+                '<div class="flex items-center gap-2">' +
+                '<code class="text-sm font-bold px-3 py-1 bg-base-100 rounded select-all">LINK ' + data.code + '</code>' +
+                '<button class="btn btn-xs btn-ghost" onclick="navigator.clipboard.writeText(\'LINK ' + data.code + '\')">Copy</button>' +
+                '</div>' +
+                '<p class="text-xs opacity-50">Expires in 10 minutes</p>' +
+                '<button class="btn btn-xs btn-ghost mt-1" onclick="loadTelegramLinkStatus()">Refresh status</button>' +
+                '</div>';
+        } else {
+            actionsEl.innerHTML =
+                '<span class="text-xs text-error">' + (data.error || 'Failed to generate code') + '</span>';
+        }
+    } catch (e) {
+        actionsEl.innerHTML = '<span class="text-xs text-error">Network error</span>';
+    }
+}
+
+async function unlinkTelegram() {
+    if (!confirm('Unlink your Telegram account? You will stop receiving OTP confirmations.')) return;
+    try {
+        const resp = await fetch('/api/settings/telegram/unlink', {method: 'POST'});
+        const data = await resp.json();
+        if (data.ok) {
+            loadTelegramLinkStatus();
+        }
+    } catch (e) {
+        alert('Failed to unlink');
+    }
+}
+
+// ── CRM ────────────────────────────────────────────────────────
+async function loadCrm() {
+    try {
+        const resp = await fetch('/api/settings/crm');
+        const data = await resp.json();
+        document.getElementById('crm-provider-select').value = data.active || 'local';
+        const host = document.getElementById('crm-providers');
+        host.innerHTML = '';
+        for (const p of data.providers || []) {
+            if (p.key === 'local') continue;
+            const card = document.createElement('div');
+            card.className = 'card bg-base-100 border border-base-300 mb-3';
+            const status = p.configured
+                ? '<span class="badge badge-success badge-sm">configured</span>'
+                : '<span class="badge badge-ghost badge-sm">not configured</span>';
+            const oauthBtn = p.oauth_start
+                ? `<a href="${p.oauth_start}" class="btn btn-sm btn-secondary">Connect via OAuth</a>`
+                : '';
+            let credRows = '';
+            for (const [key, info] of Object.entries(p.credentials || {})) {
+                const placeholder = info.is_set ? (info.masked || '••••') : 'enter value';
+                credRows += `
+                  <div class="form-control mb-2">
+                    <label class="label py-1"><span class="label-text text-sm">${info.label}</span></label>
+                    <div class="join w-full">
+                      <input type="password" id="crm-cred-${key}" placeholder="${placeholder}"
+                             class="input input-bordered input-sm join-item flex-1">
+                      <button class="btn btn-sm btn-outline join-item"
+                              onclick="saveCrmCredential('${key}')">Save</button>
+                    </div>
+                  </div>`;
+            }
+            card.innerHTML = `
+              <div class="card-body">
+                <div class="flex items-center justify-between">
+                  <h3 class="card-title text-base">${p.name} ${status}</h3>
+                  ${oauthBtn}
+                </div>
+                ${credRows}
+              </div>`;
+            host.appendChild(card);
+        }
+    } catch (e) {
+        console.error('loadCrm failed', e);
+    }
+}
+
+async function saveCrmCredential(key) {
+    const input = document.getElementById('crm-cred-' + key);
+    const value = (input.value || '').trim();
+    if (!value) return;
+    const resp = await fetch('/api/settings/credential/' + key, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({value}),
+    });
+    if (resp.ok) {
+        input.value = '';
+        loadCrm();
+    } else {
+        alert('Save failed: ' + resp.status);
+    }
+}
+
+async function setCrmProvider() {
+    const provider = document.getElementById('crm-provider-select').value;
+    const resp = await fetch('/api/settings/crm/provider', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({provider}),
+    });
+    const data = await resp.json();
+    document.getElementById('crm-test-result').textContent =
+        resp.ok ? `Active: ${data.active}` : `Error: ${data.error || resp.status}`;
+}
+
+async function testCrm() {
+    const el = document.getElementById('crm-test-result');
+    el.textContent = 'Testing…';
+    const resp = await fetch('/api/settings/crm/test', {method: 'POST'});
+    const data = await resp.json();
+    el.textContent = (data.ok ? '✓ ' : '✗ ') + (data.detail || JSON.stringify(data));
+    el.className = 'text-xs ml-2 ' + (data.ok ? 'text-success' : 'text-error');
+}
+
 // Init
 loadIntegrationStatus();
+loadTelegramLinkStatus();
 loadCharter();
 </script>
 {% endblock %}

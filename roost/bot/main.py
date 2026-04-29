@@ -56,8 +56,10 @@ from roost.bot.handlers import (
     cmd_tutorial, handle_tutorial_callback,
     # Agent + Skill Builder
     handle_agent_message, cmd_agent, cmd_skill,
-    # Recipes & Templates
-    cmd_recipe, cmd_template, cmd_sequence,
+    # Account Linking
+    handle_link_message,
+    # Recipes, Templates, Scheduling & Rollback
+    cmd_recipe, cmd_schedule, cmd_rollback, cmd_template, cmd_sequence,
     cmd_approve, cmd_skip_run,
 )
 
@@ -211,6 +213,8 @@ def main():
 
     # Recipes & Templates
     app.add_handler(CommandHandler("recipe", cmd_recipe))
+    app.add_handler(CommandHandler("schedule", cmd_schedule))
+    app.add_handler(CommandHandler("rollback", cmd_rollback))
     app.add_handler(CommandHandler("template", cmd_template))
     app.add_handler(CommandHandler("sequence", cmd_sequence))
     app.add_handler(CommandHandler("approve", cmd_approve))
@@ -220,6 +224,9 @@ def main():
     app.add_handler(CommandHandler("agent", cmd_agent))
     app.add_handler(CommandHandler("skill", cmd_skill))
 
+    # Account linking handler (group -2: intercepts "LINK <code>" before everything)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link_message), group=-2)
+
     # Capture message handler (group -1: runs before all group-0 handlers)
     from roost.bot.capture import handle_capture_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_capture_message), group=-1)
@@ -227,6 +234,11 @@ def main():
     # Email triage message handler (group -1: intercepts replies/AI prompts)
     from roost.bot.handlers.email_triage import handle_triage_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_triage_message), group=-1)
+
+    # RPA input handler (group -1: intercepts plain messages for awaiting_input runs)
+    from roost.bot.handlers.rpa_input import handle_rpa_input_message, cmd_rpa
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rpa_input_message), group=-1)
+    app.add_handler(CommandHandler("rpa", cmd_rpa))
 
     # Agent free-text handler (group 0: catches messages not consumed by capture/triage)
     # Skill revision intercept is handled inside handle_agent_message
@@ -288,6 +300,18 @@ def main():
             seed_all_curricula()
         except Exception:
             logger.exception("Failed to seed curricula")
+
+    # Seed shipped RPA flow library as global defaults (idempotent).
+    try:
+        from roost.services.rpa_flows import seed_library
+        result = seed_library()
+        if result.get("seeded"):
+            logger.info(
+                "Seeded %d RPA flow library file(s); %d skipped (already present)",
+                result["seeded"], result.get("skipped", 0),
+            )
+    except Exception:
+        logger.exception("Failed to seed RPA flow library")
 
     # Initialize scheduler (morning digest, deadline reminders, urgency recalc)
     from roost.bot.scheduler import init_scheduler

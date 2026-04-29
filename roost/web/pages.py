@@ -69,12 +69,18 @@ templates.env.globals["depttools_enabled"] = os.environ.get(
     "DEPTTOOLS_ENABLED", ""
 ).lower() in ("1", "true", "yes")
 
+# Property-agent toolkit master flag (sidebar group + pages)
+from roost.config import PROPERTY_AGENT_ENABLED as _PA_ENABLED  # noqa: E402
+templates.env.globals["property_agent_enabled"] = _PA_ENABLED
+
 
 def _base_context(request: Request) -> dict:
     """Base template context: request + current_user."""
+    from roost.config import PROPERTY_AGENT_ENABLED
     return {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
+        "property_agent_enabled": PROPERTY_AGENT_ENABLED,
     }
 
 
@@ -235,6 +241,35 @@ def task_list_page(request: Request, status: str | None = None,
     })
 
 
+@router.get("/tasks/board")
+def task_board_page(request: Request, project: str | None = None):
+    """Kanban board view — drag-and-drop task management."""
+    vis_uid = _visibility_user_id(request)
+
+    # Get tasks grouped by status
+    columns = {
+        "todo": task_service.list_tasks(status="todo", project=project,
+                                        visible_to_user_id=vis_uid),
+        "in_progress": task_service.list_tasks(status="in_progress", project=project,
+                                                visible_to_user_id=vis_uid),
+        "done": task_service.list_tasks(status="done", project=project,
+                                        visible_to_user_id=vis_uid, limit=20),
+    }
+
+    projects = task_service.list_projects(visible_to_user_id=vis_uid)
+    project_names = sorted(set(
+        t.project for col in columns.values() for t in col if t.project
+    ))
+
+    return templates.TemplateResponse("kanban.html", {
+        **_base_context(request),
+        "columns": columns,
+        "projects": projects,
+        "project_names": project_names,
+        "selected_project": project or "",
+    })
+
+
 @router.get("/tasks/new")
 def task_new_page(request: Request):
     projects = task_service.list_projects()
@@ -373,6 +408,12 @@ def page_energy_mode(level: str = Form("low")):
 @router.get("/inbox")
 def inbox_page(request: Request):
     return templates.TemplateResponse("email_inbox.html", {**_base_context(request)})
+
+
+@router.get("/rpa")
+def rpa_page(request: Request):
+    """Minimal RPA run viewer — list runs, surface 'Take over browser' for paused runs."""
+    return templates.TemplateResponse("rpa.html", {**_base_context(request)})
 
 
 # ── Notes pages ──────────────────────────────────────────────────────
@@ -1097,6 +1138,21 @@ def notion_bulk_export(request: Request):
 
 # ── Curriculum Dashboard ────────────────────────────────────────────
 
+# ── Chat ──────────────────────────────────────────────────────────
+
+@router.get("/chat")
+def chat_page(request: Request):
+    from roost.config import AGENT_ENABLED, AGENT_PROVIDER
+    from roost.adapters import get_agentic_mode
+    mode = get_agentic_mode()
+    provider = mode or AGENT_PROVIDER or "none"
+    return templates.TemplateResponse("chat.html", {
+        **_base_context(request),
+        "agent_enabled": AGENT_ENABLED and mode is not None,
+        "provider": provider,
+    })
+
+
 # ── Claude Sessions ───────────────────────────────────────────────
 
 @router.get("/sessions")
@@ -1322,6 +1378,13 @@ def docs_file(path: str = ""):
 
 # ── Settings ─────────────────────────────────────────────────────────
 
+_INTEGRATIONS_MAP = {
+    "gemini": {"credentials": ["GEMINI_API_KEY"]},
+    "claude": {"credentials": ["CLAUDE_API_KEY"]},
+    "openai": {"credentials": ["OPENAI_API_KEY"]},
+}
+
+
 @router.get("/settings")
 def settings_page(request: Request):
     """Desktop settings page — integrations, flags, personality."""
@@ -1336,7 +1399,57 @@ def settings_page(request: Request):
         **_base_context(request),
         "flags": get_flags_status(),
         "integrations": get_integrations_status(),
+        "integrations_map": _INTEGRATIONS_MAP,
         "personality": prefs.get("personality", ""),
         "active_tab": "",
         "page_title": "Settings",
+    })
+
+
+# ── Property-agent toolkit (Singapore) ──────────────────────────────
+
+
+def _require_property_agent():
+    from roost.config import PROPERTY_AGENT_ENABLED
+    if not PROPERTY_AGENT_ENABLED:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Property-agent toolkit disabled")
+
+
+@router.get("/property-agent/stamp-duty")
+def property_agent_stamp_duty(request: Request):
+    """IRAS stamp-duty calculator: BSD + ABSD, SSD, lease duty."""
+    _require_property_agent()
+    return templates.TemplateResponse("property_agent/stamp_duty.html", {
+        **_base_context(request),
+        "active_tab": "",
+        "page_title": "Stamp Duty Calculator",
+    })
+
+
+@router.get("/property-agent/dnc-scrub")
+def property_agent_dnc_scrub(request: Request):
+    """PDPC DNC Registry scrub UI."""
+    _require_property_agent()
+    from roost.config import DNC_ENABLED
+    return templates.TemplateResponse("property_agent/dnc_scrub.html", {
+        **_base_context(request),
+        "enabled": DNC_ENABLED,
+        "active_tab": "",
+        "page_title": "DNC Scrub",
+    })
+
+
+@router.get("/property-agent/cdd-screen")
+def property_agent_cdd_screen(request: Request):
+    """CDD screening (sanctions / PEP / adverse media)."""
+    _require_property_agent()
+    from roost.config import CDD_ENABLED, CDD_REFRESH_DAYS, CDD_VENDOR
+    return templates.TemplateResponse("property_agent/cdd_screen.html", {
+        **_base_context(request),
+        "enabled": CDD_ENABLED,
+        "vendor": CDD_VENDOR,
+        "refresh_days": CDD_REFRESH_DAYS,
+        "active_tab": "",
+        "page_title": "CDD Screening",
     })

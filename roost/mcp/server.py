@@ -17,6 +17,7 @@ from roost.config import (
     TELEGRAM_ENABLED,
     NOTION_ENABLED,
     INFRA_ENABLED,
+    WHATSAPP_ENABLED,
 )
 
 logger = logging.getLogger("roost.mcp.server")
@@ -48,6 +49,13 @@ from roost.mcp import tools_scheduled_emails  # noqa: E402, F401
 from roost.mcp import tools_scrape            # noqa: E402, F401
 from roost.mcp import tools_text_cleanup      # noqa: E402, F401
 from roost.mcp import tools_recipes           # noqa: E402, F401
+from roost.mcp import tools_guardian          # noqa: E402, F401
+from roost.mcp import tools_memory           # noqa: E402, F401
+from roost.mcp import tools_rpa              # noqa: E402, F401
+from roost.mcp import tools_iras             # noqa: E402, F401
+from roost.mcp import tools_pdpc             # noqa: E402, F401
+from roost.mcp import tools_cdd              # noqa: E402, F401
+from roost.mcp import tools_crm              # noqa: E402, F401
 
 # ── Google tools (GOOGLE_ENABLED) ───────────────────────────────────
 if GOOGLE_ENABLED:
@@ -77,6 +85,10 @@ if AI_ENABLED:
 # ── Telegram tools (TELEGRAM_ENABLED) ───────────────────────────────
 if TELEGRAM_ENABLED:
     from roost.mcp import tools_telegram       # noqa: E402, F401
+
+# ── WhatsApp tools (WHATSAPP_ENABLED) ───────────────────────────────
+if WHATSAPP_ENABLED:
+    from roost.mcp import tools_whatsapp       # noqa: E402, F401
 
 # ── Notion tools (NOTION_ENABLED) ───────────────────────────────────
 if NOTION_ENABLED:

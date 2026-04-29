@@ -50,6 +50,15 @@ WEB_PORT: int = int(os.getenv("WEB_PORT", "8080"))
 UPLOADS_DIR: str = os.getenv("UPLOADS_DIR", str(PROJECT_ROOT / "uploads"))
 DOCS_DIR: str = os.getenv("DOCS_DIR", str(PROJECT_ROOT / "generated"))
 
+# Browserless / Chromium sidecar
+# Internal URL: how Roost reaches the sidecar inside the docker network.
+# Public URL:   how a HUMAN reaches it (used to render live debug URLs in
+# Telegram prompts when an RPA flow pauses for Singpass / 2FA / captcha).
+# Laptop default = loopback; cloud deploys must set SIDECAR_PUBLIC_URL to
+# whatever they tunnel / reverse-proxy to.
+SIDECAR_INTERNAL_HTTP_URL: str = os.getenv("SIDECAR_INTERNAL_HTTP_URL", "http://chromium:3000")
+SIDECAR_PUBLIC_URL: str = os.getenv("SIDECAR_PUBLIC_URL", "http://localhost:3000")
+
 # Calendar & Reminders
 GOOGLE_CALENDAR_ICS_URL: str = os.getenv("GOOGLE_CALENDAR_ICS_URL", "")
 MORNING_DIGEST_HOUR: int = int(os.getenv("MORNING_DIGEST_HOUR", "8"))
@@ -97,10 +106,32 @@ INFRA_ENABLED = os.getenv("INFRA_ENABLED", "true").lower() in ("true", "1", "yes
 SSH_ENABLED = os.getenv("SSH_ENABLED", "true").lower() in ("true", "1", "yes")
 CHARTS_ENABLED = False  # Charts not included in open-source release
 
+# Guardian AI — pre-flight safety checks on tool calls
+GUARDIAN_ENABLED = os.getenv("GUARDIAN_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# Cost tracking — per-run and daily token cost limits
+MAX_COST_PER_RUN: float = float(os.getenv("MAX_COST_PER_RUN", "0.50"))
+MAX_DAILY_COST: float = float(os.getenv("MAX_DAILY_COST", "5.00"))
+
+# Proactive monitoring — push alerts for risks and events
+PROACTIVE_ENABLED = os.getenv("PROACTIVE_ENABLED", "true").lower() in ("true", "1", "yes")
+PROACTIVE_RISK_INTERVAL: int = int(os.getenv("PROACTIVE_RISK_INTERVAL", "300"))  # seconds
+PROACTIVE_CALENDAR_PREP: int = int(os.getenv("PROACTIVE_CALENDAR_PREP", "30"))   # minutes before event
+
+# Autonomy level — supervised | assisted | autonomous
+# supervised: confirm every external action
+# assisted: confirm destructive only (default, current behaviour)
+# autonomous: no confirmation (max speed, max risk)
+AUTONOMY_LEVEL: str = os.getenv("AUTONOMY_LEVEL", "assisted")
+
 # Agent — natural language via Telegram (agentic with tool use)
 AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "true").lower() == "true"
 AGENT_PROVIDER: str = os.getenv("AGENT_PROVIDER", "gemini")  # gemini | claude | openai | ollama
 AGENT_TIMEOUT: int = int(os.getenv("AGENT_TIMEOUT", "120"))
+
+# Background agent limits
+MAX_BACKGROUND_RUNS: int = int(os.getenv("MAX_BACKGROUND_RUNS", "3"))
+MAX_BACKGROUND_DURATION: int = int(os.getenv("MAX_BACKGROUND_DURATION", "300"))  # seconds
 
 # Agent API keys (for agentic mode — separate from CLI subscriptions)
 CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
@@ -163,12 +194,105 @@ WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
 
+# Property-Agent Toolkit (Singapore) — master flag for the sidebar group + pages.
+# Stamp-duty calculator is pure-Python and gated only by this flag.
+# DNC and CDD have their own sub-flags below for the external API integrations.
+PROPERTY_AGENT_ENABLED: bool = os.getenv("PROPERTY_AGENT_ENABLED", "true").lower() == "true"
+
+# CRM adapter — vendor-agnostic dispatch. "local" wraps Roost's own contacts table.
+# Other supported: attio | hubspot | zoho | salesforce | pipedrive
+CRM_PROVIDER: str = os.getenv("CRM_PROVIDER", "local")
+
+# Attio
+ATTIO_API_KEY: str = os.getenv("ATTIO_API_KEY", "")
+ATTIO_BASE_URL: str = os.getenv("ATTIO_BASE_URL", "https://api.attio.com/v2")
+ATTIO_OBJECT_PEOPLE: str = os.getenv("ATTIO_OBJECT_PEOPLE", "people")
+ATTIO_OBJECT_COMPANIES: str = os.getenv("ATTIO_OBJECT_COMPANIES", "companies")
+ATTIO_OBJECT_DEALS: str = os.getenv("ATTIO_OBJECT_DEALS", "deals")
+
+# HubSpot
+HUBSPOT_ACCESS_TOKEN: str = os.getenv("HUBSPOT_ACCESS_TOKEN", "")
+HUBSPOT_BASE_URL: str = os.getenv("HUBSPOT_BASE_URL", "https://api.hubapi.com")
+
+# Zoho CRM (OAuth — refresh token persists, access token refreshed hourly)
+ZOHO_CLIENT_ID: str = os.getenv("ZOHO_CLIENT_ID", "")
+ZOHO_CLIENT_SECRET: str = os.getenv("ZOHO_CLIENT_SECRET", "")
+ZOHO_REFRESH_TOKEN: str = os.getenv("ZOHO_REFRESH_TOKEN", "")
+ZOHO_ACCOUNTS_URL: str = os.getenv("ZOHO_ACCOUNTS_URL", "https://accounts.zoho.com")
+ZOHO_API_DOMAIN: str = os.getenv("ZOHO_API_DOMAIN", "https://www.zohoapis.com")
+ZOHO_REDIRECT_URI: str = os.getenv("ZOHO_REDIRECT_URI", "")
+ZOHO_OAUTH_SCOPES: str = os.getenv(
+    "ZOHO_OAUTH_SCOPES",
+    "ZohoCRM.modules.ALL,ZohoCRM.users.READ,ZohoCRM.notification.ALL",
+)
+
+# Salesforce (OAuth username-password or refresh token)
+SALESFORCE_INSTANCE_URL: str = os.getenv("SALESFORCE_INSTANCE_URL", "")
+SALESFORCE_ACCESS_TOKEN: str = os.getenv("SALESFORCE_ACCESS_TOKEN", "")
+SALESFORCE_API_VERSION: str = os.getenv("SALESFORCE_API_VERSION", "v59.0")
+
+# Pipedrive
+PIPEDRIVE_API_TOKEN: str = os.getenv("PIPEDRIVE_API_TOKEN", "")
+PIPEDRIVE_BASE_URL: str = os.getenv("PIPEDRIVE_BASE_URL", "https://api.pipedrive.com/v1")
+
+# CDD Screening (sanctions / PEP / adverse media)
+# Vendor: "complyadvantage" | "acuris" | "refinitiv". Only complyadvantage
+# is implemented today; the others raise NotImplementedError.
+CDD_ENABLED: bool = os.getenv("CDD_ENABLED", "false").lower() == "true"
+CDD_VENDOR: str = os.getenv("CDD_VENDOR", "complyadvantage")
+CDD_API_KEY: str = os.getenv("CDD_API_KEY", "")
+CDD_API_BASE_URL: str = os.getenv("CDD_API_BASE_URL", "")  # vendor default if empty
+CDD_REFRESH_DAYS: int = int(os.getenv("CDD_REFRESH_DAYS", "30"))
+
+# PDPC DNC Registry (Singapore Do-Not-Call)
+DNC_ENABLED: bool = os.getenv("DNC_ENABLED", "false").lower() == "true"
+DNC_API_BASE_URL: str = os.getenv("DNC_API_BASE_URL", "https://www.dnc.gov.sg/api/v2")
+DNC_API_KEY: str = os.getenv("DNC_API_KEY", "")
+DNC_ORG_ID: str = os.getenv("DNC_ORG_ID", "")
+
 # WeChat Official Account API (Tencent)
 WECHAT_ENABLED: bool = os.getenv("WECHAT_ENABLED", "false").lower() == "true"
 WECHAT_APP_ID: str = os.getenv("WECHAT_APP_ID", "")
 WECHAT_APP_SECRET: str = os.getenv("WECHAT_APP_SECRET", "")
 WECHAT_TOKEN: str = os.getenv("WECHAT_TOKEN", "")
 WECHAT_ENCODING_AES_KEY: str = os.getenv("WECHAT_ENCODING_AES_KEY", "")
+
+# Discord Bot
+DISCORD_BOT_TOKEN: str = os.getenv("DISCORD_BOT_TOKEN", "")
+DISCORD_ALLOWED_USERS: list[int] = [
+    int(uid.strip())
+    for uid in os.getenv("DISCORD_ALLOWED_USERS", "").split(",")
+    if uid.strip().isdigit()
+]
+
+# Slack Bot (Socket Mode)
+SLACK_BOT_TOKEN: str = os.getenv("SLACK_BOT_TOKEN", "")
+SLACK_APP_TOKEN: str = os.getenv("SLACK_APP_TOKEN", "")
+SLACK_ALLOWED_USERS: list[str] = [
+    uid.strip()
+    for uid in os.getenv("SLACK_ALLOWED_USERS", "").split(",")
+    if uid.strip()
+]
+
+# Signal Bot (via signal-cli-rest-api)
+SIGNAL_API_URL: str = os.getenv("SIGNAL_API_URL", "")
+SIGNAL_PHONE_NUMBER: str = os.getenv("SIGNAL_PHONE_NUMBER", "")
+SIGNAL_ALLOWED_NUMBERS: list[str] = [
+    n.strip()
+    for n in os.getenv("SIGNAL_ALLOWED_NUMBERS", "").split(",")
+    if n.strip()
+]
+
+# Matrix Bot (via matrix-nio)
+MATRIX_HOMESERVER: str = os.getenv("MATRIX_HOMESERVER", "")
+MATRIX_USER_ID: str = os.getenv("MATRIX_USER_ID", "")
+MATRIX_ACCESS_TOKEN: str = os.getenv("MATRIX_ACCESS_TOKEN", "")
+MATRIX_PASSWORD: str = os.getenv("MATRIX_PASSWORD", "")
+MATRIX_ALLOWED_USERS: list[str] = [
+    uid.strip()
+    for uid in os.getenv("MATRIX_ALLOWED_USERS", "").split(",")
+    if uid.strip()
+]
 
 
 # ImprovMX (email forwarding management)

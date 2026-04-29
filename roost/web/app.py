@@ -26,7 +26,13 @@ try:
 except ImportError:
     otter_router = None
 from roost.web.api_leads import router as leads_router
+from roost.web.api_chat import router as chat_router
 from roost.web.api_settings import router as settings_api_router
+from roost.web.api_property_agent import router as property_agent_api_router
+from roost.web.api_crm import router as crm_api_router
+from roost.web.auth_zoho import router as zoho_auth_router
+from roost.web.api_sidecar import router as sidecar_router
+from roost.web.api_rpa import router as rpa_api_router
 try:
     from roost.config import WHATSAPP_ENABLED
     if WHATSAPP_ENABLED:
@@ -180,11 +186,13 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
 
     OPEN_PATHS = {
         "/auth/login", "/auth/login-page", "/auth/callback", "/auth/denied",
-        "/auth/logout", "/auth/setup",
+        "/auth/logout", "/auth/setup", "/auth/setup/deployment",
         "/auth/gmail/callback",
         "/auth/microsoft", "/auth/microsoft/callback",
+        "/auth/zoho/start", "/auth/zoho/callback",
         "/api/otter/ingest",
         "/api/leads/capture",
+        "/health",
     }
 
     ADMIN_PATH_PREFIXES = ("/sessions", "/integrations")
@@ -194,6 +202,13 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
 
         # 1. Open paths — always pass through
         if path.startswith("/static") or path.startswith("/shared/") or path.startswith("/forms") or path in ("/sw.js", "/favicon.ico", "/clear-cache") or path in self.OPEN_PATHS:
+            return await call_next(request)
+
+        # Webhooks — third-party systems can't carry session cookies.
+        # Each handler verifies its own per-vendor signature.
+        if (path.startswith("/api/whatsapp/webhook")
+                or path.startswith("/api/wechat/webhook")
+                or path.startswith("/api/crm/") and path.endswith("/webhook")):
             return await call_next(request)
 
         # 2. Dev token bypass (local tools like Playwright — localhost only)
@@ -225,20 +240,20 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
         if auth and WEB_USERNAME and WEB_PASSWORD:
             try:
                 scheme, credentials = auth.split(" ", 1)
-                if scheme.lower() == "basic":
-                    decoded = base64.b64decode(credentials).decode("utf-8")
-                    username, password = decoded.split(":", 1)
-                    if (secrets.compare_digest(username, WEB_USERNAME)
-                            and secrets.compare_digest(password, WEB_PASSWORD)):
-                        # Set user context so admin-gated endpoints work
-                        request.state.current_user = {
-                            "name": WEB_USERNAME,
-                            "role": "owner",
-                            "user_id": 1,
-                        }
-                        return await call_next(request)
+                decoded = base64.b64decode(credentials).decode("utf-8")
+                username, password = decoded.split(":", 1)
             except Exception:
                 _logger.debug("Basic auth header decode failed", exc_info=True)
+            else:
+                if (scheme.lower() == "basic"
+                        and secrets.compare_digest(username, WEB_USERNAME)
+                        and secrets.compare_digest(password, WEB_PASSWORD)):
+                    request.state.current_user = {
+                        "name": WEB_USERNAME,
+                        "role": "owner",
+                        "user_id": 1,
+                    }
+                    return await call_next(request)
 
         # 5. Not authenticated — redirect to login page
         return RedirectResponse("/auth/login-page")
@@ -298,6 +313,11 @@ def create_app() -> FastAPI:
         https_only=USE_OAUTH,  # True when Google OAuth is configured (HTTPS)
     )
 
+    # Setup wizard (password + deployment) — registered unconditionally so
+    # the wizard works on first boot before any auth is configured.
+    from roost.web.auth_setup import router as auth_setup_router
+    app.include_router(auth_setup_router)
+
     if USE_OAUTH:
         # Google OAuth routes (login/callback)
         from roost.web.auth import router as auth_router
@@ -308,17 +328,37 @@ def create_app() -> FastAPI:
         app.include_router(gmail_auth_router)
 
     else:
-        # Fallback login page + logout when Google OAuth is not configured
+        # Fallback login page + logout + password login when Google OAuth is not configured
         from fastapi.templating import Jinja2Templates
         _templates = Jinja2Templates(directory=WEB_DIR / "templates")
 
         @app.get("/auth/login-page")
         async def login_page(request: Request):
+            error = request.query_params.get("error", "")
             return _templates.TemplateResponse("login.html", {
                 "request": request,
                 "show_google": bool(GOOGLE_CLIENT_ID),
                 "show_microsoft": bool(MS_CLIENT_ID),
+                "show_password": bool(WEB_USERNAME and WEB_PASSWORD),
+                "login_error": error,
             })
+
+        @app.post("/auth/login")
+        @limiter.limit("5/minute")
+        async def password_login(request: Request):
+            form = await request.form()
+            username = form.get("username", "")
+            password = form.get("password", "")
+            if (WEB_USERNAME and WEB_PASSWORD
+                    and secrets.compare_digest(str(username), WEB_USERNAME)
+                    and secrets.compare_digest(str(password), WEB_PASSWORD)):
+                request.session["user"] = {
+                    "name": WEB_USERNAME,
+                    "role": "owner",
+                    "user_id": 1,
+                }
+                return RedirectResponse("/", status_code=303)
+            return RedirectResponse("/auth/login-page?error=invalid", status_code=303)
 
         @app.get("/auth/logout")
         async def logout(request: Request):
@@ -345,6 +385,13 @@ def create_app() -> FastAPI:
 
     # Trust proxy headers from nginx (X-Forwarded-For, X-Forwarded-Proto)
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["127.0.0.1", "::1"])
+
+    # Health check — unauthenticated, for Docker/load-balancer probes
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    @app.get("/health", include_in_schema=False)
+    async def health():
+        return _JSONResponse({"ok": True})
 
     # Static files
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
@@ -403,11 +450,17 @@ function msg(t){log.textContent += t + '\\n';}
     if otter_router is not None:
         app.include_router(otter_router)
     app.include_router(leads_router)
+    app.include_router(chat_router)
     if whatsapp_router is not None:
         app.include_router(whatsapp_router)
     if wechat_router is not None:
         app.include_router(wechat_router)
     app.include_router(settings_api_router)
+    app.include_router(property_agent_api_router)
+    app.include_router(crm_api_router)
+    app.include_router(zoho_auth_router)
+    app.include_router(sidecar_router)
+    app.include_router(rpa_api_router)
 
     return app
 

@@ -110,13 +110,16 @@ def get_user_by_email(email: str) -> User | None:
     return User(**dict(row))
 
 
-def update_user(user_id: int, name: str | None = None, role: str | None = None) -> User | None:
+def update_user(user_id: int, name: str | None = None, role: str | None = None,
+                telegram_id: int | None = None) -> User | None:
     """Partial update of a user record."""
     updates = {}
     if name is not None:
         updates["name"] = name
     if role is not None:
         updates["role"] = role
+    if telegram_id is not None:
+        updates["telegram_id"] = telegram_id
     if not updates:
         return get_user(user_id)
 

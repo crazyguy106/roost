@@ -92,6 +92,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from roost.bot.handlers.recipes import handle_recipe_callback
         await handle_recipe_callback(update, context)
 
+    elif prefix == "rollback":
+        checkpoint_id = parts[1] if len(parts) > 1 and parts[1].isdigit() else None
+        if checkpoint_id:
+            from roost.services.checkpoints import rollback_checkpoint
+            result = rollback_checkpoint(int(checkpoint_id))
+            if "error" in result:
+                await query.answer(result["error"][:200])
+            else:
+                await query.answer("Rolled back!")
+                await query.edit_message_text(
+                    f"Checkpoint #{checkpoint_id} rolled back: "
+                    f"{result.get('reverse_tool', '?')} executed."
+                )
+        else:
+            await query.answer("Invalid checkpoint ID.")
+
     else:
         logger.warning("Unknown callback prefix: %s (full data: %s)", prefix, query.data)
         await query.answer("Unknown action.")

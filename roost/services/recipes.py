@@ -263,12 +263,20 @@ async def execute_recipe(
     5. Return draft for approval (if external_write) or result
 
     Returns dict with run_id, classification, selected_template, draft.
+
+    Special case: if `instructions` starts with `RPA_FLOW:<portal>` the
+    recipe is treated as a browser-automation flow and dispatched to
+    `roost.services.rpa_flows`. The AI CDR pipeline is skipped.
     """
     from roost.services.ai_cdr import classify_message
 
     recipe = get_recipe(recipe_id)
     if "error" in recipe:
         return recipe
+
+    instructions = (recipe.get("instructions") or "").strip()
+    if instructions.upper().startswith("RPA_FLOW:"):
+        return await _execute_rpa_recipe(recipe, instructions, trigger_data)
 
     # Create run record
     run = create_run(recipe_id, trigger_data=trigger_data or {"message": message[:200]})
@@ -346,6 +354,52 @@ async def execute_recipe(
         logger.exception("Recipe execution error")
         complete_run(run_id, status="failed", actions_taken=[{"error": str(e)}])
         return {"run_id": run_id, "status": "failed", "error": str(e)}
+
+
+async def _execute_rpa_recipe(
+    recipe: dict, instructions: str, trigger_data: dict | None
+) -> dict:
+    """Dispatch an RPA recipe.
+
+    `instructions` format:
+        RPA_FLOW:<portal>            (optional second line: JSON params)
+    """
+    from roost.services import rpa_flows, rpa_runs
+
+    parts = instructions.split("\n", 1)
+    portal = parts[0].split(":", 1)[1].strip().lower()
+    params: dict = {}
+    if len(parts) == 2:
+        try:
+            params = json.loads(parts[1])
+        except json.JSONDecodeError:
+            logger.warning("Recipe %s: malformed RPA params", recipe.get("name"))
+
+    # Merge trigger-time params (e.g. from a /recipe call)
+    if trigger_data and isinstance(trigger_data.get("params"), dict):
+        params.update(trigger_data["params"])
+
+    user_id = recipe.get("user_id") or ""
+    rpa_run_id = rpa_runs.create_run(
+        user_id=user_id, portal_slug=portal, recipe_id=recipe["id"], state=params
+    )
+
+    # Track in automation_runs as well so the audit trail is consistent
+    auto_run = create_run(recipe["id"], trigger_data={"rpa_run_id": rpa_run_id, **(trigger_data or {})})
+    auto_run_id = auto_run["id"]
+
+    try:
+        result = await rpa_flows.dispatch(portal, rpa_run_id, user_id, params)
+        if "error" in result:
+            complete_run(auto_run_id, status="failed", actions_taken=[result])
+            return {"run_id": auto_run_id, "rpa_run_id": rpa_run_id, "status": "failed", **result}
+        complete_run(auto_run_id, status="completed", final_output=json.dumps(result)[:8000])
+        return {"run_id": auto_run_id, "rpa_run_id": rpa_run_id, "status": "completed", "result": result}
+    except Exception as e:
+        logger.exception("RPA recipe failed")
+        rpa_runs.fail(rpa_run_id, str(e))
+        complete_run(auto_run_id, status="failed", actions_taken=[{"error": str(e)}])
+        return {"run_id": auto_run_id, "rpa_run_id": rpa_run_id, "status": "failed", "error": str(e)}
 
 
 def approve_run(run_id: int, final_output: str = "") -> dict:

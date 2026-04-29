@@ -2,7 +2,7 @@
 
 MCP (Model Context Protocol) server exposing roost as native Claude Code tools. Uses FastMCP 2.x with stdio transport. This is the 4th interface alongside CLI, Web, and Telegram Bot.
 
-**285 tools across 44 modules** - tasks, contacts, projects, entities, calendar, Gmail, Drive, Slides, Sheets, Docs, Gemini (incl. image generation), Notion, SSH, Docker, Kubernetes, Microsoft 365 (email, calendar, OneDrive, Excel, Teams, SharePoint), OKR management, time tracking, productivity stats, document generation, presentations, scheduled emails, context bundles.
+**303+ tools across 47 modules** - tasks, contacts, projects, entities, calendar, Gmail, Drive, Slides, Sheets, Docs, Gemini (incl. image generation), Notion, SSH, Docker, Kubernetes, Microsoft 365 (email, calendar, OneDrive, Excel, Teams, SharePoint), OKR management, time tracking, productivity stats, document generation, presentations, scheduled emails, context bundles, Guardian AI safety, checkpoints & rollback, learned skills, background agents, cross-channel memory, natural language scheduling.
 
 ## Quick Start
 
@@ -18,7 +18,7 @@ Installed to `~/.local/bin/roost-mcp` via `setup.py` console_scripts.
 
 ---
 
-## Tools Reference (285 tools)
+## Tools Reference (303+ tools)
 
 ### Tasks — CRUD (4 tools)
 
@@ -535,6 +535,92 @@ Birth chart calculations across 4 systems: Human Design, BaZi (Four Pillars), We
 | `chart_db_missing` | Missing centers in a composite group |
 | `chart_auto_add` | Calculate charts + add/update person in YAML database |
 
+### Guardian AI & Safety (5 tools)
+
+Rules-based pre-flight safety engine. Every tool call passes through Guardian before execution. Returns allow/warn/block decisions based on configurable rules. Enable with `GUARDIAN_ENABLED=true`.
+
+| Tool | Description |
+|------|-------------|
+| `get_guardian_log` | View recent Guardian decisions (allow/warn/block) with tool names and reasons |
+| `get_guardian_stats` | Aggregate stats: total checks, blocks, warns, top blocked tools |
+| `get_usage_today` | Token usage and cost for the current day |
+| `get_usage_history` | Historical token usage over N days |
+| `get_autonomy_level` | Current autonomy mode (supervised/assisted/autonomous) |
+
+### Cost Tracking (integrated with Guardian)
+
+Per-run and daily token cost limits with automatic enforcement. Costs estimated per-model using token counts.
+
+- **Per-run limit:** `MAX_COST_PER_RUN` (default $0.50) — stops the agent run if exceeded
+- **Daily limit:** `MAX_DAILY_COST` (default $5.00) — blocks all runs for the rest of the day
+- Usage viewable via `get_usage_today` and `get_usage_history` tools
+
+### Checkpoints & Rollback (2 tools)
+
+Snapshot every write tool call with automatic reverse-action mapping. Up to 34 tool types are checkpointed (creates, updates, deletes). Each checkpoint stores the original arguments and result, plus the computed reverse tool call.
+
+| Tool | Description |
+|------|-------------|
+| `list_checkpoints` | List recent checkpoints for a run (or all runs), newest first |
+| `rollback_checkpoint` | Execute the reverse action for a checkpoint (e.g., delete a created task) |
+
+Size limit: 10KB per JSON field to prevent database bloat.
+
+### Self-Improving Skills (3 tools)
+
+Auto-extract reusable tool-sequence patterns from successful multi-tool agent runs. Skills go through a pending→approved workflow before being injected into future agent prompts.
+
+| Tool | Description |
+|------|-------------|
+| `list_learned_skills` | List learned skills (filterable by status: pending/approved/rejected) |
+| `approve_learned_skill` | Approve a pending skill for use in future agent runs |
+| `reject_learned_skill` | Reject a pending skill |
+
+Extraction criteria: ≥2 tool calls, <50% error rate, no duplicate signatures. Sensitive args (passwords, tokens, keys) are sanitized before storage.
+
+### Background Agents (3 tools)
+
+Spawn sub-agents that run in background threads with concurrency and duration limits. Default tool scope is `TIER_READ_ONLY` for safety.
+
+| Tool | Description |
+|------|-------------|
+| `spawn_background_agent` | Spawn a background agent with a prompt and optional tool scope |
+| `list_background_runs` | List background agent runs (filterable by status) |
+| `get_background_run_result` | Get the result/status of a specific background run |
+
+Limits: `MAX_BACKGROUND_RUNS=3` concurrent, `MAX_BACKGROUND_DURATION=300s` timeout.
+
+### Cross-Channel Memory (4 tools)
+
+Context that persists across Telegram, Web, and MCP interfaces. Entries auto-expire after 7 days unless pinned. Maximum 100 entries per user.
+
+| Tool | Description |
+|------|-------------|
+| `remember` | Store a memory (categories: fact/decision/preference/context) |
+| `recall` | Search memories by query and/or category (7-day window unless pinned) |
+| `forget` | Delete a specific memory entry |
+| `pin_memory` | Pin/unpin a memory to prevent auto-expiry |
+
+### Natural Language Scheduling (1 tool)
+
+Convert plain English schedules into cron automation recipes. Uses Gemini for smart parsing with regex fallback.
+
+| Tool | Description |
+|------|-------------|
+| `create_schedule` | Parse natural language ("Every Monday at 9am, summarize emails") into a cron recipe |
+
+Supports: time extraction (12/24h), day-of-week (weekdays/weekends/specific days), risk tier inference from keywords.
+
+### Proactive Monitoring (integrated — no dedicated tools)
+
+Risk monitoring that runs on configurable intervals. Detects:
+- Guardian blocks (3+ per hour)
+- Tool bursts (30+ in 5 minutes)
+- Cost spikes (80% of daily limit)
+- Failed tools (5+ in 30 minutes)
+
+Enable with `PROACTIVE_ENABLED=true`. Results surfaced via `run_proactive_checks()` in the agent loop.
+
 ---
 
 ## Secrets Masking
@@ -603,6 +689,9 @@ roost/mcp/
 ├── tools_ms_excel.py          # Microsoft Excel Online (3)
 ├── tools_ms_teams.py          # Microsoft Teams (16)
 ├── tools_ms_sharepoint.py     # Microsoft SharePoint (4)
+├── tools_guardian.py           # Guardian AI, cost tracking, checkpoints, skills, background agents (13)
+├── tools_recipes.py           # Automation recipes + natural language scheduling (+ create_schedule)
+├── tools_memory.py            # Cross-channel memory — remember/recall/forget/pin (4)
 ├── tools_bundles.py           # Context bundles - assembled views (3)
 ├── tools_scrape.py            # Web scraping with Chrome automation (2)
 ├── tools_sessions.py          # Claude Code session management (4)
@@ -629,6 +718,14 @@ MCP tools are thin wrappers around service modules:
 | `ssh_service.py` | `tools_ssh`, `tools_docker`, `tools_k8s` | Remote command execution |
 | `notion/client.py` | `tools_notion` | Notion API via rate-limited client |
 | `gemini_agent.py` | `tools_gemini` | Multi-LLM pipeline |
+| `guardian.py` | `tools_guardian` | Pre-flight safety checks, cost tracking |
+| `checkpoints.py` | `tools_guardian` | Checkpoint snapshots, rollback |
+| `learned_skills.py` | `tools_guardian` | Skill extraction and approval |
+| `background_runs.py` | `tools_guardian` | Sub-agent spawning |
+| `conversation_memory.py` | `tools_memory` | Cross-channel context persistence |
+| `natural_cron.py` | `tools_recipes` | Natural language schedule parsing |
+| `proactive.py` | (agent loop) | Risk monitoring, upcoming event alerts |
+| `sop_triggers.py` | (event bus) | SOP event-fired recipe execution |
 
 ### Design Patterns
 
@@ -705,3 +802,4 @@ Auth URL uses `include_granted_scopes=true` to accumulate scopes across re-auth.
 | 2026-02-13 | 130 | Added calendar CRUD, time tracking, stats, Notion archive/restore/create_database |
 | 2026-02-13 | 133 | Added doc generation, Notion duplicate, secrets masking |
 | 2026-02-23 | 210 | Added gemini_generate, gemini_image (Gemini + Imagen 4), create_project, update_project |
+| 2026-04-12 | 303+ | Added Guardian AI (5), checkpoints & rollback (2), learned skills (3), background agents (3), cross-channel memory (4), natural language scheduling (1), proactive monitoring, SOP event triggers, Kanban board UI |

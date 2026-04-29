@@ -199,8 +199,10 @@ def create_recipe(
         name: Recipe name (e.g. 'Qualify WhatsApp leads').
         instructions: Natural language instructions for what this recipe does.
         description: Optional longer description.
-        trigger_type: One of: manual, cron, event.
-        trigger_config: Trigger-specific config (cron expression, event name, etc.).
+        trigger_type: One of: manual, cron, event, rpa_flow, crm_event.
+        trigger_config: Trigger-specific config — cron expression, event name, RPA portal,
+            or for crm_event a JSON filter like {"provider":"hubspot","object_type":"deal",
+            "event_type":"updated"} (any subset; missing keys match all).
         risk_tier: One of: read_only, internal_write, external_write.
         template_ids: List of template IDs this recipe can use. Empty = all active templates.
     """
@@ -422,6 +424,50 @@ def skip_recipe_run(run_id: int) -> dict:
 
 
 # ── AI CDR (standalone classification) ─────────────────────────────
+
+
+@mcp.tool()
+def create_schedule(
+    description: str,
+    name: str = "",
+    risk_tier: str = "",
+) -> dict:
+    """Create a scheduled automation from natural language.
+
+    Parses plain English like "Every Monday at 9am, summarize my unread emails"
+    into a cron recipe that runs automatically.
+
+    Args:
+        description: Natural language schedule (e.g. "Daily at 6pm, send me a task report").
+        name: Optional override for the recipe name (auto-generated if empty).
+        risk_tier: Optional override for risk tier (read_only, internal_write, external_write).
+    """
+    try:
+        from roost.services.natural_cron import (
+            parse_natural_schedule,
+            schedule_to_trigger_config,
+        )
+        from roost.services.recipes import create_recipe as _create
+
+        parsed = parse_natural_schedule(description)
+        trigger_config = schedule_to_trigger_config(parsed)
+
+        recipe = _create(
+            name=name or parsed.get("name", "Scheduled task"),
+            instructions=parsed.get("instructions", description),
+            description=f"Auto-created from: {description}",
+            trigger_type="cron",
+            trigger_config=trigger_config,
+            risk_tier=risk_tier or parsed.get("risk_tier", "read_only"),
+        )
+
+        return {
+            **recipe,
+            "parsed_schedule": parsed,
+            "trigger_config": trigger_config,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @mcp.tool()

@@ -43,6 +43,30 @@ FEATURE_FLAGS = {
         "env_default": "true",
         "restart": True,
     },
+    "WHATSAPP_ENABLED": {
+        "label": "WhatsApp Cloud API",
+        "description": "Outbound + webhook for inbound. Meta Business verification required.",
+        "env_default": "false",
+        "restart": True,
+    },
+    "PROPERTY_AGENT_ENABLED": {
+        "label": "Property-Agent Toolkit (Singapore)",
+        "description": "Stamp-duty calculator, DNC scrub, CDD screening, HDB EIP. Master flag — DNC/CDD have own sub-flags for the external API integrations.",
+        "env_default": "true",
+        "restart": True,
+    },
+    "DNC_ENABLED": {
+        "label": "PDPC DNC Registry",
+        "description": "Singapore Do-Not-Call scrub for marketing voice / SMS / fax (21-day validity).",
+        "env_default": "false",
+        "restart": True,
+    },
+    "CDD_ENABLED": {
+        "label": "CDD Screening",
+        "description": "Sanctions / PEP / adverse-media screening (CEA PC 01-21 / 02-23).",
+        "env_default": "false",
+        "restart": True,
+    },
 }
 
 # Integration checks — each returns (name, status_bool, detail_str)
@@ -81,6 +105,24 @@ _INTEGRATION_CHECKS = [
         "name": "Telegram Bot",
         "icon": "telegram",
         "check_env": ["TELEGRAM_BOT_TOKEN"],
+        "check_token": None,
+    },
+    {
+        "name": "WhatsApp Cloud API",
+        "icon": "whatsapp",
+        "check_env": ["WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN"],
+        "check_token": None,
+    },
+    {
+        "name": "PDPC DNC Registry",
+        "icon": "shield",
+        "check_env": ["DNC_API_KEY", "DNC_ORG_ID"],
+        "check_token": None,
+    },
+    {
+        "name": "CDD Screening",
+        "icon": "shield",
+        "check_env": ["CDD_API_KEY"],
         "check_token": None,
     },
 ]

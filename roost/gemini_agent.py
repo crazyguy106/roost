@@ -50,6 +50,7 @@ MAX_HISTORY_TURNS = 20
 # TIER_NONE: no tools at all (used by AI CDR classifier)
 
 TIER_FULL = "full"
+TIER_WEB = "web"  # Web chat: read + write, destructive tools require OTP confirmation
 TIER_INTERNAL_WRITE = "internal_write"
 TIER_READ_ONLY = "read_only"
 TIER_NONE = "none"
@@ -74,6 +75,7 @@ _INTERNAL_WRITE_TOOLS = _READ_ONLY_TOOLS | {
 # Full tier includes everything (no restriction)
 _TIER_ALLOWED: dict[str, set[str] | None] = {
     TIER_FULL: None,  # None = all tools allowed
+    TIER_WEB: None,   # All tools declared, but destructive ones held for OTP
     TIER_INTERNAL_WRITE: _INTERNAL_WRITE_TOOLS,
     TIER_READ_ONLY: _READ_ONLY_TOOLS,
     TIER_NONE: set(),  # No tools at all
@@ -988,18 +990,66 @@ def _build_tool_declarations(include_agent_tools: bool = False) -> list[types.To
 
 
 def _execute_tool(name: str, args: dict[str, Any], user_id: str = "",
-                   tool_scope: str = TIER_FULL) -> dict[str, Any]:
+                   tool_scope: str = TIER_FULL,
+                   confirmation_callback=None) -> dict[str, Any]:
     """Execute a tool by name with arguments. Logs to command_log.
 
     Args:
         tool_scope: Restrict available tools by tier. Default TIER_FULL
                     allows everything. TIER_READ_ONLY blocks writes.
+        confirmation_callback: Optional callback for TIER_WEB — called when
+                    a destructive tool needs OTP confirmation. Receives
+                    (tool_name, tool_args, description) and should return
+                    a dict with action_id info.
     """
     # Check tool scope
     allowed = _TIER_ALLOWED.get(tool_scope)
     if allowed is not None and name not in allowed:
         logger.warning("Tool '%s' blocked by scope tier '%s'", name, tool_scope)
         return {"error": f"Tool '{name}' not available in {tool_scope} mode"}
+
+    # Autonomy level + TIER_WEB confirmation logic
+    from roost.config import AUTONOMY_LEVEL
+    from roost.services.action_confirmations import is_destructive
+
+    # "supervised" mode: confirm ALL external sends, regardless of tier
+    # "assisted" mode (default): confirm destructive only in TIER_WEB
+    # "autonomous" mode: skip all confirmation
+    needs_confirmation = False
+    if AUTONOMY_LEVEL == "supervised" and name in (
+        "send_email", "ms_send_email", "schedule_email",
+        "telegram_send_message", "ms_teams_send_message",
+        "ms_teams_send_chat", "ms_teams_reply_channel_message",
+        "ssh_exec", "docker_compose_up", "docker_compose_down",
+        "kubectl_apply", "kubectl_delete", "scp_upload",
+        "drive_upload", "ms_onedrive_upload",
+    ):
+        needs_confirmation = True
+    elif AUTONOMY_LEVEL != "autonomous" and tool_scope == TIER_WEB:
+        if is_destructive(name):
+            needs_confirmation = True
+
+    if needs_confirmation:
+        if confirmation_callback:
+            description = f"{name}({json.dumps(args, default=str)[:200]})"
+            return confirmation_callback(name, args, description)
+        return {
+            "held": True,
+            "tool": name,
+            "message": f"Action '{name}' requires confirmation. OTP has been sent to your Telegram.",
+        }
+
+    # Guardian AI pre-flight check
+    from roost.config import GUARDIAN_ENABLED
+    if GUARDIAN_ENABLED:
+        from roost.services.guardian import guardian_check, BLOCK, WARN
+        check = guardian_check(name, args, user_id)
+        if check["decision"] == BLOCK:
+            logger.warning("Guardian BLOCKED tool '%s': %s", name, check["reason"])
+            return {"blocked": True, "reason": check["reason"], "rule": check["rule"]}
+        elif check["decision"] == WARN:
+            logger.info("Guardian WARN on tool '%s': %s", name, check["reason"])
+            # Warnings are logged but execution continues
 
     handler = TOOL_HANDLERS.get(name) or AGENT_TOOL_HANDLERS.get(name)
     if not handler:
@@ -1084,14 +1134,33 @@ class GeminiAgent:
         self.history = _load_session(session_id)
 
     async def run(self, user_prompt: str, user_id: str = "",
-                  on_progress: Callable | None = None) -> str:
+                  on_progress: Callable | None = None,
+                  confirmation_callback: Callable | None = None) -> str:
         """Run the agentic loop. Returns final text response.
 
         Args:
             user_prompt: The user's message.
             user_id: For audit logging.
             on_progress: Optional async callback(text) for streaming updates.
+            confirmation_callback: For TIER_WEB — called when a destructive tool
+                needs OTP confirmation. Receives (tool_name, tool_args, description).
         """
+        # Inject learned skills and cross-channel memory into system prompt
+        try:
+            from roost.services.learned_skills import get_approved_skills_prompt
+            skills_prompt = get_approved_skills_prompt()
+            if skills_prompt and skills_prompt not in (self.system_prompt or ""):
+                self.system_prompt = (self.system_prompt or "") + skills_prompt
+        except Exception:
+            pass
+        try:
+            from roost.services.conversation_memory import get_context_prompt
+            memory_prompt = get_context_prompt(user_id)
+            if memory_prompt and memory_prompt not in (self.system_prompt or ""):
+                self.system_prompt = (self.system_prompt or "") + memory_prompt
+        except Exception:
+            pass
+
         # Add user message to history
         self.history.append(types.Content(
             role="user",
@@ -1099,6 +1168,19 @@ class GeminiAgent:
         ))
 
         tool_call_count = 0
+
+        # Cost tracking
+        from roost.config import MAX_COST_PER_RUN, MAX_DAILY_COST
+        from roost.services.cost_tracking import (
+            RunTracker, check_run_limit, check_daily_limit,
+        )
+        tracker = RunTracker(model=self.model, user_id=user_id)
+        _collected_tool_calls: list[dict] = []  # For skill extraction
+
+        # Check daily limit before starting
+        daily_check = check_daily_limit(MAX_DAILY_COST, user_id)
+        if daily_check:
+            return daily_check["message"]
 
         for iteration in range(MAX_ITERATIONS):
             # Call Gemini
@@ -1116,6 +1198,21 @@ class GeminiAgent:
             except Exception as e:
                 logger.exception("Gemini API error")
                 return f"Gemini API error: {e}"
+
+            # Record token usage
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                um = response.usage_metadata
+                tracker.record(
+                    input_tokens=getattr(um, 'prompt_token_count', 0) or 0,
+                    output_tokens=getattr(um, 'candidates_token_count', 0) or 0,
+                )
+
+            # Check per-run cost limit
+            run_check = check_run_limit(tracker, MAX_COST_PER_RUN)
+            if run_check:
+                tracker.save()
+                _save_session(self.session_id, self.history)
+                return run_check["message"]
 
             if not response.candidates:
                 return "No response from Gemini (empty candidates)."
@@ -1141,8 +1238,22 @@ class GeminiAgent:
                 ]
                 final_text = "\n".join(text_parts) if text_parts else "(no text response)"
 
-                # Save session
+                # Save session and cost data
+                tracker.save()
                 _save_session(self.session_id, self.history)
+
+                # Extract learned skill from multi-tool runs
+                if tool_call_count >= 2:
+                    try:
+                        from roost.services.learned_skills import extract_skill_from_run
+                        extract_skill_from_run(
+                            run_id=tracker.run_id,
+                            user_prompt=user_prompt,
+                            tool_calls=_collected_tool_calls,
+                            user_id=user_id,
+                        )
+                    except Exception:
+                        pass  # Non-critical
 
                 return final_text
 
@@ -1173,8 +1284,26 @@ class GeminiAgent:
                 logger.info("Tool call: %s(%s)", fc.name, json.dumps(args, default=str)[:200])
 
                 result = _execute_tool(fc.name, args, user_id=user_id,
-                                       tool_scope=self.tool_scope)
+                                       tool_scope=self.tool_scope,
+                                       confirmation_callback=confirmation_callback)
                 tool_call_count += 1
+                tracker.record_tool_call()
+                _collected_tool_calls.append({
+                    "tool_name": fc.name, "args": args, "result": result,
+                })
+
+                # Checkpoint write actions for rollback
+                try:
+                    from roost.services.checkpoints import save_checkpoint
+                    save_checkpoint(
+                        run_id=tracker.run_id,
+                        tool_name=fc.name,
+                        tool_args=args,
+                        result=result if isinstance(result, dict) else {"raw": str(result)[:5000]},
+                        user_id=user_id,
+                    )
+                except Exception:
+                    pass  # Non-critical
 
                 function_response_parts.append(
                     types.Part.from_function_response(
@@ -1190,5 +1319,6 @@ class GeminiAgent:
             ))
 
         # Exhausted iterations
+        tracker.save()
         _save_session(self.session_id, self.history)
         return "Reached maximum iteration limit. Here's what I found so far — please try a more specific request."

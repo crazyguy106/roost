@@ -1,6 +1,6 @@
 # Roost User Guide
 
-*For team members with a Roost instance. Last updated: 2026-02-23.*
+*For team members with a Roost instance. Last updated: 2026-04-12.*
 
 ---
 
@@ -200,7 +200,7 @@ In Claude Code, ask things like:
 
 ### AI Assistant (Claude Code)
 
-Claude Code is your most powerful interface with 210 tools. It can do everything the web and Telegram can do, plus:
+Claude Code is your most powerful interface with 270+ tools. It can do everything the web and Telegram can do, plus:
 
 - **Research topics** -- "Research the latest trends in AI governance and summarise the key points"
 - **Draft documents** -- "Write a one-page summary of our project status"
@@ -254,6 +254,36 @@ To access settings, click "Settings" in the sidebar (desktop) or tap the gear ic
 | `/urgent` | Top tasks ranked by urgency score |
 | `/note TEXT` | Capture a quick thought or reminder |
 | `/spoons` | Check your energy budget for the day |
+| `/schedule` | List cron recipes or create from natural language |
+| `/rollback` | List recent checkpoints or undo a specific action |
+
+### Kanban Board
+
+Access a drag-and-drop task board at your web dashboard under **Tasks → Board** (or go to `/tasks/board` directly). Tasks are grouped into three columns — To Do, In Progress, and Done. Drag a task card between columns to update its status. Filter by project using the dropdown at the top.
+
+### Guardian AI & Safety
+
+When `GUARDIAN_ENABLED=true`, every AI tool call passes through a pre-flight safety check. Guardian blocks dangerous commands (like `rm -rf` or `curl|bash`), bulk deletes, and bulk emails. It warns on sensitive file access.
+
+**Autonomy levels** control how much confirmation the agent needs:
+- **Supervised** — confirm everything before acting
+- **Assisted** (default) — confirm destructive actions only
+- **Autonomous** — no confirmation needed
+
+**Checkpoints** — every write action (creating tasks, sending emails, uploading files) is checkpointed. Use `/rollback` in Telegram to see recent actions and undo them with one tap.
+
+**Cost tracking** — per-run and daily token cost limits prevent runaway API spend. Defaults: $0.50 per run, $5.00 per day.
+
+### Cross-Channel Memory
+
+The agent remembers context across all interfaces (Telegram, Web, MCP). Memories auto-expire after 7 days unless pinned. Categories: fact, decision, preference, context. Use Claude Code to say "remember that I prefer morning meetings" and it persists.
+
+### Natural Language Scheduling
+
+Create automated recipes from plain English via `/schedule` in Telegram or the `create_schedule` MCP tool:
+- "Every Monday at 9am, summarize my inbox"
+- "Every weekday at 5pm, generate a daily report"
+- "Every Friday at 3pm, review overdue tasks"
 
 ### Useful habits
 

@@ -1,11 +1,13 @@
-"""Bot handlers for automation recipes and response templates.
+"""Bot handlers for automation recipes, templates, schedules, and rollback.
 
 Commands:
   /recipe [name]      — List recipes or show a specific one
+  /schedule <text>    — Create a scheduled automation from natural language
   /template [name]    — List templates or show a specific one
   /sequence [group]   — Show a template sequence
   /approve <run_id>   — Approve a pending recipe run
   /skip <run_id>      — Skip a pending recipe run
+  /rollback [id]      — List checkpoints or rollback an action
 """
 
 import logging
@@ -84,6 +86,86 @@ async def cmd_recipe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Runs", callback_data=f"recipe:runs:{recipe['id']}"))
 
     keyboard = InlineKeyboardMarkup([buttons]) if buttons else None
+    await update.message.reply_text(
+        "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard)
+
+
+@authorized
+async def cmd_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Create a scheduled automation from natural language.
+
+    Usage: /schedule Every Monday at 9am, summarize my unread emails
+    """
+    from roost.services.natural_cron import (
+        parse_natural_schedule,
+        schedule_to_trigger_config,
+    )
+    from roost.services.recipes import create_recipe, list_recipes
+
+    args = context.args or []
+    text = " ".join(args).strip()
+
+    if not text:
+        # List existing cron recipes
+        recipes = list_recipes(trigger_type="cron", enabled_only=True)
+        if not recipes:
+            await update.message.reply_text(
+                "No scheduled automations yet.\n\n"
+                "Usage: /schedule <natural language description>\n"
+                "Example: /schedule Every Monday at 9am, summarize my unread emails"
+            )
+            return
+
+        lines = ["*Scheduled Automations:*\n"]
+        for r in recipes:
+            config = r.get("trigger_config", "")
+            lines.append(f"  #{r['id']} {escape_md(r['name'])} ({config})")
+        lines.append("\nUse /recipe <id> for details.")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+
+    # Parse natural language
+    parsed = parse_natural_schedule(text)
+    trigger_config = schedule_to_trigger_config(parsed)
+
+    # Create the recipe
+    recipe = create_recipe(
+        name=parsed.get("name", "Scheduled task"),
+        instructions=parsed.get("instructions", text),
+        description=f"Auto-created from: {text}",
+        trigger_type="cron",
+        trigger_config=trigger_config,
+        risk_tier=parsed.get("risk_tier", "read_only"),
+    )
+
+    if "error" in recipe:
+        await update.message.reply_text(f"Failed: {recipe['error']}")
+        return
+
+    # Format day spec for display
+    day_spec = parsed.get("day_spec", "")
+    day_display = {
+        "": "daily",
+        "weekdays": "weekdays",
+        "weekends": "weekends",
+    }.get(day_spec, f"days {day_spec}")
+
+    lines = [
+        f"Scheduled #{recipe['id']}: *{escape_md(recipe['name'])}*",
+        f"Time: {parsed['time']} ({day_display})",
+        f"Risk: {parsed.get('risk_tier', 'read_only')}",
+        f"Instructions: {escape_md(parsed.get('instructions', '')[:200])}",
+    ]
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "Disable", callback_data=f"recipe:disable:{recipe['id']}"),
+            InlineKeyboardButton(
+                "Delete", callback_data=f"recipe:delete:{recipe['id']}"),
+        ],
+    ])
+
     await update.message.reply_text(
         "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard)
 
@@ -225,6 +307,63 @@ async def cmd_skip_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Run #{run_id} skipped.")
 
 
+@authorized
+async def cmd_rollback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List recent checkpoints or rollback a specific action.
+
+    Usage:
+      /rollback        — List recent checkpoints
+      /rollback <id>   — Rollback a specific checkpoint
+    """
+    from roost.services.checkpoints import list_checkpoints, rollback_checkpoint
+
+    args = context.args or []
+    text = " ".join(args).strip()
+
+    if text and text.isdigit():
+        # Rollback a specific checkpoint
+        result = rollback_checkpoint(int(text))
+        if "error" in result:
+            await update.message.reply_text(f"Rollback failed: {result['error']}")
+        else:
+            await update.message.reply_text(
+                f"Rolled back checkpoint #{text}: "
+                f"{result.get('reverse_tool', '?')} executed."
+            )
+        return
+
+    # List recent checkpoints
+    checkpoints = list_checkpoints(limit=10)
+    if not checkpoints:
+        await update.message.reply_text("No checkpoints yet. Agent actions are recorded automatically.")
+        return
+
+    lines = ["*Recent Checkpoints:*\n"]
+    for cp in checkpoints:
+        rolled = " (rolled back)" if cp.get("rolled_back") else ""
+        reversible = "undo" if cp.get("reverse_tool") else "no undo"
+        created = cp.get("created_at", "")[:16]
+        lines.append(
+            f"  #{cp['id']} {escape_md(cp['tool_name'])} "
+            f"[{reversible}]{rolled} ({created})"
+        )
+
+    lines.append("\nUse /rollback <id> to undo an action.")
+
+    # Add rollback buttons for recent reversible checkpoints
+    buttons = []
+    for cp in checkpoints[:5]:
+        if cp.get("reverse_tool") and not cp.get("rolled_back"):
+            buttons.append([InlineKeyboardButton(
+                f"Undo #{cp['id']}: {cp['tool_name']}",
+                callback_data=f"rollback:{cp['id']}",
+            )])
+
+    keyboard = InlineKeyboardMarkup(buttons) if buttons else None
+    await update.message.reply_text(
+        "\n".join(lines), parse_mode="Markdown", reply_markup=keyboard)
+
+
 # ── Callback handlers ──────────────────────────────────────────────
 
 
@@ -296,6 +435,16 @@ async def handle_recipe_callback(update: Update, context: ContextTypes.DEFAULT_T
         else:
             await query.answer("Skipped.")
             await query.edit_message_text(f"Run #{recipe_id} skipped.")
+        return
+
+    if action == "delete" and recipe_id:
+        from roost.services.recipes import delete_recipe
+        result = delete_recipe(recipe_id)
+        if "error" in result:
+            await query.answer(result["error"])
+        else:
+            await query.answer("Deleted!")
+            await query.edit_message_text(f"Recipe #{recipe_id} deleted.")
         return
 
     await query.answer("Unknown recipe action.")

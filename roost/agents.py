@@ -15,6 +15,7 @@ from typing import Any, Callable
 from roost.gemini_agent import (
     TOOL_HANDLERS, AGENT_TOOL_HANDLERS, _execute_tool,
     MAX_TOOL_CALLS_PER_RUN, MAX_ITERATIONS, MAX_HISTORY_TURNS,
+    TIER_FULL,
 )
 
 logger = logging.getLogger("roost.agents")
@@ -305,7 +306,8 @@ class OpenAIAgent:
 
     def __init__(self, system_prompt: str = "", session_id: str | None = None,
                  include_agent_tools: bool = False,
-                 api_key: str = "", base_url: str = "", model: str = ""):
+                 api_key: str = "", base_url: str = "", model: str = "",
+                 tool_scope: str = TIER_FULL):
         try:
             from openai import AsyncOpenAI
         except ImportError:
@@ -322,10 +324,12 @@ class OpenAIAgent:
         self.tools = _build_openai_tools(include_agent_tools)
         self.system_prompt = system_prompt
         self.session_id = session_id
+        self.tool_scope = tool_scope
         self.history = _load_agent_session(session_id)
 
     async def run(self, user_prompt: str, user_id: str = "",
-                  on_progress: Callable | None = None) -> str:
+                  on_progress: Callable | None = None,
+                  confirmation_callback: Callable | None = None) -> str:
         # Add system prompt if starting fresh
         if not self.history and self.system_prompt:
             self.history.append({"role": "system", "content": self.system_prompt})
@@ -387,7 +391,9 @@ class OpenAIAgent:
                     args = {}
 
                 logger.info("Tool call: %s(%s)", tc.function.name, json.dumps(args, default=str)[:200])
-                result = _execute_tool(tc.function.name, args, user_id=user_id)
+                result = _execute_tool(tc.function.name, args, user_id=user_id,
+                                       tool_scope=self.tool_scope,
+                                       confirmation_callback=confirmation_callback)
                 tool_call_count += 1
 
                 self.history.append({
@@ -407,7 +413,8 @@ class ClaudeAgent:
 
     def __init__(self, system_prompt: str = "", session_id: str | None = None,
                  include_agent_tools: bool = False,
-                 api_key: str = "", model: str = ""):
+                 api_key: str = "", model: str = "",
+                 tool_scope: str = TIER_FULL):
         try:
             from anthropic import AsyncAnthropic
         except ImportError:
@@ -422,6 +429,7 @@ class ClaudeAgent:
         self.tools = self._build_claude_tools(include_agent_tools)
         self.system_prompt = system_prompt
         self.session_id = session_id
+        self.tool_scope = tool_scope
         self.history = _load_agent_session(session_id)
 
     @staticmethod
@@ -439,7 +447,8 @@ class ClaudeAgent:
         return claude_tools
 
     async def run(self, user_prompt: str, user_id: str = "",
-                  on_progress: Callable | None = None) -> str:
+                  on_progress: Callable | None = None,
+                  confirmation_callback: Callable | None = None) -> str:
         self.history.append({"role": "user", "content": user_prompt})
 
         tool_call_count = 0
@@ -499,7 +508,9 @@ class ClaudeAgent:
             for tu in tool_uses:
                 args = dict(tu.input) if tu.input else {}
                 logger.info("Tool call: %s(%s)", tu.name, json.dumps(args, default=str)[:200])
-                result = _execute_tool(tu.name, args, user_id=user_id)
+                result = _execute_tool(tu.name, args, user_id=user_id,
+                                       tool_scope=self.tool_scope,
+                                       confirmation_callback=confirmation_callback)
                 tool_call_count += 1
 
                 tool_results.append({

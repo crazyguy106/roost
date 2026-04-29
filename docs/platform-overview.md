@@ -2,7 +2,7 @@
 
 How Roost works as a system. Written for someone technical joining the team who needs the big picture before diving into code.
 
-**Last updated:** 2026-02-23
+**Last updated:** 2026-04-12
 
 ---
 
@@ -26,8 +26,8 @@ All four interfaces call the same service functions, emit the same events, and r
 
 ```
 Roost (Central Hub)
-├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (235+ tools)
-├── SQLite (WAL) — tasks, projects, contacts, calendar, OAuth, time tracking, templates, recipes
+├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (270+ tools)
+├── SQLite (WAL) — tasks, projects, contacts, calendar, OAuth, time tracking, templates, recipes, guardian, checkpoints
 │
 ├── Google Workspace (Dev VPS only)
 │   ├── Gmail — auto-labelling, action cycling, email-to-task, 5-min poller
@@ -62,6 +62,17 @@ Roost (Central Hub)
 │   │   └── Layer 4: Validate — output must match fixed JSON schema
 │   ├── Response Templates — canned messages with {{variable}} placeholders
 │   └── Automation Recipes — user-defined rules with risk tier enforcement
+│
+├── Agent Safety & Observability
+│   ├── Guardian AI — pre-flight rules engine (block/warn/allow) on every tool call
+│   ├── Cost Tracking — per-run + daily token cost limits with automatic enforcement
+│   ├── Autonomy Levels — supervised / assisted / autonomous confirmation modes
+│   ├── Proactive Monitoring — risk alerts (guardian blocks, tool bursts, cost spikes)
+│   ├── Checkpoints — snapshot write actions for rollback (/rollback command)
+│   ├── Self-improving Skills — extract reusable patterns from successful runs
+│   ├── Background Agents — spawn sub-agents with MAX_BACKGROUND_RUNS + timeout
+│   ├── Cross-channel Memory — context persists across Telegram/Web/MCP (7-day expiry)
+│   └── SOP Event Triggers — fire recipes on email_received, task_completed, webhooks
 │
 ├── Notion — bidirectional sync (6 databases, push/pull/retry)
 ├── Otter.ai + Zapier + Dropbox — meeting transcription capture
@@ -170,12 +181,12 @@ ai-claude-4    Background work
 Claude Code (in tmux)
   → reads ~/.mcp.json
   → spawns roost-mcp (stdio transport)
-  → MCP server loads 31 tool modules (deferred imports)
-  → Claude Code can now call any of 210 tools
+  → MCP server loads 45+ tool modules (deferred imports)
+  → Claude Code can now call any of 270+ tools
   → tools call service layer → SQLite / APIs / subprocess
 ```
 
-**Key MCP tool modules (210 tools across 31 modules):**
+**Key MCP tool modules (270+ tools across 45+ modules):**
 
 | Category | Modules | Tools |
 |----------|---------|:-----:|
@@ -190,6 +201,9 @@ Claude Code (in tmux)
 | OKR | objectives, key results, check-ins, dashboards, scorecards | 12 |
 | Presentations | deck generation, meeting notes, transcription | 3 |
 | Scheduled Email | schedule, list, cancel | 3 |
+| Safety & Observability | guardian, cost tracking, autonomy, checkpoints, skills, background agents | 18 |
+| Recipes & Scheduling | recipes, templates, CDR, natural language cron | 14 |
+| Cross-channel Memory | remember, recall, forget, pin | 4 |
 
 ---
 
@@ -530,12 +544,12 @@ Task created/updated/completed (from any interface)
 | **MS SharePoint** | No | Yes | Sites, files, download, upload | MSAL OAuth |
 | **Gemini AI** | Yes | Yes | Generation, research, summarisation | API key |
 | **Notion** | Yes | No | Bidirectional sync (6 databases) | API token |
-| **Telegram** | Yes | Yes | Bot interface (84 commands) | Bot token |
+| **Telegram** | Yes | Yes | Bot interface (86 commands) | Bot token |
 | **SSH servers** | Yes | No | Remote execution, SCP, management | SSH keys |
 | **Docker** | Yes | No | Container management | Local socket / SSH |
 | **Kubernetes** | Yes | No | Cluster management | kubeconfig |
 | **Otter.ai/Dropbox** | Yes | No | Meeting transcription capture | Dropbox API |
-| **Claude Code MCP** | Yes | No | 210 tools for AI-assisted work | stdio (FastMCP) |
+| **Claude Code MCP** | Yes | No | 270+ tools for AI-assisted work | stdio (FastMCP) |
 
 **Shared Azure app:** All MS Graph instances share one Azure App Registration. Each instance adds its own redirect URI and users OAuth independently.
 
@@ -555,31 +569,32 @@ Task created/updated/completed (from any interface)
 ├── tests/                         Test files
 └── roost/
     ├── config.py                  Environment config + feature flags
-    ├── database.py                SQLite + SQLAlchemy setup (37 tables)
+    ├── database.py                SQLite setup (43 tables incl. guardian, checkpoints, skills)
     ├── models.py                  Pydantic models (shared by all interfaces)
     ├── task_service.py            All CRUD operations (2500+ lines)
     ├── events.py                  In-process event bus
     ├── calendar_service.py        Google Calendar hub
-    ├── gemini_agent.py            Multi-turn Gemini (document + research)
+    ├── gemini_agent.py            Multi-turn Gemini + Guardian + cost tracking + skills
     ├── dropbox_client.py          Dropbox API for Otter sync
     ├── otter_poll.py              Otter transcript + summary polling
     ├── gmail/                     Gmail + Calendar Write (8 files)
     ├── microsoft/                 MS Graph (3 files)
     ├── notion/                    Notion mirror (7 files)
-    ├── mcp/                       MCP Server (36 tool modules, 210 tools)
+    ├── mcp/                       MCP Server (45+ tool modules, 270+ tools)
     ├── web/                       FastAPI app + templates + static
     │   ├── app.py                 Middleware + auth + router setup
     │   ├── api.py                 REST API endpoints
     │   ├── api_settings.py        Settings API — credentials, flags, personality
     │   ├── api_otter.py           Otter webhook ingest
-    │   ├── pages.py               Desktop HTML routes + docs browser
+    │   ├── pages.py               Desktop HTML routes + kanban board + docs browser
     │   ├── pages_mobile.py        Mobile PWA — 52 routes + HTMX
     │   ├── forms.py               Public forms (no auth)
-    │   └── templates/             50 Jinja2 templates (desktop + mobile + forms)
+    │   └── templates/             51 Jinja2 templates (incl. kanban.html)
     ├── bot/                       Telegram bot
     │   ├── main.py                Entry + handler registration
-    │   ├── handlers/              17 handler modules (84 commands)
-    │   ├── scheduler.py           Background jobs (digest, polling, reminders)
+    │   ├── handlers/              17 handler modules (86 commands incl. /schedule, /rollback)
+    │   ├── adapters/              DingTalk + Feishu/Lark stubs (future)
+    │   ├── scheduler.py           Background jobs (digest, polling, reminders, proactive)
     │   └── notifier.py            Push notifications
     ├── services/
     │   ├── credentials.py         Fernet-encrypted credential storage

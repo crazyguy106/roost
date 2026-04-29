@@ -775,6 +775,135 @@ CREATE INDEX IF NOT EXISTS idx_contact_identifiers_contact ON contact_identifier
 CREATE INDEX IF NOT EXISTS idx_contact_identifiers_type_value ON contact_identifiers(type, value);
 """
 
+SCHEMA_V24 = """
+-- Guardian AI: pre-flight safety check audit log
+CREATE TABLE IF NOT EXISTS guardian_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_name TEXT NOT NULL,
+    tool_args TEXT DEFAULT '{}',
+    decision TEXT NOT NULL CHECK (decision IN ('allow', 'warn', 'block')),
+    reason TEXT DEFAULT '',
+    rule_name TEXT DEFAULT '',
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_guardian_log_decision ON guardian_log(decision);
+CREATE INDEX IF NOT EXISTS idx_guardian_log_created ON guardian_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_guardian_log_tool ON guardian_log(tool_name);
+
+-- Cost tracking: per-run token usage and cost estimates
+CREATE TABLE IF NOT EXISTS token_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    provider TEXT DEFAULT '',
+    model TEXT DEFAULT '',
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    estimated_cost_usd REAL DEFAULT 0.0,
+    tool_calls INTEGER DEFAULT 0,
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_usage_run ON token_usage(run_id);
+CREATE INDEX IF NOT EXISTS idx_token_usage_created ON token_usage(created_at);
+CREATE INDEX IF NOT EXISTS idx_token_usage_user ON token_usage(user_id);
+"""
+
+SCHEMA_V25 = """
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    tool_args TEXT DEFAULT '{}',
+    result TEXT DEFAULT '{}',
+    reverse_tool TEXT DEFAULT '',
+    reverse_args TEXT DEFAULT '',
+    rolled_back INTEGER DEFAULT 0,
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_run ON checkpoints(run_id);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_created ON checkpoints(created_at);
+
+CREATE TABLE IF NOT EXISTS learned_skills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    trigger_phrases TEXT DEFAULT '[]',
+    tool_sequence TEXT DEFAULT '[]',
+    description TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    use_count INTEGER DEFAULT 0,
+    source_run_id TEXT DEFAULT '',
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_learned_skills_status ON learned_skills(status);
+
+CREATE TABLE IF NOT EXISTS background_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL UNIQUE,
+    prompt TEXT DEFAULT '',
+    status TEXT DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed', 'timeout')),
+    result TEXT DEFAULT '',
+    user_id TEXT DEFAULT '',
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_background_runs_status ON background_runs(status);
+
+CREATE TABLE IF NOT EXISTS conversation_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    channel TEXT DEFAULT '',
+    category TEXT DEFAULT 'fact' CHECK (category IN ('fact', 'decision', 'preference', 'context')),
+    pinned INTEGER DEFAULT 0,
+    user_id TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_conv_memory_user ON conversation_memory(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_memory_created ON conversation_memory(created_at);
+"""
+
+SCHEMA_V26 = """
+-- RPA runs: durable, pausable browser-automation runs (insurance portals etc.)
+CREATE TABLE IF NOT EXISTS rpa_runs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL DEFAULT '',
+    portal_slug     TEXT NOT NULL,
+    recipe_id       INTEGER,
+    status          TEXT NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'awaiting_input', 'completed', 'failed', 'cancelled')),
+    state_json      TEXT NOT NULL DEFAULT '{}',
+    prompt_text     TEXT DEFAULT '',
+    prompt_kind     TEXT DEFAULT '',
+    last_input      TEXT DEFAULT '',
+    result_json     TEXT DEFAULT '{}',
+    error           TEXT DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rpa_runs_user_status ON rpa_runs(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_rpa_runs_status ON rpa_runs(status);
+
+-- RPA flow configs: data-driven step lists per portal, edited by the user.
+CREATE TABLE IF NOT EXISTS rpa_flow_configs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    portal_slug     TEXT NOT NULL,
+    name            TEXT DEFAULT '',
+    login_url       TEXT DEFAULT '',
+    steps_json      TEXT NOT NULL DEFAULT '[]',
+    otp_config_json TEXT NOT NULL DEFAULT '{}',
+    user_id         TEXT NOT NULL DEFAULT '',
+    enabled         INTEGER DEFAULT 1,
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(portal_slug, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rpa_flow_configs_user ON rpa_flow_configs(user_id);
+"""
+
 
 def get_connection() -> sqlite3.Connection:
     """Get a new database connection with WAL mode and row factory."""
@@ -1255,6 +1384,15 @@ def init_db() -> None:
 
     # Phase 23: AI CDR — response templates, automation recipes, automation runs
     conn.executescript(SCHEMA_V20)
+
+    # Phase 24: Guardian AI + Cost Tracking
+    conn.executescript(SCHEMA_V24)
+
+    # Phase 25: Checkpoints (agent action rollback)
+    conn.executescript(SCHEMA_V25)
+
+    # Phase 26: RPA runs (browser automation with pause/resume)
+    conn.executescript(SCHEMA_V26)
 
     conn.close()
 

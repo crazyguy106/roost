@@ -109,9 +109,12 @@ from roost.bot.handlers.skill_builder import cmd_skill
 
 # Recipes & Templates
 from roost.bot.handlers.recipes import (
-    cmd_recipe, cmd_template, cmd_sequence,
+    cmd_recipe, cmd_schedule, cmd_rollback, cmd_template, cmd_sequence,
     cmd_approve, cmd_skip_run,
 )
+
+# Account Linking
+from roost.bot.handlers.linking import handle_link_message
 
 __all__ = [
     # Help
@@ -164,6 +167,8 @@ __all__ = [
     # Agent + Skill Builder
     "handle_agent_message", "cmd_agent", "cmd_skill",
     # Recipes & Templates
-    "cmd_recipe", "cmd_template", "cmd_sequence",
+    "cmd_recipe", "cmd_schedule", "cmd_rollback", "cmd_template", "cmd_sequence",
     "cmd_approve", "cmd_skip_run",
+    # Account Linking
+    "handle_link_message",
 ]
