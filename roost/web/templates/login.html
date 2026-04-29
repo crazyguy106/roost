@@ -49,6 +49,23 @@
                 Sign in with Microsoft
             </a>
             {% endif %}
+            {% if show_password %}
+            {% if show_google or show_microsoft %}
+            <div class="divider text-xs opacity-40 my-2">OR</div>
+            {% endif %}
+            {% if login_error %}
+            <div class="alert alert-error text-sm py-2 mb-2">Invalid username or password.</div>
+            {% endif %}
+            <form method="post" action="/auth/login" class="w-full space-y-2">
+                <input type="text" name="username" placeholder="Username" required autocomplete="username"
+                       class="input input-bordered input-sm w-full">
+                <input type="password" name="password" placeholder="Password" required autocomplete="current-password"
+                       class="input input-bordered input-sm w-full">
+                <button type="submit" class="btn btn-sm {% if not show_google and not show_microsoft %}btn-primary{% else %}btn-ghost{% endif %} w-full">
+                    Sign in with password
+                </button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </body>

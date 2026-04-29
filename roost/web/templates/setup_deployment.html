@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Deployment — Roost setup</title>
+    <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="48x48">
+    <link href="/static/vendor/daisyui.css" rel="stylesheet" type="text/css" />
+    <link href="/static/vendor/daisyui-themes.css" rel="stylesheet" type="text/css" />
+    <script src="/static/vendor/tailwind-browser.js"></script>
+    <style>body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:oklch(0.2 0.015 250);}</style>
+</head>
+<body>
+    <div class="card bg-base-200 shadow-xl w-full max-w-2xl mx-4">
+        <div class="card-body">
+            <h1 class="text-2xl font-bold mb-1">Where will Roost run?</h1>
+            <p class="opacity-60 mb-4 text-sm">This sets a couple of env values. You can change them later by editing <code>.env</code>.</p>
+
+            {% if success %}
+                <div class="alert alert-success mb-4"><span>Setup complete.</span></div>
+                {% if shape == "vps_domain" %}
+                    <div class="alert alert-info mb-4 text-sm">
+                        <div>
+                            <p class="font-semibold mb-1">One more step on your end:</p>
+                            <p class="mb-2">Stop this container, then bring Roost up with the public overlay so Caddy can issue a TLS cert for <code>{{ roost_domain }}</code>:</p>
+                            <pre class="text-xs bg-base-300 p-2 rounded">docker compose -f docker-compose.yml -f docker-compose.public.yml up -d</pre>
+                            <p class="mt-2 text-xs opacity-80">Make sure your DNS A record for <code>{{ roost_domain }}</code> already points at this VPS.</p>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="mb-4 text-sm">Restart Roost so the new env values take effect: <code>docker compose up -d</code>.</p>
+                {% endif %}
+                <a href="/auth/login-page" class="btn btn-primary">Sign in</a>
+            {% else %}
+                {% if error %}<div class="alert alert-error mb-4"><span>{{ error }}</span></div>{% endif %}
+
+                <form method="POST" action="/auth/setup/deployment" class="space-y-4">
+                    <input type="hidden" name="token" value="{{ token }}">
+
+                    <div class="form-control">
+                        <label class="label cursor-pointer flex items-start gap-3 justify-start">
+                            <input type="radio" name="shape" value="laptop" class="radio radio-primary mt-1" checked
+                                   onchange="document.getElementById('hosted-fields').style.display='none';document.getElementById('vps-fields').style.display='none';">
+                            <div>
+                                <div class="font-semibold">Laptop — my own machine</div>
+                                <div class="text-xs opacity-70">Runs in Docker on this machine. Reachable at <code>http://localhost:8080</code>. No domain or extra config. Best for solo agents.</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label cursor-pointer flex items-start gap-3 justify-start">
+                            <input type="radio" name="shape" value="vps_domain" class="radio radio-primary mt-1"
+                                   onchange="document.getElementById('hosted-fields').style.display='none';document.getElementById('vps-fields').style.display='';">
+                            <div>
+                                <div class="font-semibold">VPS + my own domain (recommended for cloud)</div>
+                                <div class="text-xs opacity-70">Roost ships a Caddy sidecar that auto-issues Let's Encrypt. Phone-reachable, 24/7, scheduled flows fire while laptop sleeps. Costs ~$10/yr domain + ~$5/mo VPS.</div>
+                            </div>
+                        </label>
+                        <div id="vps-fields" style="display:none;" class="ml-8 mt-2 space-y-2">
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs">Domain (DNS A-record points at this VPS)</span></label>
+                                <input type="text" name="roost_domain" class="input input-bordered input-sm" placeholder="roost.example.com">
+                            </div>
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs">Let's Encrypt account email</span></label>
+                                <input type="email" name="roost_admin_email" class="input input-bordered input-sm" placeholder="you@example.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label cursor-pointer flex items-start gap-3 justify-start">
+                            <input type="radio" name="shape" value="hosted" class="radio radio-primary mt-1"
+                                   onchange="document.getElementById('hosted-fields').style.display='';document.getElementById('vps-fields').style.display='none';">
+                            <div>
+                                <div class="font-semibold">Hosted — someone else fronts the proxy</div>
+                                <div class="text-xs opacity-70">You're behind an existing reverse proxy / Cloudflare / Tailscale. Just tell Roost what URL the chromium proxy lives at.</div>
+                            </div>
+                        </label>
+                        <div id="hosted-fields" style="display:none;" class="ml-8 mt-2 space-y-2">
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs">SIDECAR_PUBLIC_URL (e.g. https://roost.example.com/sidecar)</span></label>
+                                <input type="text" name="sidecar_public_url" class="input input-bordered input-sm" placeholder="https://...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full">Finish setup</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

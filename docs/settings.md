@@ -2,7 +2,7 @@
 
 How to configure Roost — from first-time setup to ongoing credential management.
 
-**Last updated:** 2026-03-19
+**Last updated:** 2026-04-12
 
 ---
 
@@ -68,7 +68,9 @@ Each integration shows:
 
 Toggle features on/off without restarting. Changes are stored in the database and override `.env` defaults.
 
-Available flags: AI, Telegram, Google, Microsoft, Gmail, Notion, Curriculum.
+Available flags: AI, Telegram, Google, Microsoft, Gmail, Notion, Curriculum, Guardian, WhatsApp, DNC (PDPC Do-Not-Call), CDD (sanctions/PEP screening).
+
+The Singapore property-agent toolkit (stamp duty, DNC scrub, CDD screen) is gated by `WHATSAPP_ENABLED`, `DNC_ENABLED`, and `CDD_ENABLED` respectively. The stamp-duty calculator is pure-Python and always available. See [property-agent-toolkit.md](property-agent-toolkit.md).
 
 ### Personality Tab
 
@@ -118,6 +120,45 @@ All credentials stored via the settings page are encrypted at rest.
 
 ### Implementation
 
+---
+
+## 5. Guardian AI & Safety Environment Variables
+
+These variables control the Guardian AI safety engine, cost tracking, proactive monitoring, and background agent limits. Set them in `.env` or via the settings page.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GUARDIAN_ENABLED` | `false` | Enable pre-flight safety checks on every tool call |
+| `MAX_COST_PER_RUN` | `0.50` | Maximum token cost ($) per agent run before auto-stop |
+| `MAX_DAILY_COST` | `5.00` | Maximum daily token cost ($) before blocking all runs |
+| `AUTONOMY_LEVEL` | `assisted` | Agent confirmation mode: `supervised`, `assisted`, `autonomous` |
+| `PROACTIVE_ENABLED` | `false` | Enable proactive risk monitoring (guardian blocks, cost spikes, tool bursts) |
+| `PROACTIVE_RISK_INTERVAL` | `300` | Seconds between proactive risk checks |
+| `PROACTIVE_CALENDAR_PREP` | `30` | Minutes before a meeting to trigger preparation alerts |
+| `MAX_BACKGROUND_RUNS` | `3` | Maximum concurrent background agent runs |
+| `MAX_BACKGROUND_DURATION` | `300` | Maximum seconds a background agent can run before timeout |
+
+### Autonomy Levels Explained
+
+| Level | Behaviour |
+|-------|-----------|
+| `supervised` | Agent confirms every action before executing |
+| `assisted` | Agent auto-executes read-only actions; confirms destructive actions (deletes, sends, uploads) |
+| `autonomous` | Agent executes all actions without confirmation |
+
+### Cost Tracking
+
+Token costs are estimated per-model using input/output token counts. The tracker enforces two limits:
+
+1. **Per-run:** If cumulative cost for the current agent run exceeds `MAX_COST_PER_RUN`, the run is stopped and the user is notified.
+2. **Daily:** If total cost across all runs for the day exceeds `MAX_DAILY_COST`, all further runs are blocked until midnight.
+
+View usage with the `get_usage_today` and `get_usage_history` MCP tools, or via the web dashboard.
+
+---
+
+## 6. Implementation Details
+
 - Service: `roost/services/credentials.py`
 - API: `roost/web/api_settings.py`
 - Storage: `user_settings` table (shared with other user preferences)
@@ -125,7 +166,7 @@ All credentials stored via the settings page are encrypted at rest.
 
 ---
 
-## 4. Settings API Reference
+## 4. Settings API Reference (unchanged)
 
 All endpoints require authentication. Credential management requires admin/owner role.
 
