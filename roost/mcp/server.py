@@ -17,7 +17,6 @@ from roost.config import (
     TELEGRAM_ENABLED,
     NOTION_ENABLED,
     INFRA_ENABLED,
-    WHATSAPP_ENABLED,
 )
 
 logger = logging.getLogger("roost.mcp.server")
@@ -51,11 +50,11 @@ from roost.mcp import tools_text_cleanup      # noqa: E402, F401
 from roost.mcp import tools_recipes           # noqa: E402, F401
 from roost.mcp import tools_guardian          # noqa: E402, F401
 from roost.mcp import tools_memory           # noqa: E402, F401
-from roost.mcp import tools_rpa              # noqa: E402, F401
-from roost.mcp import tools_iras             # noqa: E402, F401
-from roost.mcp import tools_pdpc             # noqa: E402, F401
-from roost.mcp import tools_cdd              # noqa: E402, F401
-from roost.mcp import tools_crm              # noqa: E402, F401
+# tools_rpa — loaded by roost.extras.rpa
+# tools_iras / tools_pdpc / tools_cdd — loaded by roost.extras.property_agent
+# tools_stripe / tools_shopify / tools_xero — loaded by roost.extras.sme_ops
+# tools_crm — loaded by roost.extras.crm
+# tools_leads / tools_lead_pipeline — loaded by roost.extras.lead_nurture
 
 # ── Google tools (GOOGLE_ENABLED) ───────────────────────────────────
 if GOOGLE_ENABLED:
@@ -86,9 +85,7 @@ if AI_ENABLED:
 if TELEGRAM_ENABLED:
     from roost.mcp import tools_telegram       # noqa: E402, F401
 
-# ── WhatsApp tools (WHATSAPP_ENABLED) ───────────────────────────────
-if WHATSAPP_ENABLED:
-    from roost.mcp import tools_whatsapp       # noqa: E402, F401
+# tools_whatsapp — loaded by roost.extras.messaging_external (gated by WHATSAPP_ENABLED)
 
 # ── Notion tools (NOTION_ENABLED) ───────────────────────────────────
 if NOTION_ENABLED:

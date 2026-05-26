@@ -79,6 +79,10 @@ DEFAULT_GOOGLE_ACCOUNT: str = os.getenv("DEFAULT_GOOGLE_ACCOUNT", "")
 GMAIL_SEND_FROM: str = os.getenv("GMAIL_SEND_FROM", "")
 GMAIL_POLL_INTERVAL: int = int(os.getenv("GMAIL_POLL_INTERVAL", "300"))
 
+# Operator email — used for high-priority alerts (hot-lead notifications).
+# Falls back silently if unset or Gmail not configured.
+OPERATOR_EMAIL: str = os.getenv("OPERATOR_EMAIL", "")
+
 # Microsoft Graph OAuth (Azure AD)
 MS_CLIENT_ID: str = os.getenv("MS_CLIENT_ID", "")
 MS_CLIENT_SECRET: str = os.getenv("MS_CLIENT_SECRET", "")
@@ -92,8 +96,13 @@ MSAL_CACHE_PATH: str = os.getenv("MSAL_CACHE_PATH", "")
 
 # Gemini Agentic (google-genai SDK)
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+# Known-good fallback if the configured model 404s: "gemini-3-flash-preview".
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_AGENTIC: bool = os.getenv("GEMINI_AGENTIC", "true").lower() == "true"
+
+# Daily summary — prepend a short AI narrative + flags above the deterministic counts.
+# Fails closed: if Gemini call errors or no API key, deterministic summary still goes out.
+AI_SUMMARY_ENABLED: bool = os.getenv("AI_SUMMARY_ENABLED", "true").lower() == "true"
 
 # Curriculum scanner (seeds programme data from YAML files)
 CURRICULUM_ENABLED: bool = os.getenv("CURRICULUM_ENABLED", "true").lower() == "true"
@@ -126,8 +135,14 @@ AUTONOMY_LEVEL: str = os.getenv("AUTONOMY_LEVEL", "assisted")
 
 # Agent — natural language via Telegram (agentic with tool use)
 AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "true").lower() == "true"
-AGENT_PROVIDER: str = os.getenv("AGENT_PROVIDER", "gemini")  # gemini | claude | openai | ollama
+AGENT_PROVIDER: str = os.getenv("AGENT_PROVIDER", "gemini")  # gemini | claude | claude_cli | gemini_cli | codex_cli | openai | ollama
 AGENT_TIMEOUT: int = int(os.getenv("AGENT_TIMEOUT", "120"))
+
+# Agentic Workflow surface (Phase 1 — plan + per-tool event streaming on /agentic).
+# See docs/agentic-workflow-phase1.md.
+AGENTIC_WORKFLOW_ENABLED: bool = os.getenv("AGENTIC_WORKFLOW_ENABLED", "false").lower() == "true"
+# Planner model — empty string means "use the executor model from AGENT_PROVIDER".
+AGENTIC_PLANNER_MODEL: str = os.getenv("AGENTIC_PLANNER_MODEL", "")
 
 # Background agent limits
 MAX_BACKGROUND_RUNS: int = int(os.getenv("MAX_BACKGROUND_RUNS", "3"))
@@ -138,6 +153,36 @@ CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o")
 CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+
+# Claude Code CLI provider (AGENT_PROVIDER=claude_cli)
+# Runs `claude -p` as a subprocess. Auth via Claude subscription, not API key.
+# Roost's MCP tools exposed via --mcp-config when CLAUDE_CLI_MCP_CONFIG is set.
+CLAUDE_CLI_BIN: str = os.getenv("CLAUDE_CLI_BIN", "claude")
+CLAUDE_CLI_MODEL: str = os.getenv("CLAUDE_CLI_MODEL", "")  # empty = CLI default
+CLAUDE_CLI_MCP_CONFIG: str = os.getenv("CLAUDE_CLI_MCP_CONFIG", "")
+CLAUDE_CLI_PERMISSION_MODE: str = os.getenv("CLAUDE_CLI_PERMISSION_MODE", "bypassPermissions")
+CLAUDE_CLI_TIMEOUT: int = int(os.getenv("CLAUDE_CLI_TIMEOUT", "300"))
+CLAUDE_CLI_SESSION_FILE: str = os.getenv("CLAUDE_CLI_SESSION_FILE", "")
+
+# Gemini CLI provider (AGENT_PROVIDER=gemini_cli)
+# Runs `gemini -p` as a subprocess. Auth via ~/.gemini/ state (Google OAuth via
+# `gemini /auth`) or GEMINI_API_KEY env. MCP servers read from ~/.gemini/settings.json.
+GEMINI_CLI_BIN: str = os.getenv("GEMINI_CLI_BIN", "gemini")
+GEMINI_CLI_MODEL: str = os.getenv("GEMINI_CLI_MODEL", "")
+GEMINI_CLI_MCP_CONFIG: str = os.getenv("GEMINI_CLI_MCP_CONFIG", "")
+GEMINI_CLI_PERMISSION_MODE: str = os.getenv("GEMINI_CLI_PERMISSION_MODE", "yolo")
+GEMINI_CLI_TIMEOUT: int = int(os.getenv("GEMINI_CLI_TIMEOUT", "300"))
+GEMINI_CLI_SESSION_FILE: str = os.getenv("GEMINI_CLI_SESSION_FILE", "")
+
+# Codex CLI provider (AGENT_PROVIDER=codex_cli) — SCAFFOLD, untested
+# Runs `codex exec --json` as a subprocess. Auth via ~/.codex/ (ChatGPT Plus/Pro
+# subscription via `codex login`) or OPENAI_API_KEY env. MCP via ~/.codex/config.toml.
+CODEX_CLI_BIN: str = os.getenv("CODEX_CLI_BIN", "codex")
+CODEX_CLI_MODEL: str = os.getenv("CODEX_CLI_MODEL", "")
+CODEX_CLI_MCP_CONFIG: str = os.getenv("CODEX_CLI_MCP_CONFIG", "")
+CODEX_CLI_PERMISSION_MODE: str = os.getenv("CODEX_CLI_PERMISSION_MODE", "full-auto")
+CODEX_CLI_TIMEOUT: int = int(os.getenv("CODEX_CLI_TIMEOUT", "300"))
+CODEX_CLI_SESSION_FILE: str = os.getenv("CODEX_CLI_SESSION_FILE", "")
 
 # Ollama (local LLM — OpenAI-compatible API, free)
 OLLAMA_URL: str = os.getenv("OLLAMA_URL", "http://localhost:11434/v1")
@@ -209,6 +254,7 @@ ATTIO_BASE_URL: str = os.getenv("ATTIO_BASE_URL", "https://api.attio.com/v2")
 ATTIO_OBJECT_PEOPLE: str = os.getenv("ATTIO_OBJECT_PEOPLE", "people")
 ATTIO_OBJECT_COMPANIES: str = os.getenv("ATTIO_OBJECT_COMPANIES", "companies")
 ATTIO_OBJECT_DEALS: str = os.getenv("ATTIO_OBJECT_DEALS", "deals")
+ATTIO_WEBHOOK_SECRET: str = os.getenv("ATTIO_WEBHOOK_SECRET", "")
 
 # HubSpot
 HUBSPOT_ACCESS_TOKEN: str = os.getenv("HUBSPOT_ACCESS_TOKEN", "")
@@ -312,11 +358,52 @@ CLOUDFLARE_API_TOKEN: str = os.getenv("CLOUDFLARE_API_TOKEN", "")
 CLOUDFLARE_API_TOKEN_SECONDARY: str = os.getenv("CLOUDFLARE_API_TOKEN_SECONDARY", "")
 CLOUDFLARE_ENABLED: bool = bool(CLOUDFLARE_API_TOKEN)
 
+# SME Ops vertical bundle — ERP/integration toolkit for small/medium businesses.
+# The bundle ships with a universal Zapier ingress so users can wire in any of
+# Zapier's 6,000+ apps before native adapters land. Per-app adapter flags
+# (XERO_ENABLED, SHOPIFY_ENABLED, etc.) will be added in Phase 1+.
+SME_OPS_ENABLED: bool = os.getenv("SME_OPS_ENABLED", "false").lower() == "true"
+ZAPIER_ENABLED: bool = os.getenv("ZAPIER_ENABLED", "false").lower() == "true"
+ZAPIER_INGRESS_TOKEN: str = os.getenv("ZAPIER_INGRESS_TOKEN", "")
+ZAPIER_OUTBOUND_URL: str = os.getenv("ZAPIER_OUTBOUND_URL", "")
+
+# SME Ops native adapters (Phase 1A — read-only)
+STRIPE_ENABLED: bool = os.getenv("STRIPE_ENABLED", "false").lower() == "true"
+STRIPE_API_KEY: str = os.getenv("STRIPE_API_KEY", "")
+STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+SHOPIFY_ENABLED: bool = os.getenv("SHOPIFY_ENABLED", "false").lower() == "true"
+SHOPIFY_STORE_DOMAIN: str = os.getenv("SHOPIFY_STORE_DOMAIN", "")
+SHOPIFY_ACCESS_TOKEN: str = os.getenv("SHOPIFY_ACCESS_TOKEN", "")
+SHOPIFY_WEBHOOK_SECRET: str = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+XERO_ENABLED: bool = os.getenv("XERO_ENABLED", "false").lower() == "true"
+XERO_PAT: str = os.getenv("XERO_PAT", "")
+XERO_TENANT_ID: str = os.getenv("XERO_TENANT_ID", "")
+# Phase 1B — OAuth2 + webhook
+XERO_CLIENT_ID: str = os.getenv("XERO_CLIENT_ID", "")
+XERO_CLIENT_SECRET: str = os.getenv("XERO_CLIENT_SECRET", "")
+XERO_REDIRECT_URI: str = os.getenv("XERO_REDIRECT_URI", "")
+XERO_WEBHOOK_KEY: str = os.getenv("XERO_WEBHOOK_KEY", "")
+ROOST_DOMAIN: str = os.getenv("ROOST_DOMAIN", "")
+
 # Feature flags for MCP tool groups
 AI_ENABLED: bool = os.getenv("AI_ENABLED", "true").lower() == "true"
 TELEGRAM_ENABLED: bool = os.getenv("TELEGRAM_ENABLED", "true").lower() == "true"
 NOTION_ENABLED: bool = os.getenv("NOTION_ENABLED", "true").lower() == "true"
 INFRA_ENABLED: bool = os.getenv("INFRA_ENABLED", "true").lower() == "true"
+
+# ── Bundle master flags ──────────────────────────────────────────────
+# Each vertical bundle under roost/extras/ is gated by one master flag.
+# When false, the bundle's services / MCP tools / web routes / templates
+# / bot handlers / DB tables are all skipped at import time. Per-adapter
+# sub-flags (STRIPE_ENABLED, CDD_ENABLED, etc.) only matter when the
+# parent bundle is enabled.
+#
+# SME_OPS_ENABLED + PROPERTY_AGENT_ENABLED are defined above with the
+# bundle-specific config; mirrored here for the registry.
+CRM_ENABLED: bool = os.getenv("CRM_ENABLED", "true").lower() == "true"
+LEAD_NURTURE_ENABLED: bool = os.getenv("LEAD_NURTURE_ENABLED", "true").lower() == "true"
+RPA_ENABLED: bool = os.getenv("RPA_ENABLED", "true").lower() == "true"
+MESSAGING_EXTERNAL_ENABLED: bool = os.getenv("MESSAGING_EXTERNAL_ENABLED", "true").lower() == "true"
 
 
 def validate_config() -> None:

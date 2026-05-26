@@ -113,8 +113,19 @@ from roost.bot.handlers.recipes import (
     cmd_approve, cmd_skip_run,
 )
 
+# Nurture approval
+from roost.extras.lead_nurture.bot.nurture_approval import (
+    cmd_napprove, cmd_nskip, cmd_nlist, cmd_preapprove,
+    handle_nurture_callback,
+)
+
 # Account Linking
 from roost.bot.handlers.linking import handle_link_message
+
+# Daily summary
+from roost.bot.handlers.daily_summary import (
+    cmd_summary, cmd_summarytime, cmd_summaryoff, cmd_summarystatus,
+)
 
 __all__ = [
     # Help
@@ -169,6 +180,11 @@ __all__ = [
     # Recipes & Templates
     "cmd_recipe", "cmd_schedule", "cmd_rollback", "cmd_template", "cmd_sequence",
     "cmd_approve", "cmd_skip_run",
+    # Nurture approval
+    "cmd_napprove", "cmd_nskip", "cmd_nlist", "cmd_preapprove",
+    "handle_nurture_callback",
     # Account Linking
     "handle_link_message",
+    # Daily summary
+    "cmd_summary", "cmd_summarytime", "cmd_summaryoff", "cmd_summarystatus",
 ]

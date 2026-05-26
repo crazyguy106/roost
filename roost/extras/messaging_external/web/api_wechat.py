@@ -34,7 +34,7 @@ def verify_webhook(
     if not WECHAT_ENABLED:
         raise HTTPException(status_code=404, detail="WeChat not enabled")
 
-    from roost.services.wechat import verify_webhook_signature
+    from roost.extras.messaging_external.services.wechat import verify_webhook_signature
 
     if verify_webhook_signature(signature, timestamp, nonce):
         _logger.info("WeChat webhook verified")
@@ -62,7 +62,7 @@ async def receive_webhook(request: Request):
     timestamp = request.query_params.get("timestamp", "")
     nonce = request.query_params.get("nonce", "")
 
-    from roost.services.wechat import verify_webhook_signature
+    from roost.extras.messaging_external.services.wechat import verify_webhook_signature
     if not verify_webhook_signature(signature, timestamp, nonce):
         _logger.warning("WeChat webhook signature mismatch")
         raise HTTPException(status_code=403, detail="Invalid signature")
@@ -71,7 +71,7 @@ async def receive_webhook(request: Request):
     body = await request.body()
     xml_data = body.decode("utf-8")
 
-    from roost.services.wechat import parse_webhook_message
+    from roost.extras.messaging_external.services.wechat import parse_webhook_message
     msg = parse_webhook_message(xml_data)
 
     if not msg:
@@ -84,7 +84,7 @@ async def receive_webhook(request: Request):
         event = msg.get("event", "")
         if event == "subscribe":
             _logger.info("WeChat: new subscriber %s", msg.get("sender", "")[:8])
-            from roost.services.wechat import build_text_reply
+            from roost.extras.messaging_external.services.wechat import build_text_reply
             return PlainTextResponse(
                 content=build_text_reply(
                     msg["sender"], msg["receiver"],
@@ -119,10 +119,47 @@ async def _process_inbound(msg: dict) -> None:
     the response via customer service API (or notifies via Telegram).
     """
     from roost.services.recipes import list_recipes, execute_recipe
-    from roost.services.ai_cdr import classify_message
+    from roost.extras.messaging_external.services.ai_cdr import classify_message
 
     sender = msg.get("sender", "")
     text = msg["text"]
+
+    # Qualification intercept: WeChat addresses leads by openid (which the
+    # parser puts in msg["sender"]). If an in-progress qualifying session
+    # exists for this openid, treat the message as an answer and stop here.
+    try:
+        from roost.extras.lead_nurture.services import qualification
+        q_result = qualification.process_answer(
+            channel="wechat", identifier=sender, text=text,
+        )
+        if q_result.get("handled"):
+            _logger.info(
+                "WeChat qualification handled %s done=%s",
+                sender[:8], q_result.get("done"),
+            )
+            return
+    except Exception:
+        _logger.exception("qualification intercept failed (non-fatal)")
+
+    # Best-effort lead ingest. WeChat doesn't expose a phone number, so we
+    # use a synthetic `wechat:<openid>` identifier in the phone slot so CRM
+    # dedupe still works. The openid is also passed through
+    # `qualifying_identifier` so the next reply can be routed back to
+    # qualification.process_answer().
+    try:
+        from roost.extras.lead_nurture.services import leads as leads_svc
+        leads_svc.ingest_lead(
+            channel="wechat",
+            phone=f"wechat:{sender}",
+            name="",
+            message_text=text,
+            vertical="property",
+            source="wechat",
+            qualifying_identifier=sender,
+            fields={"wechat_openid": sender},
+        )
+    except Exception:
+        _logger.exception("lead ingest from WeChat failed (non-fatal)")
 
     # Find enabled event-triggered recipes for WeChat
     recipes = list_recipes(trigger_type="event", enabled_only=True)
@@ -149,7 +186,7 @@ async def _process_inbound(msg: dict) -> None:
         draft = result.get("draft", "")
 
         if risk_tier != "external_write" and draft:
-            from roost.services.wechat import send_text_message
+            from roost.extras.messaging_external.services.wechat import send_text_message
             send_text_message(sender, draft)
 
         # Always notify via Telegram

@@ -1,0 +1,87 @@
+slug: property_buyer_intro
+name: Property Buyer — Intro Sequence (SG)
+description: |
+  Singapore property-agent buyer intake. Day 0 acknowledges the enquiry,
+  day 2 sends a CEA-compliant qualification ask, day 5 invites a viewing
+  if no reply. Tuned for CEA salesperson outreach norms — no high-pressure
+  language. Put your CEA registration number in the `agent_signoff`
+  setting (e.g. "Best regards,\nEthan Seow\nCEA Reg. R012345A") so it
+  appears in every signoff block.
+vertical: property
+enabled: true
+
+templates:
+  - name: property_buyer_day0
+    sequence_day: 0
+    category: greeting
+    channel: any
+    subject: Thanks for your enquiry, {{first_name}}
+    body: |
+      Hi {{first_name}},
+
+      Thanks for getting in touch about {{property_interest}}. I'm
+      {{agent_name}} and I'll be your point of contact.
+
+      To help me line up the right options for you, could you confirm:
+
+      1. Budget range you're working with
+      2. Preferred districts or estates
+      3. Timeline (move-in date)
+      4. Whether this is for own-stay or investment
+
+      Reply at your convenience.
+
+      {{agent_signoff}}
+
+  - name: property_buyer_day2
+    sequence_day: 2
+    category: qualification
+    channel: any
+    subject: A few options to consider
+    body: |
+      Hi {{first_name}},
+
+      I've started shortlisting a few units in {{preferred_area}} that fit
+      what you're looking for. Two quick things before I send the list:
+
+      - For ABSD/SSD planning, are you a Singapore citizen, PR, or foreigner?
+        (Affects stamp duty calculations — I can run the numbers either way.)
+      - Are you currently financing through a bank loan, HDB loan, or cash?
+
+      Happy to walk through what's available either way.
+
+      {{agent_signoff}}
+
+  - name: property_buyer_day5
+    sequence_day: 5
+    category: nurture
+    channel: any
+    subject: "Quick check-in"
+    body: |
+      Hi {{first_name}},
+
+      Just checking in — no pressure if the timing isn't right. If you'd
+      like to view any of the properties I sent (or talk through what's
+      available in {{preferred_area}}), let me know a slot that works for
+      you next week.
+
+      Otherwise I'll keep an eye out and ping you when something fitting
+      comes up.
+
+      {{agent_signoff}}
+
+steps:
+  - day_offset: 0
+    minute_offset: 5
+    template: property_buyer_day0
+    channel: whatsapp
+  - day_offset: 2
+    hour: 10
+    tz: Asia/Singapore
+    template: property_buyer_day2
+    channel: whatsapp
+  - day_offset: 5
+    hour: 10
+    tz: Asia/Singapore
+    template: property_buyer_day5
+    channel: whatsapp

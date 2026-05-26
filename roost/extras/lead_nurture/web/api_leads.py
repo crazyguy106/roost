@@ -50,7 +50,7 @@ def capture_lead(body: LeadCaptureRequest, token: str = Query("")):
     _logger.info("Lead capture: %s <%s> from %s (risk: %d)",
                  body.name, body.email, body.orgName, body.riskScore)
 
-    from roost.services.lead_pipeline import ingest_lead
+    from roost.extras.lead_nurture.services.lead_pipeline import ingest_lead
 
     lead_data = {
         "name": body.name,
@@ -78,3 +78,30 @@ def capture_lead(body: LeadCaptureRequest, token: str = Query("")):
 def capture_lead_options():
     """Handle CORS preflight for the lead capture endpoint."""
     return JSONResponse(content={}, headers=_CORS_HEADERS)
+
+
+# ── Pipeline / detail endpoints (used by the /leads dashboard) ─────────
+
+
+@router.get("/pipeline")
+def get_pipeline(limit: int = 500):
+    """Return the six-column lead pipeline.
+
+    Shape:
+        {
+          "columns": [{"key", "label", "count", "leads": [...]}, ...],
+          "totals":  {"total", "hot", "qualifying", "nurturing"}
+        }
+    """
+    from roost.extras.lead_nurture.web.pages import build_pipeline
+    return JSONResponse(content=build_pipeline(limit=limit))
+
+
+@router.get("/{enrollment_id}")
+def get_lead_detail(enrollment_id: int):
+    """Full detail for one enrollment — card + qualification Q&A + classification."""
+    from roost.extras.lead_nurture.web.pages import enrollment_detail
+    payload = enrollment_detail(enrollment_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="enrollment not found")
+    return JSONResponse(content=payload)

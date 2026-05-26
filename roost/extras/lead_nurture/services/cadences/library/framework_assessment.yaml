@@ -1,0 +1,84 @@
+slug: framework_assessment
+name: Framework Assessment Follow-up
+description: |
+  Original Roost framework-assessment cadence — preserved verbatim from
+  lead_pipeline.EMAIL_TEMPLATES. Day 0 sends ~2 minutes after enrollment;
+  day 3 and day 7 fire at 09:00 SGT on the target day.
+vertical: generic
+enabled: true
+
+templates:
+  - name: framework_assessment_day0
+    sequence_day: 0
+    category: nurture
+    channel: email
+    subject: Your Assessment Report
+    body: |
+      Hi {{name}},
+
+      Thank you for completing the assessment.
+
+      Here's a summary of your results:
+
+      Organisation: {{org_name}}
+      Risk Score: {{risk_score}}/100 ({{risk_level}})
+      Key Factors: {{risk_factors}}
+
+      If you'd like to discuss what your score means for your organisation,
+      we're happy to arrange a brief conversation.
+
+      Best regards
+
+  - name: framework_assessment_day3
+    sequence_day: 3
+    category: nurture
+    channel: email
+    subject: What your risk score of {{risk_score}} means
+    body: |
+      Hi {{name}},
+
+      A few days ago you completed the assessment and scored
+      {{risk_score}}/100 ({{risk_level}}).
+
+      Here's what that means in practice:
+
+      - If your Health Check had Red items, those are controls that aren't
+        in place. Each one is an open door.
+      - Your 90-Day Roadmap from the assessment is a good starting point.
+        The Quick Wins (Week 1-2) are designed to close the biggest gaps
+        with the least effort.
+
+      Happy to discuss further if useful.
+
+      Best regards
+
+  - name: framework_assessment_day7
+    sequence_day: 7
+    category: nurture
+    channel: email
+    subject: "Follow-up: your assessment results"
+    body: |
+      Hi {{name}},
+
+      Following up on your recent assessment (risk score: {{risk_score}}/100).
+
+      Would you be interested in discussing the results and next steps?
+      If so, just reply and we'll arrange a time.
+
+      Best regards
+
+steps:
+  - day_offset: 0
+    minute_offset: 2          # send shortly after enrollment to avoid race
+    template: framework_assessment_day0
+    channel: email
+  - day_offset: 3
+    hour: 9
+    tz: Asia/Singapore
+    template: framework_assessment_day3
+    channel: email
+  - day_offset: 7
+    hour: 9
+    tz: Asia/Singapore
+    template: framework_assessment_day7
+    channel: email

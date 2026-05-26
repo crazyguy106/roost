@@ -1,0 +1,70 @@
+slug: generic_b2b
+name: Generic B2B Lead Nurture
+description: |
+  Vendor-neutral B2B lead-nurture cadence — three touches over a week.
+  Use when no vertical-specific cadence exists. Variables kept minimal so
+  it works for any inbound source.
+vertical: generic
+enabled: true
+
+templates:
+  - name: generic_b2b_day0
+    sequence_day: 0
+    category: greeting
+    channel: any
+    subject: "Thanks for reaching out, {{first_name}}"
+    body: |
+      Hi {{first_name}},
+
+      Thanks for getting in touch about {{topic}}. I'll review what you
+      sent and come back with something concrete in the next day or two.
+
+      If anything else comes to mind in the meantime, just reply to this.
+
+      {{sender_signoff}}
+
+  - name: generic_b2b_day3
+    sequence_day: 3
+    category: nurture
+    channel: any
+    subject: "Following up on {{topic}}"
+    body: |
+      Hi {{first_name}},
+
+      A few thoughts on {{topic}}:
+
+      - {{point_one}}
+      - {{point_two}}
+      - {{point_three}}
+
+      Worth a 20-minute call to talk through? My calendar:
+      {{sender_booking_link}}
+
+      {{sender_signoff}}
+
+  - name: generic_b2b_day7
+    sequence_day: 7
+    category: nurture
+    channel: any
+    subject: "Quick follow-up"
+    body: |
+      Hi {{first_name}},
+
+      Just circling back — happy to park this if the timing isn't right,
+      or pick it up whenever it is. Let me know either way.
+
+      {{sender_signoff}}
+
+steps:
+  - day_offset: 0
+    minute_offset: 5
+    template: generic_b2b_day0
+    channel: email
+  - day_offset: 3
+    hour: 10
+    template: generic_b2b_day3
+    channel: email
+  - day_offset: 7
+    hour: 10
+    template: generic_b2b_day7
+    channel: email

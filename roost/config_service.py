@@ -43,6 +43,12 @@ FEATURE_FLAGS = {
         "env_default": "true",
         "restart": True,
     },
+    "AGENTIC_WORKFLOW_ENABLED": {
+        "label": "Agentic Workflow (/agentic)",
+        "description": "Plan-then-execute chat surface with per-tool event streaming. See docs/agentic-workflow-phase1.md.",
+        "env_default": "false",
+        "restart": True,
+    },
     "WHATSAPP_ENABLED": {
         "label": "WhatsApp Cloud API",
         "description": "Outbound + webhook for inbound. Meta Business verification required.",

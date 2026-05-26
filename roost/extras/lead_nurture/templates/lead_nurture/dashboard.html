@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block title %}Leads — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">Leads — Pipeline</h1>
+        <p class="text-sm opacity-70">
+            {{ pipeline.totals.total }} active
+            · 🔥 {{ pipeline.totals.hot }} hot
+            · ❓ {{ pipeline.totals.qualifying }} qualifying
+            · 🌱 {{ pipeline.totals.nurturing }} nurturing
+        </p>
+    </div>
+    <div class="text-xs opacity-60" id="leads-refresh-stamp">auto-refresh every 30s</div>
+</div>
+
+<style>
+    .lead-column { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .lead-column-header {
+        display: flex; align-items: baseline; justify-content: space-between;
+        padding: 8px 10px; border-radius: 6px 6px 0 0;
+        background: var(--surface-2, oklch(0.22 0 0));
+        font-weight: 600; font-size: 0.85rem;
+    }
+    .lead-column[data-col="hot"] .lead-column-header { background: oklch(0.42 0.16 25); color: white; }
+    .lead-column[data-col="qualifying"] .lead-column-header { background: oklch(0.40 0.13 250); color: white; }
+    .lead-card {
+        background: var(--surface, oklch(0.20 0 0));
+        border: 1px solid var(--border, oklch(0.30 0 0));
+        border-radius: 6px;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+    }
+    .lead-card:hover { border-color: var(--accent, oklch(0.65 0.18 250)); }
+    .lead-card-name { font-weight: 600; font-size: 0.95rem; }
+    .lead-card-row { display: flex; gap: 6px; align-items: center; font-size: 0.75rem; opacity: 0.75; margin-top: 4px; }
+    .lead-chip {
+        display: inline-block; padding: 1px 6px; border-radius: 4px;
+        background: oklch(0.30 0.05 250); color: white; font-size: 0.7rem;
+    }
+    .lead-chip.hot   { background: oklch(0.55 0.22 25); }
+    .lead-chip.warm  { background: oklch(0.65 0.15 80); color: black; }
+    .lead-chip.cold  { background: oklch(0.50 0.05 250); }
+    .lead-chip.wa    { background: oklch(0.55 0.18 145); }
+    .lead-chip.wc    { background: oklch(0.55 0.18 145); }
+    .lead-chip.tg    { background: oklch(0.55 0.18 235); }
+    .lead-chip.email { background: oklch(0.50 0.05 270); }
+
+    /* Slide-over detail panel */
+    #lead-detail-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+        display: none; z-index: 100;
+    }
+    #lead-detail-overlay.open { display: block; }
+    #lead-detail-panel {
+        position: fixed; top: 0; right: 0; bottom: 0; width: 480px;
+        max-width: 100vw; background: var(--surface, #1d232a);
+        box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+        padding: 20px; overflow-y: auto; z-index: 101;
+        transform: translateX(100%); transition: transform 0.2s ease;
+    }
+    #lead-detail-overlay.open #lead-detail-panel { transform: translateX(0); }
+    .qa-block { border-left: 3px solid var(--accent, oklch(0.65 0.18 250)); padding-left: 10px; margin-bottom: 10px; }
+    .qa-q { font-size: 0.8rem; opacity: 0.75; }
+    .qa-a { font-size: 0.9rem; margin-top: 2px; }
+    .qa-a.empty { opacity: 0.4; font-style: italic; }
+</style>
+
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3" id="leads-grid">
+    {% for col in pipeline.columns %}
+    <div class="lead-column" data-col="{{ col.key }}">
+        <div class="lead-column-header">
+            <span>{{ col.label }}</span>
+            <span class="opacity-70" data-count>{{ col.count }}</span>
+        </div>
+        <div class="lead-cards" data-cards>
+            {% for lead in col.leads %}
+            <div class="lead-card" data-id="{{ lead.id }}" onclick="openLeadDetail({{ lead.id }})">
+                <div class="lead-card-name">{{ lead.name }}</div>
+                <div class="lead-card-row">
+                    {% if lead.channel == "whatsapp" %}<span class="lead-chip wa">WA</span>
+                    {% elif lead.channel == "wechat" %}<span class="lead-chip wc">WC</span>
+                    {% elif lead.channel == "telegram" %}<span class="lead-chip tg">TG</span>
+                    {% elif lead.channel == "email" %}<span class="lead-chip email">Email</span>
+                    {% else %}<span class="lead-chip">{{ lead.channel }}</span>{% endif %}
+
+                    {% if lead.qualify_label == "hot" or lead.lead_urgency == "hot" %}
+                        <span class="lead-chip hot">🔥 hot{% if lead.qualify_score %} {{ "%.0f"|format(lead.qualify_score * 100) }}%{% endif %}</span>
+                    {% elif lead.qualify_label == "warm" %}
+                        <span class="lead-chip warm">warm</span>
+                    {% elif lead.qualify_label == "cold" %}
+                        <span class="lead-chip cold">cold</span>
+                    {% endif %}
+
+                    {% if lead.qualifying_progress %}
+                        <span class="opacity-70">Q {{ lead.qualifying_progress }}</span>
+                    {% endif %}
+                </div>
+                <div class="lead-card-row">
+                    <span>{{ lead.cadence_slug }}</span>
+                    {% if lead.last_activity %}· <span>{{ lead.last_activity }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if col.leads|length == 0 %}
+            <div class="text-xs opacity-40 px-2 py-3">(empty)</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Slide-over detail panel -->
+<div id="lead-detail-overlay" onclick="closeLeadDetail(event)">
+    <div id="lead-detail-panel" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold" id="ld-name">…</h2>
+            <button onclick="closeLeadDetail()" class="text-xl opacity-60 hover:opacity-100">×</button>
+        </div>
+        <div id="ld-body"></div>
+    </div>
+</div>
+
+<script>
+const COLUMN_KEYS = {{ pipeline.columns | map(attribute='key') | list | tojson }};
+
+async function refreshPipeline() {
+    try {
+        const r = await fetch('/api/leads/pipeline');
+        if (!r.ok) return;
+        const data = await r.json();
+        renderPipeline(data);
+        document.getElementById('leads-refresh-stamp').textContent =
+            'refreshed ' + new Date().toLocaleTimeString();
+    } catch (e) { /* swallow */ }
+}
+
+function chipFor(ch) {
+    const cls = ch === 'whatsapp' ? 'wa'
+              : ch === 'wechat'   ? 'wc'
+              : ch === 'telegram' ? 'tg'
+              : ch === 'email'    ? 'email' : '';
+    const label = ch === 'whatsapp' ? 'WA' : ch === 'wechat' ? 'WC'
+                : ch === 'telegram' ? 'TG' : ch === 'email' ? 'Email' : (ch || '?');
+    return `<span class="lead-chip ${cls}">${label}</span>`;
+}
+
+function scoreChip(lead) {
+    if (lead.qualify_label === 'hot' || lead.lead_urgency === 'hot') {
+        const pct = lead.qualify_score ? ` ${Math.round(lead.qualify_score * 100)}%` : '';
+        return `<span class="lead-chip hot">🔥 hot${pct}</span>`;
+    }
+    if (lead.qualify_label === 'warm') return '<span class="lead-chip warm">warm</span>';
+    if (lead.qualify_label === 'cold') return '<span class="lead-chip cold">cold</span>';
+    return '';
+}
+
+function renderPipeline(data) {
+    for (const col of data.columns) {
+        const colEl = document.querySelector(`.lead-column[data-col="${col.key}"]`);
+        if (!colEl) continue;
+        colEl.querySelector('[data-count]').textContent = col.count;
+        const cards = colEl.querySelector('[data-cards]');
+        if (col.leads.length === 0) {
+            cards.innerHTML = '<div class="text-xs opacity-40 px-2 py-3">(empty)</div>';
+            continue;
+        }
+        cards.innerHTML = col.leads.map(l => `
+            <div class="lead-card" data-id="${l.id}" onclick="openLeadDetail(${l.id})">
+                <div class="lead-card-name">${escapeHTML(l.name)}</div>
+                <div class="lead-card-row">
+                    ${chipFor(l.channel)}
+                    ${scoreChip(l)}
+                    ${l.qualifying_progress ? `<span class="opacity-70">Q ${l.qualifying_progress}</span>` : ''}
+                </div>
+                <div class="lead-card-row">
+                    <span>${escapeHTML(l.cadence_slug)}</span>
+                    ${l.last_activity ? `· <span>${escapeHTML(l.last_activity)}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+function escapeHTML(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function openLeadDetail(id) {
+    document.getElementById('lead-detail-overlay').classList.add('open');
+    document.getElementById('ld-name').textContent = 'Loading…';
+    document.getElementById('ld-body').innerHTML = '';
+    try {
+        const r = await fetch('/api/leads/' + id);
+        if (!r.ok) {
+            document.getElementById('ld-body').textContent = 'Failed to load.';
+            return;
+        }
+        const d = await r.json();
+        document.getElementById('ld-name').textContent = d.card.name;
+        const qa = (d.qualification.qa || []).map(q => `
+            <div class="qa-block">
+                <div class="qa-q">${escapeHTML(q.question)}</div>
+                <div class="qa-a ${q.answer ? '' : 'empty'}">${escapeHTML(q.answer || '— no answer yet —')}</div>
+            </div>
+        `).join('');
+        const cl = d.classification || {};
+        document.getElementById('ld-body').innerHTML = `
+            <div class="text-sm opacity-70 mb-3">
+                ${chipFor(d.card.channel)}
+                ${scoreChip(d.card)}
+                ${d.card.email ? `<span class="opacity-70 ml-2">${escapeHTML(d.card.email)}</span>` : ''}
+                ${d.card.phone ? `<span class="opacity-70 ml-2">${escapeHTML(d.card.phone)}</span>` : ''}
+            </div>
+            <h3 class="text-sm font-semibold mt-4 mb-2 opacity-80">AI CDR classification</h3>
+            <div class="text-xs">
+                <div>intent: <span class="font-mono">${escapeHTML(cl.intent || '—')}</span></div>
+                <div>urgency: <span class="font-mono">${escapeHTML(cl.urgency || '—')}</span></div>
+                <div>confidence: <span class="font-mono">${cl.confidence ?? '—'}</span></div>
+                ${cl.reasoning ? `<div class="mt-1 opacity-70">${escapeHTML(cl.reasoning)}</div>` : ''}
+            </div>
+            <h3 class="text-sm font-semibold mt-4 mb-2 opacity-80">Qualification Q&amp;A</h3>
+            ${qa || '<div class="text-xs opacity-60">No question pack for this cadence.</div>'}
+            <h3 class="text-sm font-semibold mt-4 mb-2 opacity-80">Cadence</h3>
+            <div class="text-xs">
+                <div>${escapeHTML(d.enrollment.cadence_slug || '—')} · step ${d.enrollment.current_step}</div>
+                <div class="opacity-70">${escapeHTML(d.enrollment.status)} ${d.enrollment.pause_reason ? '(' + escapeHTML(d.enrollment.pause_reason) + ')' : ''}</div>
+                ${d.enrollment.next_run_at ? `<div class="opacity-70">next: ${escapeHTML(d.enrollment.next_run_at)}</div>` : ''}
+            </div>
+        `;
+    } catch (e) {
+        document.getElementById('ld-body').textContent = 'Error: ' + e;
+    }
+}
+
+function closeLeadDetail(ev) {
+    if (ev && ev.target.id !== 'lead-detail-overlay') return;
+    document.getElementById('lead-detail-overlay').classList.remove('open');
+}
+
+setInterval(refreshPipeline, 30000);
+</script>
+{% endblock %}

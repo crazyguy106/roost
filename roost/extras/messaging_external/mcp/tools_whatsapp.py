@@ -11,9 +11,9 @@ import logging
 
 from roost.config import WHATSAPP_ENABLED
 from roost.mcp.server import mcp
-from roost.services import whatsapp
+from roost.extras.messaging_external.services import whatsapp
 
-logger = logging.getLogger("roost.mcp.tools_whatsapp")
+logger = logging.getLogger("roost.extras.messaging_external.mcp.tools_whatsapp")
 
 
 def _check_enabled() -> dict | None:

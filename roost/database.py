@@ -866,43 +866,37 @@ CREATE INDEX IF NOT EXISTS idx_conv_memory_user ON conversation_memory(user_id);
 CREATE INDEX IF NOT EXISTS idx_conv_memory_created ON conversation_memory(created_at);
 """
 
-SCHEMA_V26 = """
--- RPA runs: durable, pausable browser-automation runs (insurance portals etc.)
-CREATE TABLE IF NOT EXISTS rpa_runs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id         TEXT NOT NULL DEFAULT '',
-    portal_slug     TEXT NOT NULL,
-    recipe_id       INTEGER,
-    status          TEXT NOT NULL DEFAULT 'running'
-        CHECK (status IN ('running', 'awaiting_input', 'completed', 'failed', 'cancelled')),
-    state_json      TEXT NOT NULL DEFAULT '{}',
-    prompt_text     TEXT DEFAULT '',
-    prompt_kind     TEXT DEFAULT '',
-    last_input      TEXT DEFAULT '',
-    result_json     TEXT DEFAULT '{}',
-    error           TEXT DEFAULT '',
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_rpa_runs_user_status ON rpa_runs(user_id, status);
-CREATE INDEX IF NOT EXISTS idx_rpa_runs_status ON rpa_runs(status);
 
--- RPA flow configs: data-driven step lists per portal, edited by the user.
-CREATE TABLE IF NOT EXISTS rpa_flow_configs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    portal_slug     TEXT NOT NULL,
-    name            TEXT DEFAULT '',
-    login_url       TEXT DEFAULT '',
-    steps_json      TEXT NOT NULL DEFAULT '[]',
-    otp_config_json TEXT NOT NULL DEFAULT '{}',
-    user_id         TEXT NOT NULL DEFAULT '',
-    enabled         INTEGER DEFAULT 1,
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(portal_slug, user_id)
+# SCHEMA_V26 (rpa_runs, rpa_flow_configs) moved to roost.extras.rpa bundle.
+# SCHEMA_V28 (sme_ops_events) moved to roost.extras.sme_ops bundle.
+
+
+SCHEMA_V30 = """
+-- Guardian draft queue: tool calls that require explicit human approval
+-- before execution. Money-moving SME writes (Stripe refunds, Shopify
+-- cancels, Xero invoices when status != DRAFT) land here instead of
+-- executing immediately.
+CREATE TABLE IF NOT EXISTS guardian_drafts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_name    TEXT NOT NULL,
+    tool_args    TEXT NOT NULL DEFAULT '{}',
+    rule_name    TEXT DEFAULT '',
+    user_id      TEXT DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'approved', 'rejected', 'executed', 'failed')),
+    result_json  TEXT DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    decided_at   TEXT,
+    executed_at  TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_rpa_flow_configs_user ON rpa_flow_configs(user_id);
+CREATE INDEX IF NOT EXISTS idx_guardian_drafts_status ON guardian_drafts(status);
+CREATE INDEX IF NOT EXISTS idx_guardian_drafts_created ON guardian_drafts(created_at);
 """
+
+
+# SCHEMA_V29 (xero_oauth_tokens) moved to roost.extras.sme_ops bundle.
+
+
 
 
 def get_connection() -> sqlite3.Connection:
@@ -1391,8 +1385,20 @@ def init_db() -> None:
     # Phase 25: Checkpoints (agent action rollback)
     conn.executescript(SCHEMA_V25)
 
-    # Phase 26: RPA runs (browser automation with pause/resume)
-    conn.executescript(SCHEMA_V26)
+    # Phase 26 (rpa_runs/rpa_flow_configs) — owned by roost.extras.rpa.
+
+    # Phase 27 (nurture_cadences/enrollments/preapprovals) — owned by roost.extras.lead_nurture.
+    conn.executescript(SCHEMA_V30)
+
+    # Bundle-owned tables — each extras/<bundle> ships its own schema.
+    # Idempotent CREATE TABLE IF NOT EXISTS; disabled bundles do nothing.
+    try:
+        from roost import extras
+        extras.run_bundle_schemas(conn)
+        conn.commit()
+    except Exception:
+        import logging
+        logging.getLogger("roost.database").exception("bundle schemas failed")
 
     conn.close()
 

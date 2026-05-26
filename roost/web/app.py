@@ -25,30 +25,15 @@ try:
     from roost.web.api_otter import router as otter_router
 except ImportError:
     otter_router = None
-from roost.web.api_leads import router as leads_router
+# api_leads — loaded by roost.extras.lead_nurture
 from roost.web.api_chat import router as chat_router
+from roost.web.api_agentic import router as agentic_router
 from roost.web.api_settings import router as settings_api_router
-from roost.web.api_property_agent import router as property_agent_api_router
-from roost.web.api_crm import router as crm_api_router
-from roost.web.auth_zoho import router as zoho_auth_router
-from roost.web.api_sidecar import router as sidecar_router
-from roost.web.api_rpa import router as rpa_api_router
-try:
-    from roost.config import WHATSAPP_ENABLED
-    if WHATSAPP_ENABLED:
-        from roost.web.api_whatsapp import router as whatsapp_router
-    else:
-        whatsapp_router = None
-except ImportError:
-    whatsapp_router = None
-try:
-    from roost.config import WECHAT_ENABLED
-    if WECHAT_ENABLED:
-        from roost.web.api_wechat import router as wechat_router
-    else:
-        wechat_router = None
-except ImportError:
-    wechat_router = None
+# api_property_agent — loaded by roost.extras.property_agent
+# api_zapier / api_stripe / api_shopify / api_xero / api_sme_drafts — loaded by roost.extras.sme_ops
+# api_crm / api_attio_webhook / auth_zoho — loaded by roost.extras.crm
+# api_rpa / api_sidecar — loaded by roost.extras.rpa
+# api_whatsapp / api_wechat — loaded by roost.extras.messaging_external
 
 WEB_DIR = Path(__file__).parent
 USE_OAUTH = bool(GOOGLE_CLIENT_ID)
@@ -93,6 +78,16 @@ async def lifespan(app: FastAPI):
         pass
     except Exception:
         _logger.exception("Failed to initialize Gmail subscriber (web)")
+
+    try:
+        from roost.extras.lead_nurture.services.cadences import seed_library as seed_cadences
+        cad_result = seed_cadences()
+        if cad_result.get("seeded"):
+            _logger.info(
+                "Seeded %d cadence library file(s) (web)", cad_result["seeded"]
+            )
+    except Exception:
+        _logger.exception("Failed to seed cadence library (web)")
 
     try:
         from roost.extras.rpa.services.rpa_flows import seed_library as seed_rpa
@@ -218,6 +213,7 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
         # Each handler verifies its own per-vendor signature.
         if (path.startswith("/api/whatsapp/webhook")
                 or path.startswith("/api/wechat/webhook")
+                or path == "/api/attio/webhook"
                 or path.startswith("/api/crm/") and path.endswith("/webhook")):
             return await call_next(request)
 
@@ -459,18 +455,21 @@ function msg(t){log.textContent += t + '\\n';}
     app.include_router(mobile_router)
     if otter_router is not None:
         app.include_router(otter_router)
-    app.include_router(leads_router)
     app.include_router(chat_router)
-    if whatsapp_router is not None:
-        app.include_router(whatsapp_router)
-    if wechat_router is not None:
-        app.include_router(wechat_router)
+    app.include_router(agentic_router)
     app.include_router(settings_api_router)
-    app.include_router(property_agent_api_router)
-    app.include_router(crm_api_router)
-    app.include_router(zoho_auth_router)
-    app.include_router(sidecar_router)
-    app.include_router(rpa_api_router)
+    # property_agent + sme_ops + crm + rpa + messaging_external routers — registered by roost.extras.* bundles
+
+    # Vertical bundles register themselves after core routers are mounted.
+    # No-op while bundles still live in roost/services|web|mcp; becomes
+    # the canonical entrypoint as each bundle moves into roost/extras/.
+    try:
+        from roost import extras
+        from roost.mcp.server import mcp as _mcp
+        extras.load_enabled(app, _mcp)
+    except Exception:
+        import logging
+        logging.getLogger("roost.web.app").exception("extras.load_enabled failed")
 
     return app
 

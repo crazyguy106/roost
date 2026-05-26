@@ -61,6 +61,11 @@ from roost.bot.handlers import (
     # Recipes, Templates, Scheduling & Rollback
     cmd_recipe, cmd_schedule, cmd_rollback, cmd_template, cmd_sequence,
     cmd_approve, cmd_skip_run,
+    # Nurture approval
+    cmd_napprove, cmd_nskip, cmd_nlist, cmd_preapprove,
+    handle_nurture_callback,
+    # Daily summary
+    cmd_summary, cmd_summarytime, cmd_summaryoff, cmd_summarystatus,
 )
 
 logging.basicConfig(
@@ -220,6 +225,18 @@ def main():
     app.add_handler(CommandHandler("approve", cmd_approve))
     app.add_handler(CommandHandler("skiprun", cmd_skip_run))
 
+    # Nurture approval (lead-cadence engine)
+    app.add_handler(CommandHandler("napprove", cmd_napprove))
+    app.add_handler(CommandHandler("nskip", cmd_nskip))
+    app.add_handler(CommandHandler("nlist", cmd_nlist))
+    app.add_handler(CommandHandler("preapprove", cmd_preapprove))
+
+    # Daily summary
+    app.add_handler(CommandHandler("summary", cmd_summary))
+    app.add_handler(CommandHandler("summarytime", cmd_summarytime))
+    app.add_handler(CommandHandler("summaryoff", cmd_summaryoff))
+    app.add_handler(CommandHandler("summarystatus", cmd_summarystatus))
+
     # Agent + Skill Builder
     app.add_handler(CommandHandler("agent", cmd_agent))
     app.add_handler(CommandHandler("skill", cmd_skill))
@@ -236,15 +253,33 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_triage_message), group=-1)
 
     # RPA input handler (group -1: intercepts plain messages for awaiting_input runs)
-    from roost.bot.handlers.rpa_input import handle_rpa_input_message, cmd_rpa
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rpa_input_message), group=-1)
-    app.add_handler(CommandHandler("rpa", cmd_rpa))
+    from roost.config import RPA_ENABLED
+    if RPA_ENABLED:
+        from roost.extras.rpa.bot.rpa_input import handle_rpa_input_message, cmd_rpa
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rpa_input_message), group=-1)
+        app.add_handler(CommandHandler("rpa", cmd_rpa))
+
+    # Lead qualification reply handler (group -1: intercepts replies to
+    # in-progress qualifying sessions over Telegram, so the agent catch-all
+    # doesn't also answer). Gated by LEAD_NURTURE_ENABLED.
+    from roost.config import LEAD_NURTURE_ENABLED
+    if LEAD_NURTURE_ENABLED:
+        from roost.extras.lead_nurture.bot.lead_qualify import handle_qualify_message
+        app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_qualify_message),
+            group=-1,
+        )
 
     # Agent free-text handler (group 0: catches messages not consumed by capture/triage)
     # Skill revision intercept is handled inside handle_agent_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_agent_message), group=0)
 
     # Inline keyboard callbacks (before MessageHandlers)
+    # Nurture approval buttons routed first (pattern-filtered) so the generic
+    # callback handler doesn't have to know about them.
+    app.add_handler(CallbackQueryHandler(
+        handle_nurture_callback, pattern=r"^(napprove|nskip):\d+$",
+    ))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     # Voice notes (must be before generic file handler)
@@ -302,16 +337,29 @@ def main():
             logger.exception("Failed to seed curricula")
 
     # Seed shipped RPA flow library as global defaults (idempotent).
+    if RPA_ENABLED:
+        try:
+            from roost.extras.rpa.services.rpa_flows import seed_library
+            result = seed_library()
+            if result.get("seeded"):
+                logger.info(
+                    "Seeded %d RPA flow library file(s); %d skipped (already present)",
+                    result["seeded"], result.get("skipped", 0),
+                )
+        except Exception:
+            logger.exception("Failed to seed RPA flow library")
+
+    # Seed shipped lead-nurture cadence library as global defaults (idempotent).
     try:
-        from roost.services.rpa_flows import seed_library
-        result = seed_library()
-        if result.get("seeded"):
+        from roost.extras.lead_nurture.services.cadences import seed_library as seed_cadences
+        cad_result = seed_cadences()
+        if cad_result.get("seeded"):
             logger.info(
-                "Seeded %d RPA flow library file(s); %d skipped (already present)",
-                result["seeded"], result.get("skipped", 0),
+                "Seeded %d cadence library file(s); %d skipped (already present)",
+                cad_result["seeded"], cad_result.get("skipped", 0),
             )
     except Exception:
-        logger.exception("Failed to seed RPA flow library")
+        logger.exception("Failed to seed cadence library")
 
     # Initialize scheduler (morning digest, deadline reminders, urgency recalc)
     from roost.bot.scheduler import init_scheduler

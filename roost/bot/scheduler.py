@@ -107,6 +107,15 @@ def init_scheduler(app: Application) -> None:
     jq.run_repeating(_run_cron_recipes, interval=60, first=45, name="cron_recipes")
     logger.info("Scheduled cron recipe runner (every 60s)")
 
+    # 10b. Nurture cadence tick — every 60 seconds, advances due enrollments
+    jq.run_repeating(_nurture_tick, interval=60, first=50, name="nurture_tick")
+    logger.info("Scheduled nurture cadence tick (every 60s)")
+
+    # 10c. Daily summary tick — every 60 seconds, fires per-user when their
+    # configured local time hits HH:MM (deduped via a "last sent" setting).
+    jq.run_repeating(_daily_summary_tick, interval=60, first=70, name="daily_summary")
+    logger.info("Scheduled daily summary tick (every 60s, per-user time)")
+
     # 11. Proactive monitoring — risk alerts and calendar prep
     try:
         from roost.config import PROACTIVE_ENABLED, PROACTIVE_RISK_INTERVAL
@@ -449,6 +458,79 @@ async def _send_scheduled_emails(context) -> None:
             logger.info("Scheduled email sender: sent %d emails", sent)
     except Exception:
         logger.exception("Scheduled email sender failed")
+
+
+async def _nurture_tick(context) -> None:
+    """Advance due nurture cadence enrollments."""
+    try:
+        from roost.extras.lead_nurture.services.nurture import tick
+        result = tick()
+        if result.get("sent") or result.get("held") or result.get("errors"):
+            logger.info(
+                "Nurture tick: due=%d sent=%d held=%d completed=%d errors=%d",
+                result.get("due", 0), result.get("sent", 0),
+                result.get("held", 0), result.get("completed", 0),
+                result.get("errors", 0),
+            )
+    except Exception:
+        logger.exception("Nurture tick failed")
+
+
+async def _daily_summary_tick(context) -> None:
+    """Per-user daily summary firer.
+
+    For each allowed user with `daily_summary_time` set (HH:MM) in their
+    configured `daily_summary_tz` (default Asia/Singapore), fires once per
+    day when their local time matches. Dedupes via the
+    `daily_summary_last_sent` setting (YYYY-MM-DD in their tz).
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        from roost.services.settings import get_setting, set_setting
+        from roost.services.daily_summary import build_summary, format_summary
+
+        for user_id in TELEGRAM_ALLOWED_USERS:
+            try:
+                hhmm = get_setting("daily_summary_time", user_id=user_id)
+                if not hhmm or ":" not in hhmm:
+                    continue
+                tz_name = get_setting("daily_summary_tz", user_id=user_id) \
+                    or "Asia/Singapore"
+                try:
+                    tz = ZoneInfo(tz_name)
+                except Exception:
+                    tz = ZoneInfo("UTC")
+                now_local = datetime.now(tz)
+                today_str = now_local.strftime("%Y-%m-%d")
+                if now_local.strftime("%H:%M") != hhmm:
+                    continue
+                # Dedupe — already sent today?
+                last_sent = get_setting(
+                    "daily_summary_last_sent", user_id=user_id,
+                )
+                if last_sent == today_str:
+                    continue
+
+                summary = build_summary(
+                    user_id=str(user_id), tz_name=tz_name,
+                )
+                text = format_summary(summary)
+                await context.bot.send_message(
+                    chat_id=user_id, text=text, parse_mode="Markdown",
+                )
+                set_setting(
+                    "daily_summary_last_sent", today_str, user_id=user_id,
+                )
+                logger.info(
+                    "Sent daily summary to user %s (%s %s)",
+                    user_id, hhmm, tz_name,
+                )
+            except Exception:
+                logger.exception(
+                    "Daily summary failed for user %s", user_id,
+                )
+    except Exception:
+        logger.exception("Daily summary tick failed")
 
 
 async def _run_cron_recipes(context) -> None:

@@ -58,7 +58,7 @@ async def receive_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256", "")
 
-    from roost.services.whatsapp import verify_webhook_signature
+    from roost.extras.messaging_external.services.whatsapp import verify_webhook_signature
     if signature and not verify_webhook_signature(body, signature):
         _logger.warning("WhatsApp webhook signature mismatch")
         raise HTTPException(status_code=403, detail="Invalid signature")
@@ -75,7 +75,7 @@ async def receive_webhook(request: Request):
         return JSONResponse(content={"ok": True})
 
     # Parse inbound messages
-    from roost.services.whatsapp import parse_webhook_entry
+    from roost.extras.messaging_external.services.whatsapp import parse_webhook_entry
 
     processed = 0
     for entry in payload.get("entry", []):
@@ -91,7 +91,7 @@ async def receive_webhook(request: Request):
             )
 
             # Mark as read
-            from roost.services.whatsapp import mark_as_read
+            from roost.extras.messaging_external.services.whatsapp import mark_as_read
             mark_as_read(msg["message_id"])
 
             # Find a WhatsApp recipe to run, or use default classification
@@ -109,10 +109,45 @@ async def _process_inbound(msg: dict) -> None:
     Otherwise, just classifies and notifies via Telegram.
     """
     from roost.services.recipes import list_recipes, execute_recipe
-    from roost.services.ai_cdr import classify_message
+    from roost.extras.messaging_external.services.ai_cdr import classify_message
 
     sender = msg.get("sender_name") or msg.get("sender", "")
     text = msg["text"]
+    sender_phone = msg.get("sender", "")
+
+    # Qualification intercept: if this phone has an in-progress qualifying
+    # session, treat the reply as an answer and stop here. The recipe
+    # pipeline (auto-replies, drafts) would otherwise step on the
+    # qualification dialog.
+    try:
+        from roost.extras.lead_nurture.services import qualification
+        q_result = qualification.process_answer(
+            channel="whatsapp", identifier=sender_phone, text=text,
+        )
+        if q_result.get("handled"):
+            _logger.info(
+                "WhatsApp qualification handled %s done=%s",
+                sender_phone, q_result.get("done"),
+            )
+            return
+    except Exception:
+        _logger.exception("qualification intercept failed (non-fatal)")
+
+    # Best-effort lead ingest: dedupes on phone via CRM, enrolls in default
+    # property cadence if new. Never blocks the recipe pipeline.
+    try:
+        from roost.extras.lead_nurture.services import leads as leads_svc
+        leads_svc.ingest_lead(
+            channel="whatsapp",
+            phone=sender_phone,
+            name=sender if sender != sender_phone else "",
+            message_text=text,
+            vertical="property",
+            source="whatsapp",
+            qualifying_identifier=sender_phone,
+        )
+    except Exception:
+        _logger.exception("lead ingest from WhatsApp failed (non-fatal)")
 
     # Find enabled event-triggered recipes for WhatsApp
     recipes = list_recipes(trigger_type="event", enabled_only=True)

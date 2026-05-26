@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from roost.models import ContactCreate, TaskCreate, Priority, TaskStatus
 
-_logger = logging.getLogger("roost.services.lead_pipeline")
+_logger = logging.getLogger("roost.extras.lead_nurture.services.lead_pipeline")
 
 # Pipeline project name — auto-created on first use
 PIPELINE_PROJECT = "Lead Pipeline"
@@ -99,18 +99,70 @@ def _format_template(template: dict, lead_data: dict) -> dict:
 
 
 def ingest_lead(lead_data: dict) -> dict:
-    """Process an inbound lead from the framework assessment.
+    """Process an inbound lead from the framework assessment form.
 
-    Creates or updates a contact, creates a pipeline task, and schedules
-    the 3-email follow-up sequence.
+    Backward-compat shim — delegates to `roost.extras.lead_nurture.services.leads.ingest_lead`,
+    which is now the canonical multi-channel entry point. Behavior preserved:
 
-    Args:
-        lead_data: dict with keys: name, email, org_name, industries,
-                   revenue, ai_profile, risk_score, risk_level,
-                   risk_factors, sectors, timestamp
+      - Dedupes by email (CRM `find_person`).
+      - Mirrors a task into the local "Lead Pipeline" project.
+      - Enrolls the lead in the seeded `framework_assessment` cadence so the
+        original day-0 / day-3 / day-7 emails fire from the nurture engine
+        instead of being scheduled inline here.
 
-    Returns:
-        dict with contact_id, task_id, emails_scheduled
+    Returns the same `{contact_id, task_id, emails_scheduled}` shape callers
+    expect, plus extra keys (`crm_person_id`, `enrollment_id`) for new code.
+    The `emails_scheduled` list is now empty at ingest time — the cadence
+    engine schedules each step on its tick.
+    """
+    from roost.extras.lead_nurture.services.leads import ingest_lead as _leads_ingest
+
+    email = lead_data.get("email", "").strip().lower()
+    name = lead_data.get("name", "").strip()
+    if not email:
+        return {"error": "Email is required"}
+
+    # Build template variables for the seeded framework_assessment templates.
+    factors = ", ".join(lead_data.get("risk_factors", [])[:3]) \
+        or "See your full assessment report"
+    fields = {
+        "name": name or "there",
+        "first_name": (name.split()[0] if name else "") or "there",
+        "org_name": lead_data.get("org_name") or "your organisation",
+        "risk_score": lead_data.get("risk_score", "?"),
+        "risk_level": lead_data.get("risk_level", "Unknown"),
+        "risk_factors": factors,
+    }
+
+    result = _leads_ingest(
+        channel="web_form",
+        email=email,
+        name=name,
+        org_name=lead_data.get("org_name") or "",
+        cadence_slug="framework_assessment",
+        vertical="generic",
+        fields=fields,
+        deal_name=f"Framework assessment lead: {name or email}",
+        deal_stage="Lead",
+        source="framework_assessment",
+    )
+
+    # Translate to the legacy return shape.
+    return {
+        "contact_id": result.get("crm_person_id"),
+        "task_id": result.get("local_task_id"),
+        "emails_scheduled": [],   # cadence engine schedules each step on tick
+        "enrollment_id": result.get("enrollment_id"),
+        "crm_person_id": result.get("crm_person_id"),
+        "crm_deal_id": result.get("crm_deal_id"),
+        "errors": result.get("errors", []),
+    }
+
+
+def _legacy_ingest_lead(lead_data: dict) -> dict:
+    """Original inline implementation, kept for reference and rollback.
+    Not called from the live path. To restore old behavior, swap `ingest_lead`
+    above with this body and remove the cadence enrollment.
     """
     from roost.services.contacts import (
         create_contact,
