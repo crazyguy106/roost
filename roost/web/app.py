@@ -94,6 +94,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         _logger.exception("Failed to initialize Gmail subscriber (web)")
 
+    try:
+        from roost.extras.rpa.services.rpa_flows import seed_library as seed_rpa
+        rpa_result = seed_rpa()
+        if rpa_result.get("seeded"):
+            _logger.info(
+                "Seeded %d RPA flow config(s) (web)", rpa_result["seeded"]
+            )
+    except Exception:
+        _logger.exception("Failed to seed RPA library (web)")
+
     yield
 
 import re
@@ -466,3 +476,19 @@ function msg(t){log.textContent += t + '\\n';}
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Console-script entrypoint for `roost-web` (bare-metal / venv use).
+
+    Mirrors the Docker entrypoint (`python -m uvicorn roost.web.app:app`)
+    so systemd + venv installs work without a separate launcher.
+    """
+    import os
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host=os.getenv("WEB_HOST", "0.0.0.0"),
+        port=int(os.getenv("WEB_PORT", "8080")),
+    )

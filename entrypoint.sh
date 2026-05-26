@@ -82,6 +82,8 @@ if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
     python -m roost.bot.main &
     BOT_PID=$!
     echo "[roost] roost-bot started (PID: $BOT_PID)"
+elif [ "$TELEGRAM_ENABLED" = "true" ]; then
+    echo "[roost] Telegram bot not started — TELEGRAM_BOT_TOKEN is empty (TELEGRAM_ENABLED=true)"
 else
     echo "[roost] Telegram bot disabled (TELEGRAM_ENABLED=$TELEGRAM_ENABLED)"
 fi
