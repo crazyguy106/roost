@@ -95,8 +95,15 @@ def _validate_classification(result: Any) -> dict | None:
     }
 
 
-def _parse_json_response(text: str) -> dict | None:
-    """Extract JSON from AI response, handling markdown code blocks."""
+def _parse_json_response(text: str | None) -> dict | None:
+    """Extract JSON from AI response, handling markdown code blocks.
+
+    Gemini occasionally returns `response.text == None` when the SDK
+    fills the candidate via `parts` instead of `text`; guard so callers
+    fall through to SAFE_DEFAULT instead of crashing on `.strip()`.
+    """
+    if not isinstance(text, str):
+        return None
     text = text.strip()
     # Strip markdown code fences
     if text.startswith("```"):
@@ -156,7 +163,11 @@ async def classify_message(
             config=types.GenerateContentConfig(
                 tools=None,               # NO TOOLS — critical CDR defense
                 temperature=0.2,          # Low creativity, high precision
-                max_output_tokens=512,    # Short output only
+                # The classification template (intent + urgency + 5 extracted
+                # fields + reasoning) is ~150 tokens before any content; real
+                # buyer messages need room to populate fields. 512 truncated
+                # mid-JSON on legitimate hot leads — kept tight at 1024.
+                max_output_tokens=1024,
             ),
         )
 
@@ -164,7 +175,11 @@ async def classify_message(
             logger.warning("Empty AI response during classification")
             return {**SAFE_DEFAULT, "reasoning": "empty_ai_response"}
 
-        raw_text = response.text
+        # response.text can be None even when a candidate exists (SDK quirk
+        # when parts come back without a flat text field). Coerce so the
+        # parser sees a string and the None-guard there isn't strictly load-
+        # bearing for this path.
+        raw_text = response.text or ""
 
     except Exception as e:
         logger.exception("AI CDR classification error")
