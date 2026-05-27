@@ -56,6 +56,19 @@ RUN groupadd -g 1000 dev \
     && mkdir -p /app/data /app/config \
     && chown -R dev:dev /app
 
+# Migrate Claude Code to its dev-writable native build. The npm-global
+# install under /usr/lib/node_modules is root-owned, but Claude's
+# auto-updater runs as `dev` and can't replace those files — it leaves
+# a dangling `.claude-XXXX` temp symlink and breaks the CLI on next
+# invocation. `claude install stable` writes a native binary under
+# /home/dev/.local/share/claude/ with a symlink at /home/dev/.local/bin/claude
+# that dev owns and can update freely. The `|| true` keeps the npm-global
+# claude as a fallback if the download flakes during build.
+RUN mkdir -p /home/dev/.local/bin /home/dev/.local/share \
+    && chown -R dev:dev /home/dev/.local \
+    && gosu dev bash -lc "claude install stable" \
+    || echo "WARN: claude install stable failed; npm-global claude remains as fallback"
+
 # Configure sshd
 RUN mkdir -p /run/sshd \
     && sed -i 's/#PermitUserEnvironment no/PermitUserEnvironment yes/' /etc/ssh/sshd_config \
