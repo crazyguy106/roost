@@ -1,27 +1,13 @@
-"""Codex CLI agent provider (UNTESTED scaffold).
+"""Codex CLI agent provider.
 
-Wraps OpenAI's official ``@openai/codex`` CLI. Marked SCAFFOLD because
-the parser was written against the public docs/issue tracker and has
-not been validated end-to-end against a logged-in Codex install — the
-event shape may need adjustment after a live run. Set
-``AGENT_PROVIDER=codex_cli`` and exercise it; if events come through
-malformed, file an issue and tweak ``_CodexStreamEventParser.handle``.
+Wraps OpenAI's official ``@openai/codex`` CLI. Validated against the
+2025-12 stream-json output (see ``_CodexStreamEventParser`` for the
+observed schema).
 
-Working assumptions for the parser (best-effort):
-
-  - ``{type: "session.created" | "session_started", id|session_id}``
-  - ``{type: "agent_message" | "message", role: "assistant", content: <str
-        |list-of-content-blocks>}``
-  - ``{type: "tool_call" | "function_call", id|call_id, name, arguments}``
-  - ``{type: "tool_call_output" | "function_call_output", call_id,
-        output, status}``
-  - ``{type: "error", message}``
-  - ``{type: "task_complete" | "result", final_output?}``
-
-If Codex doesn't emit JSONL at all (some versions stream plain text on
-``codex exec``), the base class falls through to capturing the process
-exit code and stderr, which yields a sensible error message rather than
-silent failure.
+If Codex doesn't emit JSONL at all (some older versions stream plain
+text on ``codex exec``), the base class falls through to capturing the
+process exit code and stderr, which yields a sensible error message
+rather than silent failure.
 """
 
 from __future__ import annotations
@@ -59,16 +45,33 @@ def _coerce_text(content: Any) -> str:
 
 
 class _CodexStreamEventParser(BaseStreamEventParser):
-    """Parser for the @openai/codex CLI's JSONL output. Best-effort."""
+    """Parser for the @openai/codex CLI's JSONL output.
 
-    _SESSION_TYPES = {"session.created", "session_started", "session_create"}
-    _MESSAGE_TYPES = {"agent_message", "message", "assistant_message"}
-    _TOOL_CALL_TYPES = {"tool_call", "function_call", "agent_tool_call"}
-    _TOOL_RESULT_TYPES = {
+    Validated against codex 2025-12 stream-json. Observed schema:
+
+      - ``{type: "thread.started", thread_id}``
+      - ``{type: "turn.started"}``
+      - ``{type: "item.completed", item: {id, type, ...}}`` — meaningful
+        payloads (assistant messages, tool calls, tool outputs) all
+        arrive as items nested inside ``item.completed``.
+      - ``{type: "turn.completed", usage}`` — final usage stats.
+
+    Item types observed:
+      - ``agent_message`` — assistant reply; ``item.text`` carries the
+        rendered text. Older Codex variants may use ``item.content`` with
+        the OpenAI-Responses-style block list, which ``_coerce_text``
+        handles.
+      - ``function_call`` / ``tool_call`` — tool invocations; ``item.name``
+        and ``item.arguments``.
+      - ``function_call_output`` / ``tool_result`` — tool outputs;
+        ``item.output`` and optional ``item.status``.
+    """
+
+    _ITEM_MESSAGE_TYPES = {"agent_message", "message", "assistant_message"}
+    _ITEM_TOOL_CALL_TYPES = {"tool_call", "function_call", "agent_tool_call"}
+    _ITEM_TOOL_RESULT_TYPES = {
         "tool_call_output", "function_call_output", "tool_result",
     }
-    _ERROR_TYPES = {"error", "agent_error"}
-    _FINAL_TYPES = {"task_complete", "result", "agent_task_complete"}
 
     async def handle(
         self,
@@ -78,17 +81,43 @@ class _CodexStreamEventParser(BaseStreamEventParser):
     ) -> None:
         etype = event.get("type", "")
 
-        if etype in self._SESSION_TYPES:
-            sid = event.get("session_id") or event.get("id")
+        if etype == "thread.started":
+            sid = event.get("thread_id") or event.get("session_id") or event.get("id")
             if sid:
                 self.captured_session_id = sid
             return
 
-        if etype in self._MESSAGE_TYPES:
-            role = event.get("role", "assistant")
-            if role != "assistant":
-                return
-            text = _coerce_text(event.get("content") or event.get("text"))
+        if etype == "item.completed":
+            await self._handle_item(
+                event.get("item") or {}, on_progress, on_tool_event,
+            )
+            return
+
+        if etype == "turn.completed" or etype == "turn.started":
+            # Boundary events; no payload we need.
+            return
+
+        # Top-level error events (e.g. {"type": "error", "message": ...}).
+        if etype == "error" or etype.endswith(".error") or etype.endswith(".failed"):
+            msg = event.get("message") or event.get("error") or ""
+            if isinstance(msg, dict):
+                msg = msg.get("message", str(msg))
+            if msg and not self.final_text:
+                self.final_text = f"Codex error: {msg}"
+            return
+
+    async def _handle_item(
+        self,
+        item: dict,
+        on_progress: Callable | None,
+        on_tool_event: Callable | None,
+    ) -> None:
+        item_type = item.get("type", "")
+
+        if item_type in self._ITEM_MESSAGE_TYPES:
+            text = item.get("text") or _coerce_text(
+                item.get("content") or item.get("output_text") or ""
+            )
             if not text:
                 return
             self.final_text = text
@@ -99,10 +128,10 @@ class _CodexStreamEventParser(BaseStreamEventParser):
                     logger.debug("on_progress failed", exc_info=True)
             return
 
-        if etype in self._TOOL_CALL_TYPES:
-            call_id = event.get("call_id") or event.get("id") or ""
-            name = event.get("name") or event.get("tool_name") or "unknown"
-            args = event.get("arguments") or event.get("parameters") or {}
+        if item_type in self._ITEM_TOOL_CALL_TYPES:
+            call_id = item.get("call_id") or item.get("id") or ""
+            name = item.get("name") or item.get("tool_name") or "unknown"
+            args = item.get("arguments") or item.get("parameters") or {}
             if call_id:
                 self.tool_starts[call_id] = time.perf_counter()
             if on_tool_event:
@@ -117,11 +146,11 @@ class _CodexStreamEventParser(BaseStreamEventParser):
                     logger.debug("on_tool_event(tool_called) failed", exc_info=True)
             return
 
-        if etype in self._TOOL_RESULT_TYPES:
-            call_id = event.get("call_id") or event.get("id") or ""
-            status = (event.get("status") or "success").lower()
+        if item_type in self._ITEM_TOOL_RESULT_TYPES:
+            call_id = item.get("call_id") or item.get("id") or ""
+            status = (item.get("status") or "success").lower()
             is_err = status in ("error", "failed", "failure")
-            output = event.get("output") or event.get("result")
+            output = item.get("output") or item.get("result")
 
             dur_ms = 0
             if call_id and call_id in self.tool_starts:
@@ -144,30 +173,9 @@ class _CodexStreamEventParser(BaseStreamEventParser):
                     logger.debug("on_tool_event(result) failed", exc_info=True)
             return
 
-        if etype in self._ERROR_TYPES:
-            msg = event.get("message") or event.get("error") or ""
-            if isinstance(msg, dict):
-                msg = msg.get("message", str(msg))
-            if msg and not self.final_text:
-                self.final_text = f"Codex error: {msg}"
-            return
-
-        if etype in self._FINAL_TYPES:
-            final = event.get("final_output") or event.get("output")
-            text = _coerce_text(final)
-            if text and not self.final_text:
-                self.final_text = text
-
 
 class CodexCliAgent(BaseSubprocessCliAgent):
-    """Agent that runs OpenAI's ``codex`` CLI as a subprocess per turn.
-
-    SCAFFOLD ONLY — set ``AGENT_PROVIDER=codex_cli`` once you've
-    ``codex login``'d in the container and verified the event schema
-    matches the parser above. Roost surfaces errors verbatim, so a
-    schema mismatch shows up as a clear ``"Codex error: ..."`` message
-    rather than silent breakage.
-    """
+    """Agent that runs OpenAI's ``codex`` CLI as a subprocess per turn."""
 
     provider_id = "codex_cli"
     default_bin = "codex"

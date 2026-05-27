@@ -41,10 +41,14 @@ RUN curl -fsSL -o /usr/local/bin/ttyd \
 # Each ships with its own auth flow (`claude login` / `gemini /auth` /
 # `codex login`) that writes state under /home/dev/.<vendor>/, which is
 # bind-mounted from the host so it survives rebuilds.
-RUN npm install -g \
-    @anthropic-ai/claude-code \
-    @google/gemini-cli \
-    @openai/codex
+#
+# Installed in separate steps — npm's atomic rename pattern races when
+# multiple top-level packages share a single install transaction, which
+# left a dangling `.claude-XXXX` temp symlink on the demo VPS and no
+# `claude` binary on PATH.
+RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @google/gemini-cli
+RUN npm install -g @openai/codex
 
 # Create non-root user
 RUN groupadd -g 1000 dev \
