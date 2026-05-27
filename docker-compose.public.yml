@@ -44,7 +44,9 @@ services:
       roost:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:2019/config/"]
+      # Use 127.0.0.1 (not localhost) — BusyBox wget in caddy:2-alpine prefers
+      # IPv6 ::1, but Caddy's admin endpoint binds IPv4-only on 127.0.0.1:2019.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 5s
       retries: 3

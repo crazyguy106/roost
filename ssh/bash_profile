@@ -1,0 +1,5 @@
+[ -f ~/.bashrc ] && . ~/.bashrc
+
+if [ -n "$SSH_TTY" ] && [ -z "$TMUX" ] && [ -t 0 ]; then
+    exec tmux new-session -A -s ai-claude claude
+fi

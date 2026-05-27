@@ -2,4 +2,10 @@ services:
   roost:
     ports: !override
       - "127.0.0.1:8090:8080"
-      - "2222:22"
+      - "127.0.0.1:2222:22"
+    cap_add:
+      - AUDIT_WRITE
+    volumes:
+      - ./ssh/authorized_keys:/home/dev/.ssh/authorized_keys:ro
+      - ./ssh/sshd_config.d:/etc/ssh/sshd_config.d:ro
+      - ./ssh/bash_profile:/home/dev/.bash_profile:ro
