@@ -17,6 +17,7 @@ Channels supported:
   * **whatsapp** — sent via `whatsapp.send_text_message` (best effort; needs
     24h-window check before the engine actually fires it — see notes inline)
   * **telegram** — broadcast via the bot HTTP API (operator-side test channel)
+  * **sms** — sent via `sms.send_sms` (Twilio REST, fail-closed on missing creds)
 
 Driven by a periodic call to `tick()` from a scheduler (APScheduler in the
 bot, or a separate `python -m roost.nurture_tick` cron) — not bound to any
@@ -201,6 +202,20 @@ def _dispatch_send(*, enrollment: dict, message: dict, when_utc: datetime) -> di
     if channel == "telegram":
         _notify_telegram(message["body"])
         return {"ok": True, "channel": channel, "ref": "broadcast", "detail": "broadcast"}
+
+    if channel == "sms":
+        from roost.extras.messaging_external.services.sms import send_sms
+        to = enrollment.get("contact_phone") or ""
+        if not to:
+            return {"ok": False, "channel": channel, "detail": "no contact_phone"}
+        try:
+            res = send_sms(to=to, body=message["body"])
+        except Exception as e:
+            logger.exception("sms send failed")
+            return {"ok": False, "channel": channel, "detail": str(e)}
+        if not res.get("ok"):
+            return {"ok": False, "channel": channel, "detail": res.get("error") or "send failed"}
+        return {"ok": True, "channel": channel, "ref": res.get("message_id", ""), "detail": "sent"}
 
     return {"ok": False, "channel": channel, "detail": f"unsupported channel: {channel}"}
 

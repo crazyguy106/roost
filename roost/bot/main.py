@@ -271,6 +271,8 @@ def main():
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_qualify_message),
             group=-1,
         )
+        from roost.extras.lead_nurture.bot.lead_capture import cmd_lead
+        app.add_handler(CommandHandler("lead", cmd_lead))
 
     # Agent free-text handler (group 0: catches messages not consumed by capture/triage)
     # Skill revision intercept is handled inside handle_agent_message

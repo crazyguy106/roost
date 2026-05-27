@@ -55,6 +55,12 @@ FEATURE_FLAGS = {
         "env_default": "false",
         "restart": True,
     },
+    "SMS_ENABLED": {
+        "label": "SMS (Twilio)",
+        "description": "Outbound SMS for lead-nurture cadences. Requires Twilio account SID / auth token / from-number.",
+        "env_default": "false",
+        "restart": True,
+    },
     "PROPERTY_AGENT_ENABLED": {
         "label": "Property-Agent Toolkit (Singapore)",
         "description": "Stamp-duty calculator, DNC scrub, CDD screening, HDB EIP. Master flag — DNC/CDD have own sub-flags for the external API integrations.",

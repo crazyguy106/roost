@@ -26,7 +26,7 @@ LIBRARY_DIR = Path(__file__).parent / "library"
 USER_DIR = PROJECT_ROOT / "data" / "cadences"
 
 REQUIRED_TOP_KEYS = {"slug", "name", "steps"}
-ALLOWED_CHANNELS = {"email", "whatsapp", "telegram"}
+ALLOWED_CHANNELS = {"email", "whatsapp", "telegram", "sms"}
 
 
 def _safe_resolve(path: Path | str, *, allowed_roots: list[Path]) -> Path:

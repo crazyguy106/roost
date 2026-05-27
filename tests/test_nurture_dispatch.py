@@ -120,6 +120,48 @@ def test_dispatch_whatsapp_raises(monkeypatch):
     assert "131047" in out["detail"]
 
 
+# ── SMS ───────────────────────────────────────────────────────────────
+
+
+def test_dispatch_sms_happy(monkeypatch):
+    from roost.extras.lead_nurture.services import nurture as n
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.sms.send_sms",
+        lambda to, body: {"ok": True, "message_id": "SM_abc"},
+    )
+    out = n._dispatch_send(
+        enrollment=_enr(), message=_msg("sms"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is True
+    assert out["channel"] == "sms"
+    assert out["ref"] == "SM_abc"
+
+
+def test_dispatch_sms_missing_phone():
+    from roost.extras.lead_nurture.services import nurture as n
+    out = n._dispatch_send(
+        enrollment=_enr(contact_phone=""), message=_msg("sms"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert "no contact_phone" in out["detail"]
+
+
+def test_dispatch_sms_adapter_error_surfaces(monkeypatch):
+    from roost.extras.lead_nurture.services import nurture as n
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.sms.send_sms",
+        lambda to, body: {"ok": False, "error": "SMS not enabled (SMS_ENABLED=false)"},
+    )
+    out = n._dispatch_send(
+        enrollment=_enr(), message=_msg("sms"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert "SMS not enabled" in out["detail"]
+
+
 # ── Telegram + unsupported ────────────────────────────────────────────
 
 
