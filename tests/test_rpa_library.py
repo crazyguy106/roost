@@ -35,7 +35,7 @@ def clean_rpa_table():
 
 def test_library_files_all_validate():
     """Every shipped YAML in library/ must parse and validate."""
-    from roost.services.rpa_flows import LIBRARY_DIR, load_yaml
+    from roost.extras.rpa.services.rpa_flows import LIBRARY_DIR, load_yaml
     files = sorted(LIBRARY_DIR.glob("*.yaml"))
     assert files, "no library files found"
     for p in files:
@@ -43,25 +43,25 @@ def test_library_files_all_validate():
 
 
 def test_validator_catches_missing_op():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({"portal": "x", "steps": [{"selector": "a"}]})
     assert any("missing `op`" in e for e in errs)
 
 
 def test_validator_catches_unknown_op():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({"portal": "x", "steps": [{"op": "teleport"}]})
     assert any("unknown op" in e for e in errs)
 
 
 def test_validator_catches_missing_required_arg():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({"portal": "x", "steps": [{"op": "fill", "selector": "a"}]})
     assert any("missing required arg `value`" in e for e in errs)
 
 
 def test_validator_catches_bad_placeholder():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({
         "portal": "x",
         "steps": [{"op": "fill", "selector": "a", "value": "$nosuch:bad"}],
@@ -70,7 +70,7 @@ def test_validator_catches_bad_placeholder():
 
 
 def test_validator_accepts_all_known_placeholders():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     cfg = {
         "portal": "x",
         "steps": [
@@ -85,14 +85,14 @@ def test_validator_accepts_all_known_placeholders():
 
 
 def test_validator_rejects_empty_steps():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({"portal": "x", "steps": []})
     assert any("non-empty list" in e for e in errs)
 
 
 def test_seed_library_writes_to_db(clean_rpa_table):
-    from roost.services.rpa_flows import seed_library
-    from roost.services.rpa_flows.configs import get_config
+    from roost.extras.rpa.services.rpa_flows import seed_library
+    from roost.extras.rpa.services.rpa_flows.configs import get_config
 
     result = seed_library()
     assert result["seeded"] >= 1
@@ -105,7 +105,7 @@ def test_seed_library_writes_to_db(clean_rpa_table):
 
 
 def test_seed_library_is_idempotent(clean_rpa_table):
-    from roost.services.rpa_flows import seed_library
+    from roost.extras.rpa.services.rpa_flows import seed_library
     first = seed_library()
     second = seed_library()
     assert first["seeded"] == second["skipped"]
@@ -113,8 +113,8 @@ def test_seed_library_is_idempotent(clean_rpa_table):
 
 
 def test_seed_library_does_not_clobber_user_edits(clean_rpa_table):
-    from roost.services.rpa_flows import seed_library
-    from roost.services.rpa_flows.configs import set_config, get_config
+    from roost.extras.rpa.services.rpa_flows import seed_library
+    from roost.extras.rpa.services.rpa_flows.configs import set_config, get_config
 
     set_config(
         "aia", user_id="",
@@ -132,8 +132,8 @@ def test_seed_library_does_not_clobber_user_edits(clean_rpa_table):
 
 def test_round_trip_import_export(tmp_path: Path, clean_rpa_table):
     """YAML → DB → YAML round-trip preserves the steps."""
-    from roost.services.rpa_flows import LIBRARY_DIR, USER_DIR
-    from roost.services.rpa_flows import import_to_db, export_from_db
+    from roost.extras.rpa.services.rpa_flows import LIBRARY_DIR, USER_DIR
+    from roost.extras.rpa.services.rpa_flows import import_to_db, export_from_db
 
     src = LIBRARY_DIR / "example.yaml"
 
@@ -156,7 +156,7 @@ def test_round_trip_import_export(tmp_path: Path, clean_rpa_table):
 
 def test_import_rejects_path_traversal(tmp_path: Path, clean_rpa_table):
     """Files outside library/ and data/rpa_flows/ must be rejected."""
-    from roost.services.rpa_flows import import_to_db
+    from roost.extras.rpa.services.rpa_flows import import_to_db
 
     rogue = tmp_path / "rogue.yaml"
     rogue.write_text("portal: rogue\nsteps:\n  - op: log\n")
@@ -165,7 +165,7 @@ def test_import_rejects_path_traversal(tmp_path: Path, clean_rpa_table):
 
 
 def test_validator_accepts_whatsapp_send_op():
-    from roost.services.rpa_flows.schema import validate_flow, KNOWN_OPS
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow, KNOWN_OPS
     assert "whatsapp_send" in KNOWN_OPS
     cfg = {
         "portal": "x",
@@ -181,7 +181,7 @@ def test_validator_accepts_whatsapp_send_op():
 
 
 def test_validator_rejects_whatsapp_send_without_to():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({
         "portal": "x",
         "steps": [{"op": "whatsapp_send", "body": "hi"}],
@@ -190,7 +190,7 @@ def test_validator_rejects_whatsapp_send_without_to():
 
 
 def test_validator_accepts_screenshot_op():
-    from roost.services.rpa_flows.schema import validate_flow, KNOWN_OPS
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow, KNOWN_OPS
     assert "screenshot" in KNOWN_OPS
     cfg = {
         "portal": "x",
@@ -204,7 +204,7 @@ def test_validator_accepts_screenshot_op():
 
 
 def test_list_library_reports_each_file():
-    from roost.services.rpa_flows import list_library
+    from roost.extras.rpa.services.rpa_flows import list_library
     items = list_library()
     portals = {it["portal"] for it in items}
     assert {"example", "aia", "great_eastern", "hdb_eip"} <= portals
@@ -213,7 +213,7 @@ def test_list_library_reports_each_file():
 
 
 def test_validator_accepts_select_option_op():
-    from roost.services.rpa_flows.schema import validate_flow, KNOWN_OPS
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow, KNOWN_OPS
     assert "select_option" in KNOWN_OPS
     cfg = {
         "portal": "x",
@@ -226,7 +226,7 @@ def test_validator_accepts_select_option_op():
 
 
 def test_validator_rejects_select_option_without_value():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({
         "portal": "x",
         "steps": [{"op": "select_option", "selector": "select#x"}],
@@ -235,7 +235,7 @@ def test_validator_rejects_select_option_without_value():
 
 
 def test_validator_accepts_await_user_session_op():
-    from roost.services.rpa_flows.schema import validate_flow, KNOWN_OPS
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow, KNOWN_OPS
     assert "await_user_session" in KNOWN_OPS
     cfg = {
         "portal": "x",
@@ -248,7 +248,7 @@ def test_validator_accepts_await_user_session_op():
 
 
 def test_validator_rejects_await_user_session_without_selector():
-    from roost.services.rpa_flows.schema import validate_flow
+    from roost.extras.rpa.services.rpa_flows.schema import validate_flow
     errs = validate_flow({
         "portal": "x",
         "steps": [{"op": "await_user_session"}],
@@ -257,7 +257,7 @@ def test_validator_rejects_await_user_session_without_selector():
 
 
 def test_hdb_eip_library_file_validates():
-    from roost.services.rpa_flows import LIBRARY_DIR, load_yaml
+    from roost.extras.rpa.services.rpa_flows import LIBRARY_DIR, load_yaml
     cfg = load_yaml(LIBRARY_DIR / "hdb_eip.yaml")
     ops = [s["op"] for s in cfg["steps"]]
     assert "select_option" in ops

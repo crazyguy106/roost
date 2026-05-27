@@ -456,7 +456,7 @@ async def set_crm_provider(request: Request):
     from roost.services.settings import set_setting
     set_setting("crm_provider", provider)
     try:
-        from roost.services.crm import reset_provider_cache
+        from roost.extras.crm.services import reset_provider_cache
         reset_provider_cache()
     except Exception:
         pass
@@ -467,7 +467,7 @@ async def set_crm_provider(request: Request):
 def test_crm(request: Request):
     """Ping the active CRM provider."""
     try:
-        from roost.services.crm import get_provider, reset_provider_cache
+        from roost.extras.crm.services import get_provider, reset_provider_cache
         reset_provider_cache()
         crm = get_provider(_active_crm_provider())
         result = crm.test_connection()

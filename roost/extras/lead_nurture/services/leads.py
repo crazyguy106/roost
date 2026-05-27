@@ -22,7 +22,7 @@ Roost contacts table, so dedupe and notes still happen, just locally.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from roost.extras.lead_nurture.services import cadences as cadences_svc
@@ -52,7 +52,7 @@ def _summary_note(
     lines = [
         f"Lead captured via {channel}",
         f"Source: {source or '(unspecified)'}",
-        f"Captured at: {datetime.utcnow().isoformat(timespec='seconds')}Z",
+        f"Captured at: {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}",
     ]
     if classification:
         lines.append(

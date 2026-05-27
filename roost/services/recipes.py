@@ -268,7 +268,7 @@ async def execute_recipe(
     recipe is treated as a browser-automation flow and dispatched to
     `roost.services.rpa_flows`. The AI CDR pipeline is skipped.
     """
-    from roost.services.ai_cdr import classify_message
+    from roost.extras.messaging_external.services.ai_cdr import classify_message
 
     recipe = get_recipe(recipe_id)
     if "error" in recipe:
@@ -364,7 +364,7 @@ async def _execute_rpa_recipe(
     `instructions` format:
         RPA_FLOW:<portal>            (optional second line: JSON params)
     """
-    from roost.services import rpa_flows, rpa_runs
+    from roost.extras.rpa.services import rpa_flows, rpa_runs
 
     parts = instructions.split("\n", 1)
     portal = parts[0].split(":", 1)[1].strip().lower()

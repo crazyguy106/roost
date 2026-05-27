@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}SME Ops Sync Status — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">SME Ops — Sync Status</h1>
+        <p class="text-sm opacity-70">Adapter health for the SME Ops vertical bundle. Zapier ingress is the universal entry point; per-app adapters land in Phase 1+.</p>
+    </div>
+</div>
+
+<section class="mb-6">
+    <div class="border rounded p-4 {% if pending_drafts %}border-amber-400 bg-amber-50{% endif %}">
+        <h2 class="font-semibold mb-2">Pending drafts (require approval)</h2>
+        {% if pending_drafts %}
+            <p class="text-xs opacity-70 mb-3">Money-moving writes (Stripe refunds, Shopify cancels, non-DRAFT Xero invoices) drafted by an agent. Approve to execute, reject to discard.</p>
+            <table class="w-full text-sm">
+                <thead><tr class="text-left">
+                    <th class="py-1">Tool</th><th>Args</th><th>Created</th><th></th>
+                </tr></thead>
+                <tbody>
+                {% for d in pending_drafts %}
+                <tr class="border-t align-top">
+                    <td class="py-1 font-mono text-xs">{{ d.tool_name }}</td>
+                    <td class="py-1 font-mono text-xs"><code>{{ d.args | tojson }}</code></td>
+                    <td class="py-1 text-xs opacity-70">{{ d.created_at }}</td>
+                    <td class="py-1 text-right">
+                        <button class="text-xs px-2 py-1 rounded bg-green-600 text-white"
+                                onclick="approveDraft({{ d.id }})">Approve</button>
+                        <button class="text-xs px-2 py-1 rounded bg-gray-200"
+                                onclick="rejectDraft({{ d.id }})">Reject</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <script>
+            async function approveDraft(id) {
+                if (!confirm('Approve draft ' + id + '? This will execute the underlying API call.')) return;
+                const r = await fetch('/api/sme/drafts/' + id + '/approve', {method: 'POST'});
+                const j = await r.json();
+                alert('Status: ' + (j.status || 'error'));
+                location.reload();
+            }
+            async function rejectDraft(id) {
+                const reason = prompt('Reason for rejection (optional):') || '';
+                const r = await fetch('/api/sme/drafts/' + id + '/reject',
+                    {method: 'POST', headers: {'Content-Type': 'application/json'},
+                     body: JSON.stringify({reason})});
+                const j = await r.json();
+                alert('Status: ' + (j.status || 'error'));
+                location.reload();
+            }
+            </script>
+        {% else %}
+            <p class="text-sm opacity-70">No pending drafts.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="space-y-4">
+    <div class="border rounded p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">Zapier</h2>
+            <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-800' if zapier_enabled else 'bg-gray-200 text-gray-600' }}">
+                {{ "enabled" if zapier_enabled else "disabled" }}
+            </span>
+        </div>
+        <dl class="text-sm grid grid-cols-2 gap-y-1">
+            <dt class="opacity-70">Ingress webhook</dt>
+            <dd>{{ "configured" if zapier_ingress_configured else "no token set" }}</dd>
+            <dt class="opacity-70">Outbound URL</dt>
+            <dd>{{ "configured" if zapier_outbound_configured else "not set" }}</dd>
+            <dt class="opacity-70">Last event received</dt>
+            <dd>{{ zapier_stats.last_received_at or "—" }}{% if zapier_stats.last_event %} ({{ zapier_stats.last_event }}){% endif %}</dd>
+            <dt class="opacity-70">Today</dt>
+            <dd>
+                {% if zapier_stats.today_counts %}
+                    {% for status, n in zapier_stats.today_counts.items() %}{{ n }} {{ status }}{% if not loop.last %}, {% endif %}{% endfor %}
+                {% else %}none{% endif %}
+            </dd>
+        </dl>
+        <p class="text-xs opacity-60 mt-3">
+            Endpoint: <code>POST /api/zapier/inbound</code> with header
+            <code>Authorization: Bearer &lt;ZAPIER_INGRESS_TOKEN&gt;</code> and body
+            <code>{ "event": "...", "payload": { ... } }</code>.
+        </p>
+    </div>
+
+    {# Stripe #}
+    <div class="border rounded p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">Stripe</h2>
+            <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-800' if stripe_enabled else 'bg-gray-200 text-gray-600' }}">
+                {{ "enabled" if stripe_enabled else "disabled" }}
+            </span>
+        </div>
+        <dl class="text-sm grid grid-cols-2 gap-y-1">
+            <dt class="opacity-70">API key</dt>
+            <dd>{{ "configured" if stripe_api_configured else "not set" }}</dd>
+            <dt class="opacity-70">Webhook secret</dt>
+            <dd>{{ "configured" if stripe_webhook_configured else "not set" }}</dd>
+            <dt class="opacity-70">Last event received</dt>
+            <dd>{{ stripe_stats.last_received_at or "—" }}{% if stripe_stats.last_event %} ({{ stripe_stats.last_event }}){% endif %}</dd>
+        </dl>
+        <p class="text-xs opacity-60 mt-3">Webhook: <code>POST /api/stripe/webhook</code> (Stripe-Signature verified).</p>
+    </div>
+
+    {# Shopify #}
+    <div class="border rounded p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">Shopify</h2>
+            <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-800' if shopify_enabled else 'bg-gray-200 text-gray-600' }}">
+                {{ "enabled" if shopify_enabled else "disabled" }}
+            </span>
+        </div>
+        <dl class="text-sm grid grid-cols-2 gap-y-1">
+            <dt class="opacity-70">Admin API</dt>
+            <dd>{{ "configured" if shopify_api_configured else "not set" }}</dd>
+            <dt class="opacity-70">Webhook secret</dt>
+            <dd>{{ "configured" if shopify_webhook_configured else "not set" }}</dd>
+            <dt class="opacity-70">Last event received</dt>
+            <dd>{{ shopify_stats.last_received_at or "—" }}{% if shopify_stats.last_event %} ({{ shopify_stats.last_event }}){% endif %}</dd>
+        </dl>
+        <p class="text-xs opacity-60 mt-3">Webhook: <code>POST /api/shopify/webhook</code> (HMAC-SHA256 verified).</p>
+    </div>
+
+    {# Xero #}
+    <div class="border rounded p-4">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">Xero</h2>
+            <span class="text-xs px-2 py-1 rounded {{ 'bg-green-100 text-green-800' if xero_enabled else 'bg-gray-200 text-gray-600' }}">
+                {{ "enabled" if xero_enabled else "disabled" }}
+            </span>
+        </div>
+        <dl class="text-sm grid grid-cols-2 gap-y-1">
+            <dt class="opacity-70">PAT + Tenant</dt>
+            <dd>{{ "configured" if xero_configured else "not set" }}</dd>
+        </dl>
+        <p class="text-xs opacity-60 mt-3">Read-only via Personal Access Token (Phase 1A). OAuth2 in Phase 1B.</p>
+    </div>
+
+    <div class="border rounded p-4 opacity-60">
+        <h2 class="font-semibold mb-2">Other adapters (Phase 2+)</h2>
+        <p class="text-sm">HitPay, HubSpot, Mailchimp, Lazada, Shopee, QuickBooks, WooCommerce, Pipedrive, Airtable — coming. Use the Zapier bridge above in the meantime.</p>
+    </div>
+</section>
+{% endblock %}

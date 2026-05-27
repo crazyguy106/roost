@@ -71,7 +71,7 @@ def patched_browser_service(monkeypatch, tmp_path):
     """Replace `browser_service.portal_context` with a no-op async ctx, and
     `download_via_action` with a stub that writes a 1-byte file and returns
     its path."""
-    from roost.services import browser_service
+    from roost.extras.rpa.services import browser_service
 
     @asynccontextmanager
     async def fake_ctx(user_id, portal_slug, **kw):
@@ -109,7 +109,7 @@ async def test_interpreter_walks_every_simple_op(fake_page, patched_browser_serv
     )
 
     # Patch the portal_context to yield a context whose new_page returns our fake_page
-    from roost.services import browser_service
+    from roost.extras.rpa.services import browser_service
 
     @asynccontextmanager
     async def fake_ctx(user_id, portal_slug, **kw):
@@ -118,8 +118,8 @@ async def test_interpreter_walks_every_simple_op(fake_page, patched_browser_serv
         yield bctx
     monkeypatch.setattr(browser_service, "portal_context", fake_ctx)
 
-    from roost.services.rpa_flows._interpreter import run_config
-    from roost.services import rpa_runs
+    from roost.extras.rpa.services.rpa_flows._interpreter import run_config
+    from roost.extras.rpa.services import rpa_runs
 
     cfg = {
         "portal_slug": "smoke",
@@ -164,7 +164,7 @@ async def test_interpreter_walks_every_simple_op(fake_page, patched_browser_serv
 async def test_interpreter_otp_pause_and_resume(fake_page, monkeypatch):
     """get_otp via TelegramOtpSource should pause the run and resume when
     rpa_runs.submit_input is called."""
-    from roost.services import browser_service, rpa_runs
+    from roost.extras.rpa.services import browser_service, rpa_runs
 
     @asynccontextmanager
     async def fake_ctx(user_id, portal_slug, **kw):
@@ -177,7 +177,7 @@ async def test_interpreter_otp_pause_and_resume(fake_page, monkeypatch):
     async def _noop(*_a, **_kw): return None
     monkeypatch.setattr(rpa_runs, "_notify_telegram", _noop)
 
-    from roost.services.rpa_flows._interpreter import run_config
+    from roost.extras.rpa.services.rpa_flows._interpreter import run_config
 
     cfg = {
         "portal_slug": "smoke_otp",
@@ -217,10 +217,10 @@ async def test_interpreter_screenshot_records_path(
     import importlib
     from roost import config as roost_config
     importlib.reload(roost_config)
-    from roost.services.rpa_flows import _interpreter
+    from roost.extras.rpa.services.rpa_flows import _interpreter
     importlib.reload(_interpreter)
 
-    from roost.services import browser_service, rpa_runs
+    from roost.extras.rpa.services import browser_service, rpa_runs
 
     captured = {}
     async def fake_screenshot(path, full_page=False):
@@ -263,10 +263,11 @@ async def test_interpreter_whatsapp_send_dispatches_to_service(
     import importlib
     from roost import config as roost_config
     importlib.reload(roost_config)
-    from roost.services.rpa_flows import _interpreter
+    from roost.extras.rpa.services.rpa_flows import _interpreter
     importlib.reload(_interpreter)
 
-    from roost.services import browser_service, rpa_runs, whatsapp
+    from roost.extras.rpa.services import browser_service, rpa_runs
+    from roost.extras.messaging_external.services import whatsapp
 
     sent = []
     def fake_send_text(to, body):
@@ -331,10 +332,10 @@ async def test_interpreter_download_one_records_path(
     import importlib
     from roost import config as roost_config
     importlib.reload(roost_config)
-    from roost.services.rpa_flows import _interpreter
+    from roost.extras.rpa.services.rpa_flows import _interpreter
     importlib.reload(_interpreter)
 
-    from roost.services import browser_service, rpa_runs
+    from roost.extras.rpa.services import browser_service, rpa_runs
 
     @asynccontextmanager
     async def fake_ctx(user_id, portal_slug, **kw):
@@ -356,3 +357,167 @@ async def test_interpreter_download_one_records_path(
     assert "error" not in result, result
     assert result["downloaded"], "expected at least one downloaded path"
     assert result["downloaded"][0].endswith("fake_download.zip")
+
+
+# ── telegram_send ─────────────────────────────────────────────────────
+
+
+class _FakeTelegramClient:
+    """Stand-in for httpx.AsyncClient used inside _step_telegram_send."""
+
+    def __init__(self, calls):
+        self._calls = calls
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_a):
+        return False
+
+    async def post(self, url, *, json=None, data=None, files=None):
+        self._calls.append({"url": url, "json": json, "data": data,
+                            "files": {k: (v[0], len(v[1])) for k, v in (files or {}).items()}})
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json = MagicMock(return_value={"ok": True, "result": {"message_id": 42}})
+        return resp
+
+
+def _patch_telegram_env(monkeypatch):
+    from roost import config as roost_config
+    monkeypatch.setattr(roost_config, "TELEGRAM_BOT_TOKEN", "fake-token")
+    monkeypatch.setattr(roost_config, "TELEGRAM_ALLOWED_USERS", ["111"])
+
+
+def _patch_httpx_client(monkeypatch, calls):
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: _FakeTelegramClient(calls))
+
+
+@pytest.mark.asyncio
+async def test_interpreter_telegram_send_text(fake_page, monkeypatch):
+    _patch_telegram_env(monkeypatch)
+    calls: list[dict] = []
+    _patch_httpx_client(monkeypatch, calls)
+
+    from roost.extras.rpa.services import browser_service, rpa_runs
+    from roost.extras.rpa.services.rpa_flows._interpreter import run_config
+
+    @asynccontextmanager
+    async def fake_ctx(user_id, portal_slug, **kw):
+        bctx = MagicMock()
+        bctx.new_page = AsyncMock(return_value=fake_page)
+        yield bctx
+    monkeypatch.setattr(browser_service, "portal_context", fake_ctx)
+
+    cfg = {
+        "portal_slug": "smoke_tg_text",
+        "steps": [
+            {"op": "telegram_send", "body": "$param:greeting"},
+        ],
+    }
+    run_id = rpa_runs.create_run(user_id="1", portal_slug="smoke_tg_text")
+    result = await run_config(cfg, run_id, "1", {"greeting": "Hello Ethan"})
+
+    assert "error" not in result, result
+    assert len(calls) == 1
+    assert calls[0]["url"].endswith("/sendMessage")
+    assert calls[0]["json"]["chat_id"] == "111"
+    assert calls[0]["json"]["text"] == "Hello Ethan"
+    assert result["vars"]["last_telegram_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_interpreter_telegram_send_document(fake_page, monkeypatch, tmp_path):
+    _patch_telegram_env(monkeypatch)
+    calls: list[dict] = []
+    _patch_httpx_client(monkeypatch, calls)
+
+    from roost.extras.rpa.services import browser_service, rpa_runs
+    from roost.extras.rpa.services.rpa_flows._interpreter import run_config
+
+    @asynccontextmanager
+    async def fake_ctx(user_id, portal_slug, **kw):
+        bctx = MagicMock()
+        bctx.new_page = AsyncMock(return_value=fake_page)
+        yield bctx
+    monkeypatch.setattr(browser_service, "portal_context", fake_ctx)
+
+    qr_file = tmp_path / "qr.png"
+    qr_file.write_bytes(b"\x89PNG fake-qr")
+
+    cfg = {
+        "portal_slug": "smoke_tg_doc",
+        "steps": [
+            {"op": "telegram_send", "to": "999", "caption": "Scan this",
+             "document": str(qr_file)},
+        ],
+    }
+    run_id = rpa_runs.create_run(user_id="1", portal_slug="smoke_tg_doc")
+    result = await run_config(cfg, run_id, "1", {})
+
+    assert "error" not in result, result
+    assert len(calls) == 1
+    assert calls[0]["url"].endswith("/sendDocument")
+    assert calls[0]["data"]["chat_id"] == "999"
+    assert calls[0]["data"]["caption"] == "Scan this"
+    assert "document" in calls[0]["files"]
+    name, size = calls[0]["files"]["document"]
+    assert name == "qr.png"
+    assert size == len(b"\x89PNG fake-qr")
+
+
+@pytest.mark.asyncio
+async def test_interpreter_telegram_send_keyboard_pauses_and_resumes(
+    fake_page, monkeypatch,
+):
+    """telegram_send with a keyboard should mark awaiting_input, send the
+    message with inline_keyboard markup, and resume via submit_input."""
+    _patch_telegram_env(monkeypatch)
+    calls: list[dict] = []
+    _patch_httpx_client(monkeypatch, calls)
+
+    from roost.extras.rpa.services import browser_service, rpa_runs
+    from roost.extras.rpa.services.rpa_flows._interpreter import run_config
+
+    @asynccontextmanager
+    async def fake_ctx(user_id, portal_slug, **kw):
+        bctx = MagicMock()
+        bctx.new_page = AsyncMock(return_value=fake_page)
+        yield bctx
+    monkeypatch.setattr(browser_service, "portal_context", fake_ctx)
+
+    cfg = {
+        "portal_slug": "smoke_tg_kbd",
+        "steps": [
+            {"op": "telegram_send", "body": "Which one?",
+             "keyboard": [
+                 [{"text": "Yes", "value": "yes"},
+                  {"text": "No", "value": "no"}],
+             ],
+             "as_var": "choice",
+             "timeout": 5},
+        ],
+    }
+    run_id = rpa_runs.create_run(user_id="1", portal_slug="smoke_tg_kbd")
+
+    async def submit_after_pause():
+        for _ in range(50):
+            run = rpa_runs.get_run(run_id)
+            if run and run.get("status") == "awaiting_input":
+                break
+            await asyncio.sleep(0.05)
+        rpa_runs.submit_input(run_id, "yes")
+
+    submitter = asyncio.create_task(submit_after_pause())
+    result = await run_config(cfg, run_id, "1", {})
+    await submitter
+
+    assert "error" not in result, result
+    assert len(calls) == 1
+    assert calls[0]["url"].endswith("/sendMessage")
+    markup = calls[0]["json"]["reply_markup"]
+    assert markup["inline_keyboard"][0][0]["text"] == "Yes"
+    assert markup["inline_keyboard"][0][0]["callback_data"] == f"rpa_choice:{run_id}:yes"
+    assert markup["inline_keyboard"][0][1]["callback_data"] == f"rpa_choice:{run_id}:no"
+    assert result["vars"]["choice"] == "yes"

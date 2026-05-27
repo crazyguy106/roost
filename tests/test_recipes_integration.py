@@ -32,12 +32,12 @@ class TestWhatsAppSignature:
     """verify_webhook_signature: HMAC-SHA256 against WHATSAPP_APP_SECRET."""
 
     def _patch_secret(self, secret: str):
-        import roost.services.whatsapp as wa
+        import roost.extras.messaging_external.services.whatsapp as wa
         wa.WHATSAPP_APP_SECRET = secret
 
     def test_valid_signature(self):
         self._patch_secret("test_app_secret_123")
-        from roost.services.whatsapp import verify_webhook_signature
+        from roost.extras.messaging_external.services.whatsapp import verify_webhook_signature
 
         body = b'{"object":"whatsapp_business_account","entry":[]}'
         digest = hmac.new(b"test_app_secret_123", body, hashlib.sha256).hexdigest()
@@ -47,7 +47,7 @@ class TestWhatsAppSignature:
 
     def test_wrong_secret_rejected(self):
         self._patch_secret("real_secret")
-        from roost.services.whatsapp import verify_webhook_signature
+        from roost.extras.messaging_external.services.whatsapp import verify_webhook_signature
 
         body = b'{"object":"whatsapp_business_account"}'
         # Compute with the wrong secret
@@ -58,7 +58,7 @@ class TestWhatsAppSignature:
 
     def test_malformed_signature_rejected(self):
         self._patch_secret("real_secret")
-        from roost.services.whatsapp import verify_webhook_signature
+        from roost.extras.messaging_external.services.whatsapp import verify_webhook_signature
 
         body = b'{"foo":"bar"}'
         # Missing the sha256= prefix
@@ -68,7 +68,7 @@ class TestWhatsAppSignature:
 
     def test_no_secret_configured_rejects(self):
         self._patch_secret("")
-        from roost.services.whatsapp import verify_webhook_signature
+        from roost.extras.messaging_external.services.whatsapp import verify_webhook_signature
 
         body = b'{}'
         assert verify_webhook_signature(body, "sha256=anything") is False
@@ -81,14 +81,14 @@ class TestWhatsAppHttpClient:
     """send_text_message / send_template_message / mark_as_read with mocked httpx."""
 
     def _patch_creds(self):
-        import roost.services.whatsapp as wa
+        import roost.extras.messaging_external.services.whatsapp as wa
         wa.WHATSAPP_ACCESS_TOKEN = "EAAtest_token"
         wa.WHATSAPP_PHONE_NUMBER_ID = "1234567890"
 
     @respx.mock
     def test_send_text_message_success(self):
         self._patch_creds()
-        from roost.services.whatsapp import send_text_message
+        from roost.extras.messaging_external.services.whatsapp import send_text_message
 
         route = respx.post(
             "https://graph.facebook.com/v21.0/1234567890/messages"
@@ -114,7 +114,7 @@ class TestWhatsAppHttpClient:
     @respx.mock
     def test_send_template_message_success(self):
         self._patch_creds()
-        from roost.services.whatsapp import send_template_message
+        from roost.extras.messaging_external.services.whatsapp import send_template_message
 
         respx.post(
             "https://graph.facebook.com/v21.0/1234567890/messages"
@@ -137,7 +137,7 @@ class TestWhatsAppHttpClient:
     @respx.mock
     def test_mark_as_read(self):
         self._patch_creds()
-        from roost.services.whatsapp import mark_as_read
+        from roost.extras.messaging_external.services.whatsapp import mark_as_read
 
         route = respx.post(
             "https://graph.facebook.com/v21.0/1234567890/messages"
@@ -154,7 +154,7 @@ class TestWhatsAppHttpClient:
     @respx.mock
     def test_send_text_handles_api_error(self):
         self._patch_creds()
-        from roost.services.whatsapp import send_text_message
+        from roost.extras.messaging_external.services.whatsapp import send_text_message
 
         respx.post(
             "https://graph.facebook.com/v21.0/1234567890/messages"
@@ -171,10 +171,10 @@ class TestWhatsAppHttpClient:
         assert result["details"]["error"]["code"] == 100
 
     def test_send_text_unconfigured(self):
-        import roost.services.whatsapp as wa
+        import roost.extras.messaging_external.services.whatsapp as wa
         wa.WHATSAPP_ACCESS_TOKEN = ""
         wa.WHATSAPP_PHONE_NUMBER_ID = ""
-        from roost.services.whatsapp import send_text_message
+        from roost.extras.messaging_external.services.whatsapp import send_text_message
 
         result = send_text_message("+6591234567", "Hi")
         assert "error" in result
@@ -188,7 +188,7 @@ class TestWeChatHttpClient:
     """_get_access_token cache logic + send_text_message with mocked httpx."""
 
     def _patch_creds(self):
-        import roost.services.wechat as wc
+        import roost.extras.messaging_external.services.wechat as wc
         wc.WECHAT_APP_ID = "wxtest_appid"
         wc.WECHAT_APP_SECRET = "wxtest_secret"
         # Reset token cache between tests
@@ -198,8 +198,8 @@ class TestWeChatHttpClient:
     @respx.mock
     def test_token_fetch_caches_response(self):
         self._patch_creds()
-        from roost.services.wechat import _get_access_token
-        import roost.services.wechat as wc
+        from roost.extras.messaging_external.services.wechat import _get_access_token
+        import roost.extras.messaging_external.services.wechat as wc
 
         route = respx.get(
             "https://api.weixin.qq.com/cgi-bin/token"
@@ -219,8 +219,8 @@ class TestWeChatHttpClient:
     @respx.mock
     def test_token_cache_hit_skips_http(self):
         self._patch_creds()
-        from roost.services.wechat import _get_access_token
-        import roost.services.wechat as wc
+        from roost.extras.messaging_external.services.wechat import _get_access_token
+        import roost.extras.messaging_external.services.wechat as wc
 
         # Pre-populate cache with a long-lived token
         wc._token_cache["token"] = "cached_token"
@@ -240,8 +240,8 @@ class TestWeChatHttpClient:
     def test_token_refresh_near_expiry(self):
         """If token expires in <5min, refresh."""
         self._patch_creds()
-        from roost.services.wechat import _get_access_token
-        import roost.services.wechat as wc
+        from roost.extras.messaging_external.services.wechat import _get_access_token
+        import roost.extras.messaging_external.services.wechat as wc
 
         # Token expiring in 60 seconds — should trigger refresh
         wc._token_cache["token"] = "stale_token"
@@ -262,7 +262,7 @@ class TestWeChatHttpClient:
     @respx.mock
     def test_send_text_message_success(self):
         self._patch_creds()
-        import roost.services.wechat as wc
+        import roost.extras.messaging_external.services.wechat as wc
         # Pre-cache a token to skip the token fetch
         wc._token_cache["token"] = "valid_token"
         wc._token_cache["expires_at"] = _time.time() + 3600
@@ -273,7 +273,7 @@ class TestWeChatHttpClient:
             return_value=httpx.Response(200, json={"errcode": 0, "errmsg": "ok"})
         )
 
-        from roost.services.wechat import send_text_message
+        from roost.extras.messaging_external.services.wechat import send_text_message
         result = send_text_message("oUser_test123", "Hello!")
 
         assert result["ok"] is True
@@ -298,11 +298,11 @@ class TestWhatsAppWebhookEndpoint:
         cfg.WHATSAPP_APP_SECRET = "app_secret_xyz"
 
         # Patch the names imported at module load time
-        import roost.web.api_whatsapp as api_wa
+        import roost.extras.messaging_external.web.api_whatsapp as api_wa
         api_wa.WHATSAPP_ENABLED = True
         api_wa.WHATSAPP_VERIFY_TOKEN = "verify_secret_123"
 
-        import roost.services.whatsapp as wa
+        import roost.extras.messaging_external.services.whatsapp as wa
         wa.WHATSAPP_APP_SECRET = "app_secret_xyz"
 
         from fastapi import FastAPI
@@ -387,10 +387,10 @@ class TestWeChatWebhookEndpoint:
         cfg.WECHAT_ENABLED = True
         cfg.WECHAT_TOKEN = "wechat_test_token"
 
-        import roost.web.api_wechat as api_wc
+        import roost.extras.messaging_external.web.api_wechat as api_wc
         api_wc.WECHAT_ENABLED = True
 
-        import roost.services.wechat as wc
+        import roost.extras.messaging_external.services.wechat as wc
         wc.WECHAT_TOKEN = "wechat_test_token"
 
         from fastapi import FastAPI
@@ -507,7 +507,7 @@ class TestRecipeExecutionE2E:
         )
 
         with patch(
-            "roost.services.ai_cdr.classify_message",
+            "roost.extras.messaging_external.services.ai_cdr.classify_message",
             new=AsyncMock(return_value=self._fake_classification()),
         ):
             result = await execute_recipe(
@@ -543,7 +543,7 @@ class TestRecipeExecutionE2E:
         )
 
         with patch(
-            "roost.services.ai_cdr.classify_message",
+            "roost.extras.messaging_external.services.ai_cdr.classify_message",
             new=AsyncMock(
                 return_value=self._fake_classification(intent="follow_up")
             ),
@@ -572,7 +572,7 @@ class TestRecipeExecutionE2E:
         )
 
         with patch(
-            "roost.services.ai_cdr.classify_message",
+            "roost.extras.messaging_external.services.ai_cdr.classify_message",
             new=AsyncMock(return_value=self._fake_classification()),
         ):
             result = await execute_recipe(
@@ -796,7 +796,7 @@ class TestMcpToolBridge:
         from roost.mcp import tools_recipes
 
         with patch(
-            "roost.services.ai_cdr.classify_message",
+            "roost.extras.messaging_external.services.ai_cdr.classify_message",
             new=AsyncMock(
                 return_value={
                     "intent": "buying_enquiry",
@@ -827,7 +827,7 @@ class TestMcpToolBridge:
         )
 
         with patch(
-            "roost.services.ai_cdr.classify_message",
+            "roost.extras.messaging_external.services.ai_cdr.classify_message",
             new=AsyncMock(
                 return_value={
                     "intent": "general",

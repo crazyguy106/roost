@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}SME Ops — Orders{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">SME Ops — Orders</h1>
+        <p class="text-sm opacity-70">Recent orders pulled live from each configured source. Sorted by creation time, most recent first.</p>
+    </div>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-4 text-xs">
+    {% for s in sources %}
+        <span class="px-2 py-1 rounded
+            {% if s.configured == false %}bg-gray-100 text-gray-500
+            {% elif s.error %}bg-red-100 text-red-700
+            {% else %}bg-green-100 text-green-800{% endif %}">
+            {{ s.name }}{% if s.configured == false %} (not configured)
+            {% elif s.error %} ({{ s.error }})
+            {% else %}: {{ s.count }}{% endif %}
+        </span>
+    {% endfor %}
+</div>
+
+{% if rows %}
+<div class="overflow-x-auto border rounded">
+<table class="w-full text-sm">
+    <thead class="bg-gray-50 text-left">
+        <tr>
+            <th class="p-2">Source</th>
+            <th class="p-2">Ref</th>
+            <th class="p-2">Customer</th>
+            <th class="p-2 text-right">Amount</th>
+            <th class="p-2">Status</th>
+            <th class="p-2">Fulfillment</th>
+            <th class="p-2">Created</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in rows %}
+        <tr class="border-t">
+            <td class="p-2"><span class="text-xs px-2 py-0.5 rounded bg-gray-100">{{ r.source }}</span></td>
+            <td class="p-2 font-mono text-xs">{{ r.ref }}</td>
+            <td class="p-2">{{ r.customer }}</td>
+            <td class="p-2 text-right">{{ "%.2f"|format(r.amount or 0) }} {{ r.currency or "" }}</td>
+            <td class="p-2">{{ r.status }}</td>
+            <td class="p-2">{{ r.fulfillment }}</td>
+            <td class="p-2 text-xs opacity-70">{{ r.created_at }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p class="text-sm opacity-70">No orders to display. Configure Shopify or Stripe to populate this view.</p>
+{% endif %}
+{% endblock %}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from roost.services import iras_stamp_duty as iras
+from roost.extras.property_agent.services import iras_stamp_duty as iras
 
 
 # ── BSD ──────────────────────────────────────────────────────────────

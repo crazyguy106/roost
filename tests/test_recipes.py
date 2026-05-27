@@ -111,7 +111,7 @@ class TestCDRValidation:
     """_validate_classification enforces schema constraints."""
 
     def test_valid_classification(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "buying_enquiry",
             "urgency": "hot",
@@ -126,7 +126,7 @@ class TestCDRValidation:
         assert result["extracted_fields"]["name"] == "Alice"
 
     def test_invalid_intent_rejected(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "hack_system",
             "urgency": "hot",
@@ -134,7 +134,7 @@ class TestCDRValidation:
         assert result is None
 
     def test_invalid_urgency_rejected(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "general",
             "urgency": "extreme",
@@ -142,7 +142,7 @@ class TestCDRValidation:
         assert result is None
 
     def test_confidence_clamped(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "general",
             "urgency": "cold",
@@ -152,7 +152,7 @@ class TestCDRValidation:
         assert result["confidence"] == 1.0
 
     def test_fields_truncated(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "general",
             "urgency": "cold",
@@ -162,7 +162,7 @@ class TestCDRValidation:
         assert len(result["extracted_fields"]["name"]) == 200
 
     def test_non_string_fields_rejected(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         result = _validate_classification({
             "intent": "general",
             "urgency": "cold",
@@ -172,7 +172,7 @@ class TestCDRValidation:
         assert "exploit" not in result["extracted_fields"]
 
     def test_non_dict_returns_none(self):
-        from roost.services.ai_cdr import _validate_classification
+        from roost.extras.messaging_external.services.ai_cdr import _validate_classification
         assert _validate_classification("not a dict") is None
         assert _validate_classification([1, 2, 3]) is None
 
@@ -181,22 +181,22 @@ class TestCDRJsonParser:
     """_parse_json_response handles various AI output formats."""
 
     def test_plain_json(self):
-        from roost.services.ai_cdr import _parse_json_response
+        from roost.extras.messaging_external.services.ai_cdr import _parse_json_response
         result = _parse_json_response('{"intent": "general"}')
         assert result == {"intent": "general"}
 
     def test_markdown_fenced(self):
-        from roost.services.ai_cdr import _parse_json_response
+        from roost.extras.messaging_external.services.ai_cdr import _parse_json_response
         result = _parse_json_response('```json\n{"intent": "general"}\n```')
         assert result == {"intent": "general"}
 
     def test_surrounded_by_text(self):
-        from roost.services.ai_cdr import _parse_json_response
+        from roost.extras.messaging_external.services.ai_cdr import _parse_json_response
         result = _parse_json_response('Here is the result: {"intent": "general"} done.')
         assert result == {"intent": "general"}
 
     def test_invalid_json(self):
-        from roost.services.ai_cdr import _parse_json_response
+        from roost.extras.messaging_external.services.ai_cdr import _parse_json_response
         result = _parse_json_response("not json at all")
         assert result is None
 
@@ -532,7 +532,7 @@ class TestWhatsAppWebhookParsing:
     """parse_webhook_entry extracts messages from Meta payloads."""
 
     def test_parse_text_message(self):
-        from roost.services.whatsapp import parse_webhook_entry
+        from roost.extras.messaging_external.services.whatsapp import parse_webhook_entry
 
         entry = {
             "changes": [{
@@ -557,13 +557,13 @@ class TestWhatsAppWebhookParsing:
         assert messages[0]["type"] == "text"
 
     def test_parse_empty_entry(self):
-        from roost.services.whatsapp import parse_webhook_entry
+        from roost.extras.messaging_external.services.whatsapp import parse_webhook_entry
 
         messages = parse_webhook_entry({"changes": []})
         assert messages == []
 
     def test_parse_button_reply(self):
-        from roost.services.whatsapp import parse_webhook_entry
+        from roost.extras.messaging_external.services.whatsapp import parse_webhook_entry
 
         entry = {
             "changes": [{
@@ -591,7 +591,7 @@ class TestWeChatMessageParsing:
     """parse_webhook_message extracts data from WeChat XML."""
 
     def test_parse_text_message(self):
-        from roost.services.wechat import parse_webhook_message
+        from roost.extras.messaging_external.services.wechat import parse_webhook_message
 
         xml = """<xml>
         <ToUserName><![CDATA[gh_official]]></ToUserName>
@@ -609,7 +609,7 @@ class TestWeChatMessageParsing:
         assert msg["text"] == "I want to know about insurance"
 
     def test_parse_event(self):
-        from roost.services.wechat import parse_webhook_message
+        from roost.extras.messaging_external.services.wechat import parse_webhook_message
 
         xml = """<xml>
         <ToUserName><![CDATA[gh_official]]></ToUserName>
@@ -624,7 +624,7 @@ class TestWeChatMessageParsing:
         assert msg["event"] == "subscribe"
 
     def test_build_text_reply(self):
-        from roost.services.wechat import build_text_reply
+        from roost.extras.messaging_external.services.wechat import build_text_reply
 
         reply = build_text_reply("oUser123", "gh_official", "Hello!")
         assert "<ToUserName><![CDATA[oUser123]]>" in reply
@@ -633,7 +633,7 @@ class TestWeChatMessageParsing:
         assert "<MsgType><![CDATA[text]]>" in reply
 
     def test_parse_invalid_xml(self):
-        from roost.services.wechat import parse_webhook_message
+        from roost.extras.messaging_external.services.wechat import parse_webhook_message
 
         msg = parse_webhook_message("not xml at all")
         assert msg == {}
@@ -648,10 +648,10 @@ class TestWeChatSignature:
         os.environ["WECHAT_TOKEN"] = "test_token_123"
 
         # Reload config
-        from roost.services.wechat import verify_webhook_signature
+        from roost.extras.messaging_external.services.wechat import verify_webhook_signature
         import roost.config
         roost.config.WECHAT_TOKEN = "test_token_123"
-        import roost.services.wechat as wc
+        import roost.extras.messaging_external.services.wechat as wc
         wc.WECHAT_TOKEN = "test_token_123"
 
         timestamp = "1700000000"
@@ -662,8 +662,8 @@ class TestWeChatSignature:
         assert verify_webhook_signature(expected, timestamp, nonce) is True
 
     def test_verify_wrong_signature(self):
-        import roost.services.wechat as wc
+        import roost.extras.messaging_external.services.wechat as wc
         wc.WECHAT_TOKEN = "test_token_123"
 
-        from roost.services.wechat import verify_webhook_signature
+        from roost.extras.messaging_external.services.wechat import verify_webhook_signature
         assert verify_webhook_signature("wrong_sig", "12345", "nonce") is False

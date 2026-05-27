@@ -26,6 +26,10 @@ EVENT_TYPES = {
     "calendar_event_starting",
     "contact_created",
     "webhook",
+    "zapier_event",
+    "stripe_event",
+    "shopify_event",
+    "xero_event",
 }
 
 

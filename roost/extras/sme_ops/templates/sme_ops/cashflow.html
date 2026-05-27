@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}SME Ops — Cashflow{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <div>
+        <h1 class="text-xl font-bold">SME Ops — Cashflow</h1>
+        <p class="text-sm opacity-70">Money in / out / net across configured sources. Live pull from Xero (invoices + bank tx) and Stripe (charges).</p>
+    </div>
+</div>
+
+<section class="grid md:grid-cols-3 gap-3 mb-6">
+    {% for s in summary %}
+    <div class="border rounded p-4">
+        <div class="text-xs uppercase tracking-wide opacity-60">{{ s.source }}</div>
+        {% if s.configured == false %}
+            <div class="text-sm mt-2 opacity-60">Not configured</div>
+        {% else %}
+            <div class="mt-2 text-sm space-y-1">
+                <div>In: <span class="font-mono">{{ "%.2f"|format(s["in"] or 0) }}</span></div>
+                <div>Out: <span class="font-mono">{{ "%.2f"|format(s.out or 0) }}</span></div>
+                <div class="font-semibold">Net: <span class="font-mono">{{ "%.2f"|format(s.net or 0) }}</span></div>
+            </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</section>
+
+{% if invoices %}
+<section class="mb-6">
+    <h2 class="font-semibold mb-2">Recent Xero invoices</h2>
+    <div class="overflow-x-auto border rounded">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left">
+            <tr>
+                <th class="p-2">Number</th>
+                <th class="p-2">Type</th>
+                <th class="p-2">Status</th>
+                <th class="p-2">Contact</th>
+                <th class="p-2 text-right">Total</th>
+                <th class="p-2 text-right">Due</th>
+                <th class="p-2">Due date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for i in invoices %}
+            <tr class="border-t">
+                <td class="p-2 font-mono text-xs">{{ i.number }}</td>
+                <td class="p-2"><span class="text-xs px-2 py-0.5 rounded bg-gray-100">{{ i.type }}</span></td>
+                <td class="p-2">{{ i.status }}</td>
+                <td class="p-2">{{ i.contact_name }}</td>
+                <td class="p-2 text-right font-mono">{{ "%.2f"|format(i.total or 0) }} {{ i.currency or "" }}</td>
+                <td class="p-2 text-right font-mono">{{ "%.2f"|format(i.amount_due or 0) }}</td>
+                <td class="p-2 text-xs">{{ i.due_date }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+
+{% if charges %}
+<section class="mb-6">
+    <h2 class="font-semibold mb-2">Recent Stripe charges</h2>
+    <div class="overflow-x-auto border rounded">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left">
+            <tr>
+                <th class="p-2">ID</th>
+                <th class="p-2">Status</th>
+                <th class="p-2">Customer</th>
+                <th class="p-2 text-right">Amount</th>
+                <th class="p-2">Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in charges %}
+            <tr class="border-t">
+                <td class="p-2 font-mono text-xs">{{ c.id }}</td>
+                <td class="p-2">{{ c.status }}</td>
+                <td class="p-2">{{ c.customer_id or "" }}</td>
+                <td class="p-2 text-right font-mono">{{ "%.2f"|format(c.amount or 0) }} {{ c.currency }}</td>
+                <td class="p-2 text-xs opacity-70">{{ c.description or "" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+
+{% if bank_txns %}
+<section>
+    <h2 class="font-semibold mb-2">Recent Xero bank transactions</h2>
+    <div class="overflow-x-auto border rounded">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left">
+            <tr>
+                <th class="p-2">Date</th>
+                <th class="p-2">Type</th>
+                <th class="p-2">Status</th>
+                <th class="p-2 text-right">Total</th>
+                <th class="p-2">Reconciled</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in bank_txns %}
+            <tr class="border-t">
+                <td class="p-2 text-xs">{{ t.date }}</td>
+                <td class="p-2">{{ t.type }}</td>
+                <td class="p-2">{{ t.status }}</td>
+                <td class="p-2 text-right font-mono">{{ "%.2f"|format(t.total or 0) }} {{ t.currency }}</td>
+                <td class="p-2">{{ "yes" if t.is_reconciled else "no" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</section>
+{% endif %}
+
+{% if not invoices and not charges and not bank_txns %}
+<p class="text-sm opacity-70">No data to display. Configure Xero and/or Stripe to populate this view.</p>
+{% endif %}
+{% endblock %}

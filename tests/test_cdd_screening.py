@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def configured_cdd(monkeypatch):
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     monkeypatch.setattr(cdd, "CDD_ENABLED", True)
     monkeypatch.setattr(cdd, "CDD_VENDOR", "complyadvantage")
     monkeypatch.setattr(cdd, "CDD_API_KEY", "test-key")
@@ -31,43 +31,43 @@ def _fake_resp(body: dict):
 
 
 def test_disabled_returns_config_error(monkeypatch):
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     monkeypatch.setattr(cdd, "CDD_ENABLED", False)
     with pytest.raises(cdd.CddConfigError, match="disabled"):
         cdd.screen("Test")
 
 
 def test_unknown_vendor_raises(monkeypatch):
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     monkeypatch.setattr(cdd, "CDD_VENDOR", "made-up")
     with pytest.raises(cdd.CddConfigError, match="unknown CDD vendor"):
         cdd.screen("Test")
 
 
 def test_acuris_not_implemented(monkeypatch):
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     monkeypatch.setattr(cdd, "CDD_VENDOR", "acuris")
     with pytest.raises(NotImplementedError):
         cdd.screen("Test")
 
 
 def test_missing_api_key_raises(monkeypatch):
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     monkeypatch.setattr(cdd, "CDD_API_KEY", "")
     with pytest.raises(cdd.CddConfigError, match="API_KEY"):
         cdd.screen("Test")
 
 
 def test_empty_name_rejected():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     with pytest.raises(ValueError, match="name is required"):
         cdd.screen("   ")
 
 
 def test_clean_screen_returns_no_hits():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     body = {"content": {"data": {"id": "search-123", "hits": []}}}
-    with patch("roost.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
+    with patch("roost.extras.property_agent.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
         out = cdd.screen("Tan Ah Kow", dob="1980-05-12", nationality="SG")
     assert out["ok"] is True
     assert out["matched"] is False
@@ -81,7 +81,7 @@ def test_clean_screen_returns_no_hits():
 
 
 def test_sanction_hit_marks_matched_and_high_risk():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     body = {"content": {"data": {"id": "s1", "hits": [
         {
             "score": 0.95,
@@ -93,7 +93,7 @@ def test_sanction_hit_marks_matched_and_high_risk():
             },
         }
     ]}}}
-    with patch("roost.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
+    with patch("roost.extras.property_agent.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
         out = cdd.screen("John Sanctioned")
     assert out["matched"] is True
     assert out["risk_score"] >= 0.9
@@ -102,7 +102,7 @@ def test_sanction_hit_marks_matched_and_high_risk():
 
 
 def test_false_positive_does_not_count_as_match():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     body = {"content": {"data": {"hits": [
         {
             "score": 0.4,
@@ -110,14 +110,14 @@ def test_false_positive_does_not_count_as_match():
             "doc": {"name": "Common Name", "types": ["pep"]},
         }
     ]}}}
-    with patch("roost.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
+    with patch("roost.extras.property_agent.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
         out = cdd.screen("Common Name")
     assert out["matched"] is False
     assert out["risk_score"] == 0.0
 
 
 def test_pep_hit_lower_risk_than_sanction():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     body = {"content": {"data": {"hits": [
         {
             "score": 0.8,
@@ -125,7 +125,7 @@ def test_pep_hit_lower_risk_than_sanction():
             "doc": {"name": "Some Minister", "types": ["pep-class-1"]},
         }
     ]}}}
-    with patch("roost.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
+    with patch("roost.extras.property_agent.services.cdd_screening.httpx.post", return_value=_fake_resp(body)):
         out = cdd.screen("Some Minister")
     assert out["matched"] is True
     # PEP class-1 weight 0.6 × potential_match 0.7 × score 0.8 = 0.336
@@ -133,7 +133,7 @@ def test_pep_hit_lower_risk_than_sanction():
 
 
 def test_search_payload_includes_dob_and_country():
-    from roost.services import cdd_screening as cdd
+    from roost.extras.property_agent.services import cdd_screening as cdd
     captured = {}
 
     def fake_post(url, params, json, timeout):
@@ -142,7 +142,7 @@ def test_search_payload_includes_dob_and_country():
         captured["json"] = json
         return _fake_resp({"content": {"data": {"hits": []}}})
 
-    with patch("roost.services.cdd_screening.httpx.post", side_effect=fake_post):
+    with patch("roost.extras.property_agent.services.cdd_screening.httpx.post", side_effect=fake_post):
         cdd.screen("Tan Ah Kow", dob="1980-05-12", nationality="sg", id_number="S1234567A")
 
     assert captured["params"] == {"api_key": "test-key"}

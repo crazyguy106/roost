@@ -491,7 +491,7 @@ def classify_inbound_message(
         sender: Sender identifier (name, phone, email).
     """
     try:
-        from roost.services.ai_cdr import classify_message_sync
+        from roost.extras.messaging_external.services.ai_cdr import classify_message_sync
         return classify_message_sync(message=message, sender=sender)
     except Exception as e:
         return {"error": str(e)}
