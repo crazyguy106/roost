@@ -198,7 +198,8 @@ See `docs/` for detailed guides:
 - [Multi-Tenancy](docs/multi-tenancy.md)
 - [Neurodivergent Features](docs/neurodivergent-features.md)
 - [RPA / Browser Automation](docs/rpa.md) — data-driven flows, OTP pause/resume, Singpass-assisted via `await_user_session`
-- [WhatsApp Adapter](docs/whatsapp-adapter.md) — Meta Cloud API integration
+- [WhatsApp Adapter](docs/whatsapp-adapter.md) — Meta Cloud API integration; STOP/HELP + `mark_inbound` parity for lead-nurture
+- [Telegram Customer Channel](docs/telegram-customer-channel.md) — same bot serves operators (allowlisted) and customer DMs (STOP/HELP, qualification, lead-capture, nurture)
 - [Property-Agent Toolkit](docs/property-agent-toolkit.md) — Singapore IRAS / PDPC / CEA compliance tools
 - [Lead Nurture](docs/lead-nurture.md) — multi-channel ingest + cadence engine on Attio Free, Telegram approval gate
 - [Daily Summary](docs/daily-summary.md) — end-of-day Telegram digest covering nurture, tasks, leads, recipes, RPA

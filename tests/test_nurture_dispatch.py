@@ -162,20 +162,90 @@ def test_dispatch_sms_adapter_error_surfaces(monkeypatch):
     assert "SMS not enabled" in out["detail"]
 
 
-# ── Telegram + unsupported ────────────────────────────────────────────
+# ── Telegram (customer DM via Bot API) ────────────────────────────────
 
 
-def test_dispatch_telegram_broadcast(monkeypatch):
+def test_dispatch_telegram_happy(monkeypatch):
+    """Customer DM path: reads `contact_telegram_chat_id` off enrollment,
+    calls telegram_out.send_text_message, returns the message_id as ref."""
     from roost.extras.lead_nurture.services import nurture as n
-    seen: list[str] = []
-    monkeypatch.setattr(n, "_notify_telegram", lambda text: seen.append(text))
+
+    captured: dict = {}
+
+    def fake_send(chat_id, body):
+        captured["chat_id"] = chat_id
+        captured["body"] = body
+        return {"ok": True, "message_id": "42", "provider": "telegram"}
+
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.telegram_out.send_text_message",
+        fake_send,
+    )
+
     out = n._dispatch_send(
-        enrollment=_enr(), message=_msg("telegram"),
+        enrollment=_enr(contact_telegram_chat_id="123456"),
+        message=_msg("telegram"),
         when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     assert out["ok"] is True
     assert out["channel"] == "telegram"
-    assert seen == ["Body text"]
+    assert out["ref"] == "42"
+    assert captured == {"chat_id": "123456", "body": "Body text"}
+
+
+def test_dispatch_telegram_missing_chat_id():
+    """No chat_id on the enrollment → fail closed with clear detail."""
+    from roost.extras.lead_nurture.services import nurture as n
+    out = n._dispatch_send(
+        enrollment=_enr(),  # no contact_telegram_chat_id
+        message=_msg("telegram"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert out["channel"] == "telegram"
+    assert "no contact_telegram_chat_id" in out["detail"]
+
+
+def test_dispatch_telegram_adapter_error_surfaces(monkeypatch):
+    """Adapter returns {ok: False, error: ...} → surface as detail."""
+    from roost.extras.lead_nurture.services import nurture as n
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.telegram_out.send_text_message",
+        lambda chat_id, body: {
+            "ok": False,
+            "error": "Telegram not enabled (TELEGRAM_ENABLED=false)",
+        },
+    )
+    out = n._dispatch_send(
+        enrollment=_enr(contact_telegram_chat_id="123456"),
+        message=_msg("telegram"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert "Telegram not enabled" in out["detail"]
+
+
+def test_dispatch_telegram_raises(monkeypatch):
+    """Bare exception inside the adapter call is caught and surfaced."""
+    from roost.extras.lead_nurture.services import nurture as n
+
+    def boom(chat_id, body):
+        raise RuntimeError("network gone")
+
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.telegram_out.send_text_message",
+        boom,
+    )
+    out = n._dispatch_send(
+        enrollment=_enr(contact_telegram_chat_id="123456"),
+        message=_msg("telegram"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert "network gone" in out["detail"]
+
+
+# ── Unsupported channel ───────────────────────────────────────────────
 
 
 def test_dispatch_unsupported_channel():

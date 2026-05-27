@@ -7,6 +7,7 @@ roost.extras imports each bundle module and reads `BUNDLE`.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
@@ -23,6 +24,16 @@ RegisterFn = Callable[["FastAPI", object], None]
 # into one string. Idempotent — uses CREATE TABLE IF NOT EXISTS.
 SchemaFn = Callable[[], str]
 
+# Migration callback runs after the bundle's CREATE TABLE batch. Receives
+# a live connection; should perform any ALTER TABLE / data-migration steps
+# and tolerate being re-run (e.g. catch sqlite3.OperationalError on
+# "duplicate column").
+MigrateFn = Callable[[sqlite3.Connection], None]
+
+
+def _noop_migrate(_conn: sqlite3.Connection) -> None:
+    return None
+
 
 @dataclass(frozen=True)
 class Bundle:
@@ -30,6 +41,7 @@ class Bundle:
     flag_name: str
     register: RegisterFn
     schema_sql: SchemaFn = lambda: ""
+    migrate: MigrateFn = _noop_migrate
 
     def enabled(self) -> bool:
         from roost import config

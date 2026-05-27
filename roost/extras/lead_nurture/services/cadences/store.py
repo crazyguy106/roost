@@ -156,6 +156,7 @@ def enroll_lead(
     crm_deal_id: str = "",
     contact_email: str = "",
     contact_phone: str = "",
+    contact_telegram_chat_id: str = "",
     contact_name: str = "",
     channel: str = "email",
     fields: dict | None = None,
@@ -179,11 +180,13 @@ def enroll_lead(
         cur = conn.execute(
             """INSERT INTO nurture_enrollments
                (cadence_id, cadence_slug, crm_person_id, crm_deal_id,
-                contact_email, contact_phone, contact_name, channel,
+                contact_email, contact_phone, contact_telegram_chat_id,
+                contact_name, channel,
                 fields_json, status, current_step, next_run_at, source, user_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?)""",
             (cadence["id"], cadence_slug, crm_person_id, crm_deal_id,
-             contact_email, contact_phone, contact_name, channel,
+             contact_email, contact_phone, contact_telegram_chat_id,
+             contact_name, channel,
              json.dumps(fields or {}), next_run_at, source, user_id),
         )
         conn.commit()
@@ -311,6 +314,93 @@ def exit_enrollments_by_deal(crm_deal_id: str, *, reason: str = "") -> int:
 def pause_enrollments_by_deal(crm_deal_id: str, *, reason: str = "") -> int:
     """Pause every active enrollment for the deal (human takeover)."""
     return _bulk_update_by_deal(crm_deal_id, new_status="paused", reason=reason)
+
+
+def _contact_clauses(
+    phone: str, email: str, telegram_chat_id: str,
+) -> tuple[str, list[Any]]:
+    """Build a `WHERE (...)` clause set from the contact identifiers.
+
+    Returns `(joined_where, params)` where joined_where is the OR'd
+    column-equality fragment (no leading WHERE / parens). Empty
+    identifiers are skipped. Caller must check at least one is set.
+    """
+    clauses: list[str] = []
+    params: list[Any] = []
+    if phone:
+        clauses.append("contact_phone = ?")
+        params.append(phone)
+    if email:
+        clauses.append("contact_email = ?")
+        params.append(email)
+    if telegram_chat_id:
+        clauses.append("contact_telegram_chat_id = ?")
+        params.append(telegram_chat_id)
+    return " OR ".join(clauses), params
+
+
+def exit_enrollments_by_contact(
+    *,
+    phone: str = "",
+    email: str = "",
+    telegram_chat_id: str = "",
+    reason: str = "",
+) -> int:
+    """Mark every active/paused enrollment matching phone, email, OR
+    telegram_chat_id as exited.
+
+    Used by the SMS opt-out flow (STOP keyword), the email unsubscribe
+    path, and the Telegram customer STOP handler. Compares trimmed exact
+    strings — caller is expected to pass the same shape that was
+    originally stored (E.164 for phone, integer-as-string for chat_id).
+    """
+    if not (phone or email or telegram_chat_id):
+        return 0
+    where, contact_params = _contact_clauses(phone, email, telegram_chat_id)
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            f"""UPDATE nurture_enrollments
+                   SET status = ?, pause_reason = ?, updated_at = datetime('now')
+                 WHERE ({where}) AND status IN ('active','paused')""",
+            ("exited", reason, *contact_params),
+        )
+        conn.commit()
+        return cur.rowcount or 0
+    finally:
+        conn.close()
+
+
+def mark_inbound_for_contact(
+    *,
+    phone: str = "",
+    email: str = "",
+    telegram_chat_id: str = "",
+    when_utc: str = "",
+) -> int:
+    """Stamp `last_inbound_at` on every active/paused enrollment for this
+    contact. Used by inbound channel handlers (SMS, WhatsApp, Telegram)
+    so the `wait_for_reply` step can detect that the lead has engaged.
+
+    Returns number of enrollments touched.
+    """
+    if not (phone or email or telegram_chat_id):
+        return 0
+    if not when_utc:
+        when_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    where, contact_params = _contact_clauses(phone, email, telegram_chat_id)
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            f"""UPDATE nurture_enrollments
+                   SET last_inbound_at = ?, updated_at = datetime('now')
+                 WHERE ({where}) AND status IN ('active','paused')""",
+            (when_utc, *contact_params),
+        )
+        conn.commit()
+        return cur.rowcount or 0
+    finally:
+        conn.close()
 
 
 # ── CRM stage-change router ────────────────────────────────────────────

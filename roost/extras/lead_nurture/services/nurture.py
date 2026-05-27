@@ -200,8 +200,37 @@ def _dispatch_send(*, enrollment: dict, message: dict, when_utc: datetime) -> di
             return {"ok": False, "channel": channel, "detail": str(e)}
 
     if channel == "telegram":
-        _notify_telegram(message["body"])
-        return {"ok": True, "channel": channel, "ref": "broadcast", "detail": "broadcast"}
+        # Customer DM via Bot API. Requires the customer to have messaged
+        # the bot first (Telegram bots cannot cold-DM). If we have no
+        # chat_id on the enrollment, surface the gap so the operator can
+        # nudge the contact to start the chat manually.
+        from roost.extras.messaging_external.services.telegram_out import (
+            send_text_message as telegram_send,
+        )
+        to = enrollment.get("contact_telegram_chat_id") or ""
+        if not to:
+            return {
+                "ok": False,
+                "channel": channel,
+                "detail": "no contact_telegram_chat_id",
+            }
+        try:
+            res = telegram_send(chat_id=to, body=message["body"])
+        except Exception as e:
+            logger.exception("telegram send failed")
+            return {"ok": False, "channel": channel, "detail": str(e)}
+        if not res.get("ok"):
+            return {
+                "ok": False,
+                "channel": channel,
+                "detail": res.get("error") or "send failed",
+            }
+        return {
+            "ok": True,
+            "channel": channel,
+            "ref": res.get("message_id", ""),
+            "detail": "sent",
+        }
 
     if channel == "sms":
         from roost.extras.messaging_external.services.sms import send_sms
@@ -317,6 +346,91 @@ def _schedule_next_step(enrollment: dict, cadence: dict, *, just_ran_index: int)
     )
 
 
+def _parse_iso_utc(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _handle_wait_for_reply(
+    *,
+    enrollment_id: int,
+    enrollment: dict,
+    cadence: dict,
+    step: dict,
+    step_index: int,
+) -> dict:
+    """`wait_for_reply` gate: if the lead has replied since the previous
+    step ran, exit the cadence (reply received — handing back to human).
+
+    If no reply yet and `timeout_days` (default 7) has not elapsed since
+    this step's scheduled fire, push next_run_at forward and stay active.
+
+    If timeout reached without reply, advance to the next step.
+    """
+    since_str = (
+        enrollment.get("last_step_at")
+        or enrollment.get("started_at")
+        or ""
+    )
+    since = _parse_iso_utc(since_str)
+    last_inbound = _parse_iso_utc(enrollment.get("last_inbound_at"))
+
+    if last_inbound and since and last_inbound > since:
+        cadences_svc.update_enrollment(
+            enrollment_id,
+            status="exited",
+            pause_reason="reply_received",
+            next_run_at=None,
+            last_step_at=_utc_str(_utc_now()),
+        )
+        return {
+            "ok": True,
+            "action": "exited_replied",
+            "enrollment_id": enrollment_id,
+            "step_index": step_index,
+        }
+
+    # No reply yet. The deadline must be anchored to the step's *original*
+    # scheduled fire time, not to enrollment["next_run_at"] — otherwise
+    # each deferral would push the deadline forward by another
+    # `timeout_days` and the gate would never expire.
+    timeout_days = int(step.get("timeout_days", 7))
+    now = _utc_now()
+    started = _parse_iso_utc(enrollment.get("started_at"))
+    if timeout_days > 0 and started is not None:
+        original_fire_at = _step_run_at(step, started)
+        deadline = original_fire_at + timedelta(days=timeout_days)
+        if now < deadline:
+            cadences_svc.update_enrollment(
+                enrollment_id,
+                next_run_at=_utc_str(deadline),
+                pause_reason=f"waiting_for_reply:{step_index}",
+            )
+            return {
+                "ok": True,
+                "action": "waiting_for_reply",
+                "enrollment_id": enrollment_id,
+                "step_index": step_index,
+                "deadline": _utc_str(deadline),
+            }
+
+    # Timeout elapsed (or no timeout configured) — advance.
+    _schedule_next_step(enrollment, cadence, just_ran_index=step_index)
+    return {
+        "ok": True,
+        "action": "wait_timeout",
+        "enrollment_id": enrollment_id,
+        "step_index": step_index,
+    }
+
+
 def advance_enrollment(enrollment_id: int) -> dict:
     """Run one step of an enrollment. Honors pre-approval rules.
 
@@ -342,6 +456,14 @@ def advance_enrollment(enrollment_id: int) -> dict:
         return {"ok": True, "action": "completed", "enrollment_id": enrollment_id}
 
     step = steps[step_index]
+    if step.get("type") == "wait_for_reply":
+        return _handle_wait_for_reply(
+            enrollment_id=enrollment_id,
+            enrollment=enrollment,
+            cadence=cadence,
+            step=step,
+            step_index=step_index,
+        )
     channel = step.get("channel") or enrollment.get("channel", "email")
     try:
         message = _build_message(

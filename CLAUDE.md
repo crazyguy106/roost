@@ -42,7 +42,7 @@ Core capabilities live under `roost/services/`, `roost/mcp/`, `roost/web/`. Vert
 | Capability | Service | MCP module | Web | Doc |
 |---|---|---|---|---|
 | **RPA** *(bundle)* | `extras/rpa/services/{rpa_flows/,browser_service.py,rpa_runs.py}` | `extras/rpa/mcp/tools_rpa.py` | `/rpa` run viewer + `api_rpa.py` + `api_sidecar.py` | `docs/rpa.md`, `docs/rpa-authoring.md`, `docs/rpa-for-users.md` |
-| **Messaging external** *(bundle)* — WhatsApp / WeChat / AI CDR | `extras/messaging_external/services/{whatsapp,wechat,ai_cdr}.py` | `extras/messaging_external/mcp/tools_whatsapp.py` | `extras/messaging_external/web/{api_whatsapp,api_wechat}.py` | `docs/whatsapp-adapter.md` |
+| **Messaging external** *(bundle)* — WhatsApp / WeChat / SMS / AI CDR | `extras/messaging_external/services/{whatsapp,wechat,sms,ai_cdr}.py` | `extras/messaging_external/mcp/tools_whatsapp.py` | `extras/messaging_external/web/{api_whatsapp,api_wechat}.py` | `docs/whatsapp-adapter.md`, `docs/sms-adapter.md` |
 | Charter system | `services/charter.py` | — | settings tab | — |
 | **Property-Agent Toolkit (SG)** *(bundle)* | `extras/property_agent/services/{iras_stamp_duty,pdpc_dnc,cdd_screening}.py` | `extras/property_agent/mcp/{tools_iras,tools_pdpc,tools_cdd}.py` | `/property-agent/*` | `docs/property-agent-toolkit.md`, `docs/aml-screening.md`, `docs/rpa-authoring.md` |
 | **SME Ops** *(bundle)* | `extras/sme_ops/services/{zapier,stripe,shopify,xero,xero_oauth}.py` | `extras/sme_ops/mcp/{tools_stripe,tools_shopify,tools_xero}.py` | `/sme/{sync-status,orders,cashflow}`, `/api/{zapier,stripe,shopify,xero}/*` | `docs/sme-ops.md` |
@@ -70,7 +70,7 @@ Full reference: `docs/property-agent-toolkit.md`.
 python3 -m pytest -q     # full suite
 ```
 
-526 tests at last count (2026-05-27). RPA interpreter and library tests stub Playwright; the live smoke test against `the-internet.herokuapp.com` is documented in `docs/rpa-authoring.md` and not part of CI.
+572 tests at last count (2026-05-27). RPA interpreter and library tests stub Playwright; the live smoke test against `the-internet.herokuapp.com` is documented in `docs/rpa-authoring.md` and not part of CI.
 
 ## When working in this repo
 

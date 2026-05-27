@@ -14,6 +14,7 @@ Gated by `LEAD_NURTURE_ENABLED`.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import TYPE_CHECKING
 
 from roost.extras._base import Bundle
@@ -62,6 +63,7 @@ def _schema_sql() -> str:
         crm_deal_id     TEXT NOT NULL DEFAULT '',
         contact_email   TEXT NOT NULL DEFAULT '',
         contact_phone   TEXT NOT NULL DEFAULT '',
+        contact_telegram_chat_id TEXT NOT NULL DEFAULT '',
         contact_name    TEXT NOT NULL DEFAULT '',
         channel         TEXT NOT NULL DEFAULT 'email',
         fields_json     TEXT NOT NULL DEFAULT '{}',
@@ -70,6 +72,7 @@ def _schema_sql() -> str:
         current_step    INTEGER NOT NULL DEFAULT 0,
         started_at      TEXT NOT NULL DEFAULT (datetime('now')),
         last_step_at    TEXT DEFAULT NULL,
+        last_inbound_at TEXT DEFAULT NULL,
         next_run_at     TEXT DEFAULT NULL,
         pause_reason    TEXT DEFAULT '',
         source          TEXT NOT NULL DEFAULT '',
@@ -97,9 +100,26 @@ def _schema_sql() -> str:
     """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after the initial schema landed.
+
+    Each ALTER is wrapped because sqlite3 has no `ADD COLUMN IF NOT EXISTS`.
+    """
+    for stmt in (
+        "ALTER TABLE nurture_enrollments ADD COLUMN last_inbound_at TEXT DEFAULT NULL",
+        "ALTER TABLE nurture_enrollments ADD COLUMN contact_telegram_chat_id TEXT NOT NULL DEFAULT ''",
+    ):
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+
 BUNDLE = Bundle(
     name="lead_nurture",
     flag_name="LEAD_NURTURE_ENABLED",
     register=_register,
     schema_sql=_schema_sql,
+    migrate=_migrate,
 )

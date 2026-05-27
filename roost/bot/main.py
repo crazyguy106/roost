@@ -266,6 +266,18 @@ def main():
     # doesn't also answer). Gated by LEAD_NURTURE_ENABLED.
     from roost.config import LEAD_NURTURE_ENABLED
     if LEAD_NURTURE_ENABLED:
+        # Customer fallback lives in its OWN group (-3). PTB only fires
+        # the first matching handler per group, and group -1 is already
+        # occupied by capture/triage/RPA. Group -3 also guarantees
+        # customer runs before link_message (group -2): customer defers
+        # "LINK <code>" itself by an explicit early return.
+        # Customer absorbs qualification routing, STOP/HELP intercept,
+        # last_inbound_at stamping and first-contact lead ingest.
+        from roost.extras.lead_nurture.bot.customer import handle_customer_message
+        app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_customer_message),
+            group=-3,
+        )
         from roost.extras.lead_nurture.bot.lead_qualify import handle_qualify_message
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_qualify_message),

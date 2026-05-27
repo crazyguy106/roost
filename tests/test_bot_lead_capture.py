@@ -83,6 +83,48 @@ def test_classify_phone():
     assert value == "+6591234567"
 
 
+def test_classify_phone_strips_formatting_punctuation():
+    """Spaces, dashes, parens, dots — all common in user input."""
+    for raw, expected in (
+        ("+65 9123 4567", "+6591234567"),
+        ("+65-9123-4567", "+6591234567"),
+        ("(65) 9123 4567", "6591234567"),
+        ("+65.9123.4567", "+6591234567"),
+    ):
+        kind, value = _classify_contact(raw)
+        assert kind == "phone", f"{raw!r} → {kind}"
+        assert value == expected, f"{raw!r} normalised to {value!r}"
+
+
+def test_classify_local_8_digit_phone_accepted():
+    """SG/MY/HK mobile without country code is still a plausible phone."""
+    kind, value = _classify_contact("91234567")
+    assert kind == "phone"
+    assert value == "91234567"
+
+
+def test_classify_rejects_too_short():
+    kind, _ = _classify_contact("1234567")  # 7 digits — below ITU min
+    assert kind == "unknown"
+
+
+def test_classify_rejects_too_long():
+    kind, _ = _classify_contact("+1234567890123456")  # 16 digits — above E.164 max
+    assert kind == "unknown"
+
+
+def test_classify_rejects_gibberish():
+    for raw in ("???", "hello", "abc@xyz", "@no-local", ""):
+        kind, _ = _classify_contact(raw)
+        assert kind == "unknown", f"{raw!r} → {kind}"
+
+
+def test_classify_rejects_letters_mixed_with_digits():
+    """'call me 9123' style — has digits but isn't a phone number."""
+    kind, _ = _classify_contact("call me 9123")
+    assert kind == "unknown"
+
+
 # ── handler ───────────────────────────────────────────────────────────
 
 
@@ -159,6 +201,26 @@ async def test_cmd_lead_surfaces_service_errors(monkeypatch):
     out = upd.message.reply_text.await_args.args[0]
     assert "not ingested" in out
     assert "CRM not configured" in out
+
+
+@pytest.mark.asyncio
+async def test_cmd_lead_rejects_unparseable_contact(monkeypatch):
+    """A non-email non-phone contact must NOT reach ingest_lead."""
+    called = {"n": 0}
+
+    def fake_ingest(**kw):
+        called["n"] += 1
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        "roost.extras.lead_nurture.services.leads.ingest_lead", fake_ingest,
+    )
+
+    upd = _make_update("/lead Alice | ??? gibberish ???")
+    await cmd_lead(upd, _ctx())
+    out = upd.message.reply_text.await_args.args[0]
+    assert "Couldn't parse" in out
+    assert called["n"] == 0  # service must not be invoked
 
 
 @pytest.mark.asyncio

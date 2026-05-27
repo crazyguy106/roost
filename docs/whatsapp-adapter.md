@@ -75,6 +75,30 @@ or `last_extracted` recorded by earlier steps. The op is fire-and-forget:
 Meta API errors are recorded in `$var:last_whatsapp_error` but do not
 abort the flow — the rest of the run still completes.
 
+## STOP / HELP keywords + lead-nurture parity
+
+`api_whatsapp.py::_process_inbound` runs a keyword intercept at the top
+of the inbound pipeline, mirroring the SMS adapter so customer opt-out
+semantics are consistent across every channel:
+
+| First token (uppercased, punctuation-stripped) | Action |
+|------------------------------------------------|--------|
+| `STOP`, `STOPALL`, `UNSUBSCRIBE`, `CANCEL`, `END`, `QUIT` | `cadences_store.exit_enrollments_by_contact(phone=…, reason="opted_out:whatsapp")` + send confirmation DM via `whatsapp.send_text_message`. Recipe pipeline and lead ingest are **skipped**. |
+| `HELP`, `INFO` | Send support-info DM. No exit, no ingest, no recipe. |
+
+Match is on the first whitespace-delimited token, so `stop.`, ` Stop! `,
+`UNSUBSCRIBE`, `cancel` all fire STOP. Failures inside the keyword
+branches (DB down, recipient blocked the bot) are logged and swallowed
+— we never raise back to Meta because that would trigger webhook
+retry-storms.
+
+For non-STOP/HELP inbound, `_process_inbound` also calls
+`cadences_store.mark_inbound_for_contact(phone=sender_phone)` before
+ingest so the `wait_for_reply` step in cadence YAML can detect
+engagement and exit the enrollment with
+`pause_reason='reply_received'`. See
+[docs/lead-nurture.md](lead-nurture.md) for the full nurture surface.
+
 ## 24-hour window & templates
 
 Free-form text and media may only be sent **within 24 hours of the

@@ -97,9 +97,12 @@ def run_bundle_schemas(conn: "sqlite3.Connection") -> None:
         if bundle is None:
             continue
         sql = bundle.schema_sql()
-        if not sql:
-            continue
+        if sql:
+            try:
+                conn.executescript(sql)
+            except Exception:
+                logger.exception("Bundle %s schema apply failed", bundle.name)
         try:
-            conn.executescript(sql)
+            bundle.migrate(conn)
         except Exception:
-            logger.exception("Bundle %s schema apply failed", bundle.name)
+            logger.exception("Bundle %s migrate hook failed", bundle.name)

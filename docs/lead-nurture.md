@@ -6,9 +6,10 @@ Multi-channel inbound capture + automated nurture cadences, with Telegram approv
 
 ```
 Web form ─┐
-WhatsApp ─┼─► leads.ingest_lead ─► CRM (Attio) ─► nurture_enrollments
-Email    ─┘                                          │
-                                                     ▼
+WhatsApp ─┤
+SMS      ─┼─► leads.ingest_lead ─► CRM (Attio) ─► nurture_enrollments
+Telegram ─┤                                          │
+Email    ─┘                                          ▼
                                               nurture.tick (60s)
                                                      │
                                   ┌──────────────────┴──────────────────┐
@@ -16,7 +17,7 @@ Email    ─┘                                          │
                        preapproval match?                       no match → hold
                                   │                                     │
                                   ▼                                     ▼
-                         dispatch (email/wa/tg)              Telegram approval prompt
+                  dispatch (email/wa/tg/sms)             Telegram approval prompt
                                   │                                     │
                                   ▼                            approve / skip
                               advance                                   │
@@ -31,14 +32,18 @@ Every step writes a communication note to the CRM, so Attio remains the source o
 | Direction | Channel    | Adapter                            | Notes |
 |-----------|-----------|------------------------------------|-------|
 | Inbound   | Web form  | `roost/extras/lead_nurture/web/api_leads.py`           | Existing framework-assessment form auto-routes through `leads.ingest_lead` via the legacy shim in `lead_pipeline.py`. |
-| Inbound   | WhatsApp  | `roost/extras/messaging_external/web/api_whatsapp.py`        | Best-effort `leads.ingest_lead(channel="whatsapp", vertical="property")` runs alongside the recipe pipeline. |
+| Inbound   | WhatsApp  | `roost/extras/messaging_external/web/api_whatsapp.py`        | STOP/HELP keyword intercepts (mirrors SMS); `mark_inbound_for_contact` for `wait_for_reply`; best-effort `leads.ingest_lead(channel="whatsapp", vertical="property")` runs alongside the recipe pipeline. |
+| Inbound   | SMS       | `roost/extras/messaging_external/web/api_sms.py`             | Twilio webhook (HMAC-SHA1 signed). STOP/HELP/STOPALL/UNSUBSCRIBE/CANCEL/END/QUIT keyword set; `mark_inbound_for_contact`; ingests via `leads.ingest_lead(channel="sms", source="sms_inbound")`. See [docs/sms-adapter.md](sms-adapter.md). |
 | Inbound   | Email     | Gmail poller / MS Graph webhooks   | Currently feeds the recipes pipeline; `lead_ingest` MCP tool lets agents promote a thread to a lead manually. |
-| Inbound   | Telegram  | bot handlers                       | `/lead …` slash-command path (planned). |
+| Inbound   | Telegram (operator) | `roost/extras/lead_nurture/bot/lead_capture.py` (`/lead`) | `/lead <name> \| <phone-or-email> [\| <vertical>] [\| <notes>]` — operator-driven manual capture. Routes through `leads.ingest_lead(channel="telegram", source="telegram_promote")`. |
+| Inbound   | Telegram (customer) | `roost/extras/lead_nurture/bot/customer.py` (group=-3 fallback) | Same bot serves customers (non-allowlisted users): STOP/HELP, qualification routing, `mark_inbound_for_contact`, first-contact `leads.ingest_lead(channel="telegram", source="telegram_inbound")`. See [docs/telegram-customer-channel.md](telegram-customer-channel.md). |
 | Outbound  | Email     | `services/scheduled_emails.py` (Gmail provider) | Honors UTC `scheduled_at` strings. |
 | Outbound  | WhatsApp  | `services/whatsapp.py`             | 24-hour customer-care window applies; sends fail loudly if expired. |
-| Outbound  | Telegram  | inline notify                      | Used both for human-approval prompts and for the actual Telegram channel. |
+| Outbound  | Telegram (customer) | `roost/extras/messaging_external/services/telegram_out.py` | Customer DM via Bot API. Reads `contact_telegram_chat_id` off the enrollment. Bots cannot cold-DM — customer must initiate. |
+| Outbound  | Telegram (operator) | `roost/notifications/telegram` | Operator approval prompts + daily summary broadcasts (orthogonal channel — does not use cadence dispatcher). |
+| Outbound  | SMS       | `roost/extras/messaging_external/services/sms.py` (Twilio) | Gated by `SMS_ENABLED`; fail-closed on missing flag/creds. See [docs/sms-adapter.md](sms-adapter.md). |
 
-The dispatcher (`nurture._dispatch_send()`) currently implements `email`, `whatsapp`, and `telegram` only. Other channels are roadmap; see "Roadmap" below.
+The dispatcher (`nurture._dispatch_send()`) implements `email`, `whatsapp`, `telegram`, and `sms`.
 
 ## Cadence YAML
 
@@ -72,7 +77,7 @@ Step fields:
 - `day_offset` (required) — days from `started_at`.
 - `hour` + `tz` — pin to a specific local hour (defaults to keeping `started_at`'s wall-clock time).
 - `minute_offset` — cosmetic delay for "immediately after enrol" steps.
-- `channel` — `email | whatsapp | telegram` (sms is roadmap, not yet dispatched).
+- `channel` — `email | whatsapp | telegram | sms`.
 - `template` — must match a `response_templates.name` (templates inline in the same file are seeded automatically).
 
 Validation runs at load time; broken files are skipped with errors surfaced via `cadence_library_status`.
@@ -218,31 +223,21 @@ Both scripts:
 | `tests/test_tools_leads.py` | MCP wrapper envelopes and arg pass-through. |
 | `tests/test_scheduler_jobs.py` | `_nurture_tick` JobQueue registration + exception swallowing. |
 | `tests/test_bot_nurture_approval.py` | `/napprove`, `/nskip`, `/nlist`, `/preapprove`, and inline-button callback routing. |
+| `tests/test_bot_lead_capture.py` | `/lead` parser, contact classifier, handler happy paths, error surfacing. |
+| `tests/test_sms.py` | Twilio adapter — disabled / missing creds / unsupported provider / happy / 4xx / network exception. |
+| `tests/test_sms_inbound.py` | Twilio inbound webhook — disabled/403/ingest/STOP/HELP/missing-body/signature verifier. |
+| `tests/test_telegram_customer.py` | Telegram customer fallback handler — passthroughs, STOP + variants, HELP/INFO, qualification routing, mark_inbound (no re-ingest), first-contact ingest. |
+| `tests/test_whatsapp_inbound.py` | WhatsApp webhook — verify handshake, ingest, STOP + variants, HELP/INFO, mark_inbound ordering, qualification short-circuit. |
+| `tests/test_wait_for_reply.py` | `wait_for_reply` step — replied-exits / no-reply-defers / timeout-advances / loader validation / `mark_inbound_for_contact`. |
 
 ## Roadmap
 
-Two items are referenced as "planned" / "roadmap" elsewhere in this doc and tracked here as the canonical to-build list:
+All previously-roadmapped items have shipped:
 
-### Telegram `/lead …` inbound slash-command
-
-Currently a Telegram operator can read a thread but cannot promote it to a lead from the chat surface — they have to switch to MCP or the web UI and call `lead_ingest` manually. The planned shape:
-
-```
-/lead <name> | <phone-or-email> [| <vertical>] [| <free-text notes>]
-```
-
-- Adds a handler under `roost/bot/handlers/` that parses the pipe-delimited args, calls `lead_ingest(channel="telegram", source="manual_promote", …)`, and replies with the resulting enrollment ID + cadence slug.
-- The `channel="telegram"` inbound is already accepted by `leads.ingest_lead`; what's missing is the bot-side glue.
-- Symmetric with the existing `/preapprove`, `/napprove`, `/nskip` operator commands.
-
-### SMS outbound channel
-
-The YAML schema previously accepted `channel: sms` but the dispatcher silently no-op'd it; the enum has been trimmed to `email | whatsapp | telegram` to keep doc and code in sync. To re-enable SMS:
-
-1. Pick a provider — Twilio (global), Vonage (global), or a local-MY/SG SMS gateway (cheaper for the regional flows).
-2. Add an `SMS_ENABLED` flag in `roost/config.py` + `config_service.py::FEATURE_FLAGS`, plus credentials in `env-templates/`.
-3. Add `services/sms.py` mirroring the WhatsApp adapter shape (send, error envelope, optional inbound webhook later).
-4. Extend `nurture._dispatch_send()` with an `sms` branch and re-add `sms` to the channel enum in this doc + the YAML validator.
-5. Tests: extend `tests/test_nurture_dispatch.py` with an SMS row in the channel dispatch matrix.
-
-Adapter must fail closed when `SMS_ENABLED` is off — same posture as WhatsApp / DNC / CDD.
+- **Telegram `/lead`** — `roost/extras/lead_nurture/bot/lead_capture.py`.
+- **SMS outbound** (Twilio) — `roost/extras/messaging_external/services/sms.py`, dispatched from the `sms` branch of `nurture._dispatch_send`.
+- **Inbound SMS + STOP/HELP** — `roost/extras/messaging_external/web/api_sms.py`. POST `/api/sms/webhook` verifies Twilio's HMAC-SHA1 signature, branches on STOP/HELP keywords (STOP exits matching enrollments via `cadences.exit_enrollments_by_contact(phone=…, reason='opted_out:sms')`; HELP returns support TwiML), and forwards everything else to `leads.ingest_lead(channel='sms', source='sms_inbound')` after stamping `last_inbound_at` on matching enrollments.
+- **`wait_for_reply` step** — declarative gate in cadence YAML: `{type: wait_for_reply, day_offset: N, timeout_days: M}`. When the engine reaches it, replies received since the previous step exit the enrollment with `pause_reason='reply_received'`; otherwise the gate either defers to the timeout deadline or advances to the next step once the timeout elapses. All three customer channels (SMS, WhatsApp, Telegram) call `cadences.mark_inbound_for_contact(...)` to record the reply.
+- **Phone-number heuristics in `_classify_contact`** — strips common formatting punctuation, validates against `^\+?\d{8,15}$` (E.164 floor/ceiling). Anything that's neither a plausible email nor a plausible phone returns `('unknown', raw)` and `cmd_lead` prompts the user to fix instead of silently storing junk.
+- **STOP/HELP for WhatsApp** — `roost/extras/messaging_external/web/api_whatsapp.py::_process_inbound` mirrors the SMS keyword set (STOP/STOPALL/UNSUBSCRIBE/CANCEL/END/QUIT; HELP/INFO). STOP exits enrollments and replies via `whatsapp.send_text_message`; HELP sends support info. Recipe pipeline is skipped for STOP/HELP messages.
+- **Telegram customer channel** — same bot serves both operators (allowlisted user IDs) and customers (everyone else). Customer fallback at handler group `-3` routes STOP/HELP, qualification answers, `mark_inbound`, and first-contact ingest. Outbound DMs via `telegram_out.send_text_message`. Schema: `nurture_enrollments.contact_telegram_chat_id`. Full doc: [docs/telegram-customer-channel.md](telegram-customer-channel.md).

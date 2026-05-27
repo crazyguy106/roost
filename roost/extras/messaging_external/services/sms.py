@@ -10,6 +10,9 @@ DNC / CDD pattern documented in CLAUDE.md ("Adapters fail closed").
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import logging
 
 import httpx
@@ -25,6 +28,24 @@ from roost.config import (
 logger = logging.getLogger("roost.sms")
 
 _TWILIO_BASE = "https://api.twilio.com/2010-04-01"
+
+
+def verify_twilio_signature(url: str, params: dict, signature: str) -> bool:
+    """Validate an inbound Twilio webhook against X-Twilio-Signature.
+
+    Twilio signs:  base64(HMAC-SHA1(AuthToken, full_url + concat(sorted(key+value))))
+    `params` is the POST form-data (already decoded). `url` must be the
+    exact URL Twilio called, including scheme + host + path + querystring
+    in the order configured in the Twilio console.
+
+    Empty signature or missing auth token → fail-closed (False).
+    """
+    if not (signature and TWILIO_AUTH_TOKEN):
+        return False
+    data = url + "".join(f"{k}{params[k]}" for k in sorted(params.keys()))
+    mac = hmac.new(TWILIO_AUTH_TOKEN.encode(), data.encode(), hashlib.sha1)
+    expected = base64.b64encode(mac.digest()).decode()
+    return hmac.compare_digest(expected, signature)
 
 
 def send_sms(to: str, body: str) -> dict:

@@ -154,7 +154,12 @@ def test_ingest_lead_requires_email_or_phone(clean_cadence_tables, patch_crm):
     from roost.extras.lead_nurture.services.leads import ingest_lead
     res = ingest_lead(channel="web_form")
     assert res["ok"] is False
-    assert "email or phone is required" in res["errors"][0]
+    # Error message now also mentions telegram_chat_id as an accepted
+    # identifier (added when Telegram became a first-class customer
+    # channel). The "email or phone" substring still appears.
+    assert "email" in res["errors"][0]
+    assert "phone" in res["errors"][0]
+    assert "required" in res["errors"][0]
 
 
 def test_ingest_lead_unknown_cadence_returns_error(

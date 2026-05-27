@@ -223,6 +223,7 @@ def ingest_lead(
     channel: str,
     email: str = "",
     phone: str = "",
+    telegram_chat_id: str = "",
     name: str = "",
     org_name: str = "",
     org_domain: str = "",
@@ -258,8 +259,9 @@ def ingest_lead(
     fields = dict(fields or {})
     email = _norm_email(email)
     phone = _norm_phone(phone)
-    if not email and not phone:
-        return {"ok": False, "errors": ["email or phone is required"]}
+    telegram_chat_id = (telegram_chat_id or "").strip()
+    if not (email or phone or telegram_chat_id):
+        return {"ok": False, "errors": ["email, phone, or telegram_chat_id is required"]}
 
     # Pick a cadence: explicit > vertical default > generic_b2b
     if not cadence_slug:
@@ -304,28 +306,33 @@ def ingest_lead(
 
     crm_provider_name = getattr(provider, "name", "unknown")
 
-    try:
-        existing = provider.find_person(
-            email=email or None, phone=phone or None
-        )
-        if existing:
-            crm_person_id = existing.id
-            # Update name if it was empty in the CRM and we now have one
-            if name and not (existing.name or "").strip():
-                try:
-                    provider.update_person(existing.id, name=name)
-                except CrmError as e:
-                    logger.warning("Could not update name on existing person: %s", e)
-        else:
-            person = provider.create_person(
-                name=name or None,
-                emails=[email] if email else None,
-                phones=[phone] if phone else None,
+    # Telegram-only contacts have no email or phone — no CRM provider can
+    # dedupe or create them. Skip the CRM block entirely; the enrollment
+    # itself stores the chat_id so STOP, mark_inbound, and cadence dispatch
+    # all still work locally.
+    if email or phone:
+        try:
+            existing = provider.find_person(
+                email=email or None, phone=phone or None
             )
-            crm_person_id = person.id
-    except CrmError as e:
-        errors.append(f"CRM person upsert failed: {e}")
-        logger.exception("CRM person upsert failed for %s/%s", email, phone)
+            if existing:
+                crm_person_id = existing.id
+                # Update name if it was empty in the CRM and we now have one
+                if name and not (existing.name or "").strip():
+                    try:
+                        provider.update_person(existing.id, name=name)
+                    except CrmError as e:
+                        logger.warning("Could not update name on existing person: %s", e)
+            else:
+                person = provider.create_person(
+                    name=name or None,
+                    emails=[email] if email else None,
+                    phones=[phone] if phone else None,
+                )
+                crm_person_id = person.id
+        except CrmError as e:
+            errors.append(f"CRM person upsert failed: {e}")
+            logger.exception("CRM person upsert failed for %s/%s", email, phone)
 
     # 3. AI CDR on the inbound text, if any. Runs BEFORE deal-create so the
     # hot-lead branch can override deal_stage to "Hot Lead" before the deal
@@ -354,6 +361,9 @@ def ingest_lead(
         fields.setdefault("_lead_reasoning", classification.get("reasoning", ""))
 
     # 4. Optional deal (now uses hot-branch-overridden stage if applicable)
+    # The `local` provider raises NotImplementedError (it has no deal model);
+    # catch it alongside CrmError so the rest of the pipeline — enrollment,
+    # cadence dispatch, hot-lead alert — still runs without a real CRM.
     if crm_person_id:
         try:
             deal = provider.create_deal(
@@ -363,7 +373,7 @@ def ingest_lead(
                 person_id=crm_person_id,
             )
             crm_deal_id = deal.id
-        except CrmError as e:
+        except (CrmError, NotImplementedError) as e:
             errors.append(f"CRM deal create failed: {e}")
             logger.warning("CRM deal create skipped: %s", e)
 
@@ -395,6 +405,7 @@ def ingest_lead(
             crm_deal_id=crm_deal_id or "",
             contact_email=email,
             contact_phone=phone,
+            contact_telegram_chat_id=telegram_chat_id,
             contact_name=name,
             channel=cadence["steps"][0].get("channel", "email") if cadence["steps"] else "email",
             fields=fields,
@@ -425,13 +436,18 @@ def ingest_lead(
 
     # 10. Start qualification dialog over the inbound channel, if a
     # question pack exists for this cadence AND the channel is addressable.
-    # Picks identifier: explicit param > phone (whatsapp) > chat id (telegram
-    # not currently passed through, but reserved). Skips silently otherwise.
+    # Picks identifier: explicit param > phone (whatsapp/wechat) >
+    # telegram_chat_id (telegram). Skips silently otherwise.
     qualification_started = False
     if enrollment_id is not None:
-        ident = qualifying_identifier or (
-            phone if channel == "whatsapp" else ""
-        )
+        if qualifying_identifier:
+            ident = qualifying_identifier
+        elif channel == "telegram":
+            ident = telegram_chat_id
+        elif channel in ("whatsapp", "wechat"):
+            ident = phone
+        else:
+            ident = ""
         if channel in ("whatsapp", "wechat", "telegram") and ident:
             try:
                 from roost.extras.lead_nurture.services import qualification

@@ -27,6 +27,8 @@ USER_DIR = PROJECT_ROOT / "data" / "cadences"
 
 REQUIRED_TOP_KEYS = {"slug", "name", "steps"}
 ALLOWED_CHANNELS = {"email", "whatsapp", "telegram", "sms"}
+# Step types that don't fan out a message — they gate the cadence.
+NON_MESSAGE_STEP_TYPES = {"wait_for_reply"}
 
 
 def _safe_resolve(path: Path | str, *, allowed_roots: list[Path]) -> Path:
@@ -59,10 +61,22 @@ def validate_cadence(cfg: dict) -> list[str]:
         if not isinstance(step, dict):
             errs.append(f"steps[{i}]: must be a mapping")
             continue
-        if "template" not in step:
-            errs.append(f"steps[{i}]: missing 'template'")
+        step_type = step.get("type", "message")
         if "day_offset" not in step:
             errs.append(f"steps[{i}]: missing 'day_offset'")
+        if step_type in NON_MESSAGE_STEP_TYPES:
+            # Gate steps don't need template/channel. wait_for_reply is the
+            # only one today; validate its optional fields if present.
+            tw = step.get("timeout_days")
+            if tw is not None:
+                try:
+                    if int(tw) < 0:
+                        errs.append(f"steps[{i}]: timeout_days must be ≥ 0")
+                except (TypeError, ValueError):
+                    errs.append(f"steps[{i}]: timeout_days must be an integer")
+            continue
+        if "template" not in step:
+            errs.append(f"steps[{i}]: missing 'template'")
         ch = step.get("channel", "email")
         if ch not in ALLOWED_CHANNELS:
             errs.append(f"steps[{i}]: channel '{ch}' not in {sorted(ALLOWED_CHANNELS)}")

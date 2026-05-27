@@ -28,6 +28,15 @@ logger = logging.getLogger(__name__)
 # Loose email check — same shape used elsewhere in lead_nurture.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Punctuation to strip before validating a phone number — matches what
+# users actually type ("+65 9123-4567", "(65) 9123 4567", "+65.9123.4567").
+_PHONE_PUNCT_RE = re.compile(r"[\s()\-. ]+")
+
+# After stripping, a plausible phone is an optional leading '+' followed
+# by 8 to 15 digits. ITU-T E.164 caps the subscriber portion at 15; 8 is
+# the local-number floor for SG/MY/HK landlines.
+_PHONE_RE = re.compile(r"^\+?\d{8,15}$")
+
 
 def _parse_lead_command(raw: str) -> dict:
     """Split a `/lead ...` argument string into structured fields.
@@ -57,11 +66,27 @@ def _parse_lead_command(raw: str) -> dict:
 
 
 def _classify_contact(contact: str) -> tuple[str, str]:
-    """Return ('email'|'phone', normalised_value)."""
-    contact = contact.strip()
+    """Classify a free-form contact string.
+
+    Returns ('email'|'phone'|'unknown', normalised_value).
+
+    Email branch returns the input unchanged. Phone branch strips
+    formatting punctuation and validates against an E.164-ish shape
+    (optional '+', 8-15 digits). Anything else returns 'unknown' so the
+    caller can prompt the user to fix it rather than silently storing
+    junk as a phone number.
+    """
+    contact = (contact or "").strip()
+    if not contact:
+        return "unknown", contact
     if _EMAIL_RE.match(contact):
         return "email", contact
-    return "phone", contact
+
+    candidate = _PHONE_PUNCT_RE.sub("", contact)
+    if _PHONE_RE.match(candidate):
+        return "phone", candidate
+
+    return "unknown", contact
 
 
 @authorized
@@ -76,6 +101,12 @@ async def cmd_lead(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     kind, value = _classify_contact(parsed["contact"])
+    if kind == "unknown":
+        await update.message.reply_text(
+            f"Couldn't parse `{parsed['contact']}` as an email or phone "
+            f"number. Examples: alice@example.com  or  +6591234567"
+        )
+        return
     kwargs = {
         "channel": "telegram",
         "source": "telegram_promote",

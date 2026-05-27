@@ -11,12 +11,30 @@ matched to response templates, and held for approval (external_write tier).
 import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from roost.config import WHATSAPP_ENABLED, WHATSAPP_VERIFY_TOKEN
 
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
 _logger = logging.getLogger("roost.web.whatsapp")
+
+
+# Mirror api_sms.py's keyword set — STOP/HELP behaves the same across every
+# customer channel. WhatsApp has no Twilio-equivalent "advisory keywords"
+# requirement, but consistent UX matters more than the Meta minimum.
+_STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"}
+_HELP_KEYWORDS = {"HELP", "INFO"}
+
+
+def _first_token(body: str) -> str:
+    """Return the first whitespace-delimited token, uppercased and stripped
+    of common punctuation. 'stop.' / 'Stop!' / ' STOP ' all → 'STOP'."""
+    if not body:
+        return ""
+    parts = body.strip().split()
+    if not parts:
+        return ""
+    return parts[0].upper().strip(".,!?;:'\"")
 
 
 @router.get("/webhook")
@@ -35,7 +53,7 @@ def verify_webhook(
 
     if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
         _logger.info("WhatsApp webhook verified")
-        return JSONResponse(content=int(hub_challenge))
+        return PlainTextResponse(content=hub_challenge)
 
     _logger.warning("WhatsApp webhook verification failed")
     raise HTTPException(status_code=403, detail="Verification failed")
@@ -115,6 +133,56 @@ async def _process_inbound(msg: dict) -> None:
     text = msg["text"]
     sender_phone = msg.get("sender", "")
 
+    # ── STOP — unsubscribe + confirm, skip everything else. ─────────
+    # Customers can opt out from any channel. We exit every enrollment
+    # for this phone (active or paused) and reply with the standard
+    # confirmation. The recipe pipeline does NOT run — STOP is not an
+    # inbound that operators should draft a reply to.
+    keyword = _first_token(text)
+    if keyword in _STOP_KEYWORDS:
+        try:
+            from roost.extras.lead_nurture.services.cadences import (
+                store as cadences_store,
+            )
+            n = cadences_store.exit_enrollments_by_contact(
+                phone=sender_phone, reason="opted_out:whatsapp",
+            )
+            _logger.info(
+                "WhatsApp STOP from %s — exited %d enrollments",
+                sender_phone, n,
+            )
+        except Exception:
+            _logger.exception(
+                "WhatsApp STOP exit-enrollments failed (non-fatal)"
+            )
+        try:
+            from roost.extras.messaging_external.services.whatsapp import (
+                send_text_message,
+            )
+            send_text_message(
+                to=sender_phone,
+                body=("You've been unsubscribed and will not receive further "
+                      "messages. Reply START to resubscribe."),
+            )
+        except Exception:
+            _logger.exception("WhatsApp STOP reply send failed (non-fatal)")
+        return
+
+    # ── HELP — support info, skip everything else. ───────────────────
+    if keyword in _HELP_KEYWORDS:
+        try:
+            from roost.extras.messaging_external.services.whatsapp import (
+                send_text_message,
+            )
+            send_text_message(
+                to=sender_phone,
+                body=("Reply STOP to unsubscribe. For support contact "
+                      "support@verixiom.com."),
+            )
+        except Exception:
+            _logger.exception("WhatsApp HELP reply send failed (non-fatal)")
+        return
+
     # Qualification intercept: if this phone has an in-progress qualifying
     # session, treat the reply as an answer and stop here. The recipe
     # pipeline (auto-replies, drafts) would otherwise step on the
@@ -132,6 +200,19 @@ async def _process_inbound(msg: dict) -> None:
             return
     except Exception:
         _logger.exception("qualification intercept failed (non-fatal)")
+
+    # Mark any active/paused nurture enrollments for this contact so the
+    # wait_for_reply step can detect engagement. Best-effort: a failure
+    # here must not interrupt ingest or the recipe pipeline.
+    try:
+        from roost.extras.lead_nurture.services.cadences import (
+            store as cadences_store,
+        )
+        cadences_store.mark_inbound_for_contact(phone=sender_phone)
+    except Exception:
+        _logger.exception(
+            "mark_inbound_for_contact (whatsapp) failed (non-fatal)"
+        )
 
     # Best-effort lead ingest: dedupes on phone via CRM, enrolls in default
     # property cadence if new. Never blocks the recipe pipeline.
