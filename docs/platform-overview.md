@@ -26,7 +26,7 @@ All four interfaces call the same service functions, emit the same events, and r
 
 ```
 Roost (Central Hub)
-├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (270+ tools)
+├── 4 interfaces: CLI, Web (FastAPI/PWA), Telegram Bot, MCP Server (300+ tools — canonical list: docs/mcp-inventory.md)
 ├── SQLite (WAL) — tasks, projects, contacts, calendar, OAuth, time tracking, templates, recipes, guardian, checkpoints
 │
 ├── Google Workspace (Dev VPS only)
@@ -93,7 +93,7 @@ Roost (Central Hub)
                     ┌─────────────────────────────────────────────────┐
                     │         DEV VPS (Hub) — task.example.com      │
                     │                                                 │
-                    │  Roost: CLI + Web + Bot + MCP (235+ tools)    │
+                    │  Roost: CLI + Web + Bot + MCP (300+ tools)    │
                     │  Claude Code: 4 persistent tmux sessions        │
                     │                                                 │
                     │                                                 │
@@ -162,7 +162,7 @@ When `GOOGLE_ENABLED=false` and `MS_ENABLED=true`, the Telegram bot automaticall
 
 ### Claude Code (tmux Sessions)
 
-Each instance runs Claude Code in persistent tmux sessions that survive SSH disconnects. Claude Code connects to Roost via the MCP Server (210 tools), giving it full access to tasks, email, calendar, files, AI, and infrastructure.
+Each instance runs Claude Code in persistent tmux sessions that survive SSH disconnects. Claude Code connects to Roost via the MCP Server (300+ tools), giving it full access to tasks, email, calendar, files, AI, and infrastructure.
 
 **Dev VPS:** 4 parallel sessions for concurrent AI work:
 
@@ -182,11 +182,11 @@ Claude Code (in tmux)
   → reads ~/.mcp.json
   → spawns roost-mcp (stdio transport)
   → MCP server loads 45+ tool modules (deferred imports)
-  → Claude Code can now call any of 270+ tools
+  → Claude Code can now call any of 300+ tools
   → tools call service layer → SQLite / APIs / subprocess
 ```
 
-**Key MCP tool modules (270+ tools across 45+ modules):**
+**Key MCP tool modules (300+ tools across 45+ modules):**
 
 | Category | Modules | Tools |
 |----------|---------|:-----:|
@@ -549,7 +549,7 @@ Task created/updated/completed (from any interface)
 | **Docker** | Yes | No | Container management | Local socket / SSH |
 | **Kubernetes** | Yes | No | Cluster management | kubeconfig |
 | **Otter.ai/Dropbox** | Yes | No | Meeting transcription capture | Dropbox API |
-| **Claude Code MCP** | Yes | No | 270+ tools for AI-assisted work | stdio (FastMCP) |
+| **Claude Code MCP** | Yes | No | 300+ tools for AI-assisted work | stdio (FastMCP) |
 
 **Shared Azure app:** All MS Graph instances share one Azure App Registration. Each instance adds its own redirect URI and users OAuth independently.
 
@@ -580,7 +580,7 @@ Task created/updated/completed (from any interface)
     ├── gmail/                     Gmail + Calendar Write (8 files)
     ├── microsoft/                 MS Graph (3 files)
     ├── notion/                    Notion mirror (7 files)
-    ├── mcp/                       MCP Server (45+ tool modules, 270+ tools)
+    ├── mcp/                       MCP Server (45+ tool modules, 300+ tools)
     ├── web/                       FastAPI app + templates + static
     │   ├── app.py                 Middleware + auth + router setup
     │   ├── api.py                 REST API endpoints

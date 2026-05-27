@@ -9,7 +9,7 @@ stored in the `rpa_flow_configs` table and edited via MCP tools. Adding a
 new portal is a configuration change — no Python file to write.
 
 **Open-source friendly.** Shipped flows live as YAML files under
-`roost/services/rpa_flows/library/` (reviewable in PRs, seeded on boot).
+`roost/extras/rpa/services/rpa_flows/library/` (reviewable in PRs, seeded on boot).
 DB rows are the live mutable copy; user-authored flows live under
 `data/rpa_flows/`. See [rpa-authoring.md](rpa-authoring.md) for the
 contributor guide and the round-trip via `rpa_import_flow` /
@@ -50,14 +50,14 @@ recipe (RPA_FLOW:<portal>)         tools_rpa.rpa_run        /recipe in bot
 
 | File | Role |
 |---|---|
-| `roost/services/rpa_runs.py` | Durable, pausable run state machine (`running` ↔ `awaiting_input` → `completed`/`failed`/`cancelled`). |
-| `roost/services/browser_service.py` | Async-Playwright connection to the browserless sidecar (`CDP_ENDPOINT`); persists per-portal storage state under `data/browser_state/<user>/<portal>.json`. |
+| `roost/extras/rpa/services/rpa_runs.py` | Durable, pausable run state machine (`running` ↔ `awaiting_input` → `completed`/`failed`/`cancelled`). |
+| `roost/extras/rpa/services/browser_service.py` | Async-Playwright connection to the browserless sidecar (`CDP_ENDPOINT`); persists per-portal storage state under `data/browser_state/<user>/<portal>.json`. |
 | `roost/services/archive_service.py` | `extract_zip(path, password)` using `pyzipper` (AES-aware). Raises `BadZipPassword`. |
 | `roost/services/otp_source.py` | `EmailOtpSource` polls Gmail; `TelegramOtpSource` prompts the user. |
-| `roost/services/rpa_flows/configs.py` | CRUD for stored flow configs. |
-| `roost/services/rpa_flows/_interpreter.py` | Generic step interpreter — the engine. |
+| `roost/extras/rpa/services/rpa_flows/configs.py` | CRUD for stored flow configs. |
+| `roost/extras/rpa/services/rpa_flows/_interpreter.py` | Generic step interpreter — the engine. |
 | `roost/bot/handlers/rpa_input.py` | Telegram handler at group `-1` that consumes the next plain message into an `awaiting_input` run; `/rpa list`, `/rpa cancel <id>`. |
-| `roost/mcp/tools_rpa.py` | MCP tools for run management, credentials, and flow configs. |
+| `roost/extras/rpa/mcp/tools_rpa.py` | MCP tools for run management, credentials, and flow configs. |
 
 ## Step types
 
@@ -77,6 +77,7 @@ recipe (RPA_FLOW:<portal>)         tools_rpa.rpa_run        /recipe in bot
 | `upload_drive` | `remote_path, source: "last_download"\|"last_extracted"` | Push to Drive (requires Google enabled). |
 | `screenshot` | `path?, name?, selector?, full_page?` | Captures the page (or `selector` element). Saves to today's run dir under `screenshots/`; path stored in `$var:last_screenshot`. |
 | `whatsapp_send` | `to, body? \| document? \| image?, caption?, filename?, source?` | Sends via Meta WhatsApp Cloud API. `source` shortcut: `"last_download" \| "last_screenshot" \| "last_extracted"`. Errors are logged into `$var:last_whatsapp_error`, not raised. Requires `WHATSAPP_ENABLED`. |
+| `telegram_send` | `to?, body? \| caption?, image? \| document?, source?, as?, keyboard?, as_var?, timeout?` | Sends via Telegram Bot API. `to` defaults to first `TELEGRAM_ALLOWED_USERS`. `as: "document"` keeps images byte-for-byte (use for scannable QR codes — `sendPhoto` JPEG-compresses). When `keyboard` is set (list of rows of `{text, value}` dicts) the run pauses until the user taps a button; the chosen value lands under `$var:<as_var>` (default `last_telegram_choice`). Send errors recorded in `$var:last_telegram_error` and don't abort; keyboard timeouts do abort. Requires `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS`. |
 | `log` | `message` | Info-log a message. |
 
 ### Value placeholders

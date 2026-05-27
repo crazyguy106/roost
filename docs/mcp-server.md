@@ -2,7 +2,9 @@
 
 MCP (Model Context Protocol) server exposing roost as native Claude Code tools. Uses FastMCP 2.x with stdio transport. This is the 4th interface alongside CLI, Web, and Telegram Bot.
 
-**303+ tools across 47 modules** - tasks, contacts, projects, entities, calendar, Gmail, Drive, Slides, Sheets, Docs, Gemini (incl. image generation), Notion, SSH, Docker, Kubernetes, Microsoft 365 (email, calendar, OneDrive, Excel, Teams, SharePoint), OKR management, time tracking, productivity stats, document generation, presentations, scheduled emails, context bundles, Guardian AI safety, checkpoints & rollback, learned skills, background agents, cross-channel memory, natural language scheduling.
+**300+ tools across ~51 modules** — tasks, contacts, projects, entities, calendar, Gmail, Drive, Slides, Sheets, Docs, Gemini (incl. image generation), Notion, SSH, Docker, Kubernetes, Microsoft 365 (email, calendar, OneDrive, Excel, Teams, SharePoint), OKR management, time tracking, productivity stats, document generation, presentations, scheduled emails, context bundles, Guardian AI safety, checkpoints & rollback, learned skills, background agents, cross-channel memory, natural language scheduling.
+
+> **Canonical count:** see [`mcp-inventory.md`](mcp-inventory.md) — generated from `@mcp.tool()` decorators by `scripts/gen_mcp_inventory.py`. This narrative doc groups and explains; the inventory file holds the up-to-the-commit numbers.
 
 ## Quick Start
 
@@ -18,7 +20,7 @@ Installed to `~/.local/bin/roost-mcp` via `setup.py` console_scripts.
 
 ---
 
-## Tools Reference (303+ tools)
+## Tools Reference (300+ tools — see [`mcp-inventory.md`](mcp-inventory.md) for the full generated list)
 
 ### Tasks — CRUD (4 tools)
 
@@ -435,10 +437,6 @@ get_time_summary(days=7)
 | `ms_sharepoint_download` | Download a file |
 | `ms_sharepoint_upload` | Upload a file |
 
-
-| Tool | Description |
-|------|-------------|
-
 ### OKR Management (12 tools)
 
 | Tool | Description |
@@ -689,7 +687,10 @@ roost/mcp/
 ├── tools_ms_excel.py          # Microsoft Excel Online (3)
 ├── tools_ms_teams.py          # Microsoft Teams (16)
 ├── tools_ms_sharepoint.py     # Microsoft SharePoint (4)
-├── tools_guardian.py           # Guardian AI, cost tracking, checkpoints, skills, background agents (13)
+├── tools_guardian.py           # Guardian AI, cost tracking, checkpoints, skills, background agents, draft queue (13)
+├── tools_stripe.py             # Stripe — charges, customers, subscriptions, refunds (drafted), payment links (5)
+├── tools_shopify.py            # Shopify — orders, products, customers, fulfill, cancel (drafted) (6)
+├── tools_xero.py               # Xero — invoices, contacts, bank txns, create invoice (DRAFT direct, others drafted) (4)
 ├── tools_recipes.py           # Automation recipes + natural language scheduling (+ create_schedule)
 ├── tools_memory.py            # Cross-channel memory — remember/recall/forget/pin (4)
 ├── tools_bundles.py           # Context bundles - assembled views (3)
@@ -718,7 +719,10 @@ MCP tools are thin wrappers around service modules:
 | `ssh_service.py` | `tools_ssh`, `tools_docker`, `tools_k8s` | Remote command execution |
 | `notion/client.py` | `tools_notion` | Notion API via rate-limited client |
 | `gemini_agent.py` | `tools_gemini` | Multi-LLM pipeline |
-| `guardian.py` | `tools_guardian` | Pre-flight safety checks, cost tracking |
+| `guardian.py` | `tools_guardian`, `tools_stripe`, `tools_shopify`, `tools_xero` | Pre-flight safety checks, cost tracking, draft-and-approve queue for money-moving writes |
+| `sme_ops/stripe.py` | `tools_stripe` | Stripe Charges/Refunds/Payment Links via REST |
+| `sme_ops/shopify.py` | `tools_shopify` | Shopify Admin API — orders, fulfillment, cancel |
+| `sme_ops/xero.py` + `xero_oauth.py` | `tools_xero` | Xero OAuth2 + invoices/contacts/bank txns |
 | `checkpoints.py` | `tools_guardian` | Checkpoint snapshots, rollback |
 | `learned_skills.py` | `tools_guardian` | Skill extraction and approval |
 | `background_runs.py` | `tools_guardian` | Sub-agent spawning |

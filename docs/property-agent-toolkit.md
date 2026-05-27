@@ -8,9 +8,9 @@ artefact suitable for disciplinary defence and audit.
 
 | Module | Backed by | UI | MCP | Obligation |
 |---|---|---|---|---|
-| Stamp Duty Calculator | `roost/services/iras_stamp_duty.py` | `/property-agent/stamp-duty` | `iras_calc_buyer_stamp_duty`, `iras_calc_seller_stamp_duty`, `iras_calc_lease_stamp_duty` | Stamp Duties Act, post-27-Apr-2023 cooling measures |
-| DNC Scrub | `roost/services/pdpc_dnc.py` | `/property-agent/dnc-scrub` | `pdpc_dnc_check` | PDPA s.43 / Spam Control Act (21-day validity) |
-| CDD Screening | `roost/services/cdd_screening.py` | `/property-agent/cdd-screen` | `cdd_screen` | CEA Practice Circulars 01-21 & 02-23 (AML/CFT) |
+| Stamp Duty Calculator | `roost/extras/property_agent/services/iras_stamp_duty.py` | `/property-agent/stamp-duty` | `iras_calc_buyer_stamp_duty`, `iras_calc_seller_stamp_duty`, `iras_calc_lease_stamp_duty` | Stamp Duties Act, post-27-Apr-2023 cooling measures |
+| DNC Scrub | `roost/extras/property_agent/services/pdpc_dnc.py` | `/property-agent/dnc-scrub` | `pdpc_dnc_check` | PDPA s.43 / Spam Control Act (21-day validity) |
+| CDD Screening | `roost/extras/property_agent/services/cdd_screening.py` | `/property-agent/cdd-screen` | `cdd_screen` | CEA Practice Circulars 01-21 & 02-23 (AML/CFT) |
 | HDB EIP/SPR Quota | `library/hdb_eip.yaml` (RPA) | via `/recipe rpa` or chat | `rpa_run("hdb_eip", …)` | EAA Practice Guidelines on HDB resale eligibility |
 | Singpass-assisted flows | `await_user_session` step op | RPA flow author | RPA YAML | Defensible under PDPA — Roost never holds Singpass creds |
 
@@ -76,7 +76,7 @@ Public eService — no Singpass. Inputs: block, street, ethnicity,
 citizenship. Outputs: a screenshot of the eligibility result and a
 log line.
 
-YAML lives at `roost/services/rpa_flows/library/hdb_eip.yaml`. Selectors
+YAML lives at `roost/extras/rpa/services/rpa_flows/library/hdb_eip.yaml`. Selectors
 are HDB's; if HDB updates the form, use `rpa_inspect_page` and
 `rpa_test_step` to refresh.
 

@@ -4,6 +4,8 @@
 
 ## What Roost Does
 
+Roost is **domain-agnostic** — the list below mixes **core capabilities** with **bundled vertical toolkits** (currently shipping: Property-Agent for Singapore CEA salespersons, and SME Ops for small/medium businesses). New verticals are just additional services + cadences + RPA flows on top of the same engine.
+
 Roost gives Claude Code (or any MCP-compatible AI) a persistent workspace with:
 
 - **Task Management** — tasks, projects, subtasks, dependencies, focus mode, shelving
@@ -20,12 +22,13 @@ Roost gives Claude Code (or any MCP-compatible AI) a persistent workspace with:
 - **Automation Recipes** — user-defined rules with risk tiers (read_only, internal_write, external_write)
 - **Natural Language Scheduling** — plain English to cron recipes ("Every Monday at 9am, summarize emails")
 - **AI CDR Pipeline** — Content Disarm & Reconstruct for safe inbound message classification
-- **Guardian AI** — pre-flight safety checks on every tool call (block dangerous commands, bulk deletes, bulk emails)
+- **Guardian AI** — pre-flight safety checks on every tool call (block dangerous commands, bulk deletes, bulk emails) plus a **draft-and-approve queue** for money-moving writes (Stripe refunds, Shopify order cancellations, non-DRAFT Xero invoices) — agents draft, humans approve via `/sme/sync-status` or `/api/sme/drafts/{id}/approve`
 - **Cost Tracking** — per-run and daily token cost limits with automatic enforcement
 - **Autonomy Levels** — supervised / assisted / autonomous modes for agent confirmation behaviour
 - **Proactive Monitoring** — risk alerts for guardian blocks, tool bursts, cost spikes, failed tools
 - **Checkpoints + Rollback** — snapshot agent write actions with one-click undo via `/rollback`
-- **Property-Agent Toolkit (Singapore)** — IRAS stamp-duty calculator (post-Apr-2023 ABSD/SSD/lease), PDPC DNC scrub, CDD sanctions/PEP screening, HDB EIP/SPR quota check. See [property-agent-toolkit.md](docs/property-agent-toolkit.md).
+- **Property-Agent Toolkit (Singapore)** _(vertical bundle)_ — IRAS stamp-duty calculator (post-Apr-2023 ABSD/SSD/lease), PDPC DNC scrub, CDD sanctions/PEP screening, HDB EIP/SPR quota check. See [property-agent-toolkit.md](docs/property-agent-toolkit.md).
+- **SME Ops** _(vertical bundle)_ — operational glue for small/medium businesses: Zapier ingress + outbound bridge (universal coexistence with 6,000+ apps), native Stripe / Shopify / Xero adapters with read + write + signed webhooks (writes that move money — refunds, order cancellations, non-DRAFT invoices — route through a Guardian draft-and-approve queue). HitPay, HubSpot, Mailchimp, Lazada, Shopee planned. See [sme-ops.md](docs/sme-ops.md).
 - **Self-improving Skills** — auto-extract reusable patterns from successful agent runs (approval workflow)
 - **Background Agents** — spawn sub-agents with concurrency and duration limits
 - **Cross-channel Memory** — context that persists across Telegram, Web, and MCP (7-day auto-expiry, pinning)
@@ -35,7 +38,7 @@ Roost gives Claude Code (or any MCP-compatible AI) a persistent workspace with:
 - **Notion Sync** — pages, databases, blocks
 - **Infrastructure** — SSH, Docker, Kubernetes management for remote servers
 
-All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server (270+ tools).
+All accessed through **4 interfaces**: Web UI, Telegram Bot, CLI, and MCP Server (300+ tools — see [`docs/mcp-inventory.md`](docs/mcp-inventory.md) for the canonical generated list).
 
 **New to Roost?** Run `roost-onboard` for the interactive setup wizard, or manage everything from the `/settings` page after deployment.
 
@@ -99,7 +102,7 @@ pick the one matching your AI provider and which integrations you want on.
 http://localhost:8080              # Web UI
 http://localhost:8080/settings     # Integrations, flags, personality
 http://localhost:8080/terminal     # Claude Code (browser terminal)
-ssh -p 2222 dev@localhost          # Claude Code (SSH)
+ssh -p 2222 dev@127.0.0.1          # Claude Code (SSH — loopback-only, see docs/container-ssh-access.md)
 ```
 
 ## Feature Flags
@@ -124,7 +127,7 @@ Toggle features via build args or `.env`:
 Roost runs Claude Code inside a Docker container — **the container IS the sandbox**:
 
 1. **Container isolation** — Claude Code can only affect what's inside the container
-2. **Guardian AI** — rules-based pre-flight check on every tool call: blocks dangerous commands (`rm -rf`, `curl|bash`), bulk deletes, bulk emails, and warns on sensitive file access
+2. **Guardian AI** — rules-based pre-flight check on every tool call: blocks dangerous commands (`rm -rf`, `curl|bash`), bulk deletes, bulk emails, warns on sensitive file access, and **drafts** money-moving writes (Stripe refunds, Shopify cancellations, non-DRAFT Xero invoices) for human approval via the `/sme/sync-status` page or `/api/sme/drafts/*` endpoints
 3. **Outbound guard hook** — emails, SSH commands, Teams messages require explicit user confirmation
 4. **Autonomy levels** — `supervised` (confirm everything), `assisted` (confirm destructive only, default), `autonomous` (no confirmation)
 5. **AI CDR pipeline** — inbound messages classified in a tool-less AI sandbox (prompt injection can't trigger tools)
@@ -144,7 +147,7 @@ Roost runs Claude Code inside a Docker container — **the container IS the sand
 | **Web UI** | `http://localhost:8080` | Dashboard, tasks, contacts, projects, calendar |
 | **Settings** | `http://localhost:8080/settings` | Credentials, feature flags, personality editor |
 | **Browser Terminal** | `http://localhost:8080/terminal/` | Claude Code via ttyd → tmux |
-| **SSH** | `ssh -p 2222 dev@localhost` | Claude Code via tmux attach |
+| **SSH** | `ssh -p 2222 dev@127.0.0.1` ([guide](docs/container-ssh-access.md)) | Claude Code via tmux attach (loopback-only; remote via ProxyJump) |
 | **Telegram** | Talk to your bot | Mobile access to all features |
 
 Both browser terminal and SSH connect to the same persistent tmux session. Disconnect and reconnect — Claude keeps working.
@@ -160,7 +163,7 @@ Both browser terminal and SSH connect to the same persistent tmux session. Disco
 │                                          │
 │  Web UI (:8080) ─── Dashboard + Settings  │
 │  ttyd (:7681) ───── Browser Terminal     │
-│  sshd (:22) ─────── SSH Access           │
+│  sshd (:22) ─────── SSH Access (loopback)│
 │  Telegram Bot ───── Mobile Access        │
 │  SQLite ─────────── Persistent Storage   │
 │                                          │
@@ -179,13 +182,15 @@ pytest tests/ -v
 ## Documentation
 
 See `docs/` for detailed guides:
+- [Container SSH Access](docs/container-ssh-access.md) — SSH straight into the `ai-claude` tmux session; loopback-only port, ProxyJump for remote, `CAP_AUDIT_WRITE` gotcha
 - [Deployment Shapes](docs/deployment.md) — laptop / hosted-by-you / VPS+domain (Caddy auto-TLS bundled via `docker-compose.public.yml`)
 - [What It Costs](docs/costs.md) — realistic pricing breakdown in SGD
 - [Platform Overview](docs/platform-overview.md) — architecture, APIs, file structure
 - [Onboarding Guide](docs/onboarding-guide.md) — first login, connecting integrations
 - [User Guide](docs/user-guide.md) — daily workflow, features, tips
 - [Settings & Credentials](docs/settings.md) — setup wizard, integration management, encryption
-- [MCP Server Reference](docs/mcp-server.md)
+- [MCP Server Reference](docs/mcp-server.md) — narrative + grouping
+- [MCP Tool Inventory](docs/mcp-inventory.md) — generated canonical list (run `scripts/gen_mcp_inventory.py` to refresh)
 - [Google OAuth Setup](docs/setup-google-oauth.md)
 - [Microsoft Graph Setup](docs/setup-microsoft-graph.md)
 - [Telegram Bot Setup](docs/setup-telegram-bot.md)
@@ -195,6 +200,11 @@ See `docs/` for detailed guides:
 - [RPA / Browser Automation](docs/rpa.md) — data-driven flows, OTP pause/resume, Singpass-assisted via `await_user_session`
 - [WhatsApp Adapter](docs/whatsapp-adapter.md) — Meta Cloud API integration
 - [Property-Agent Toolkit](docs/property-agent-toolkit.md) — Singapore IRAS / PDPC / CEA compliance tools
+- [Lead Nurture](docs/lead-nurture.md) — multi-channel ingest + cadence engine on Attio Free, Telegram approval gate
+- [Daily Summary](docs/daily-summary.md) — end-of-day Telegram digest covering nurture, tasks, leads, recipes, RPA
+- [SME Ops](docs/sme-ops.md) — vertical bundle for SMBs: Zapier ingress + native Stripe/Shopify/Xero (read + write + signed webhooks, money-moving writes drafted for human approval) + planned HitPay/HubSpot/Mailchimp/Lazada/Shopee
+- [Agentic Workflow Strategy](docs/agentic-workflow-strategy.md) — *(strategy memo)* product direction for Roost's own agentic surface: Plan-Approve-Execute, live file ops, streaming tool calls. Three vertical skins (admin / agent / SME) on one engine.
+- [Agentic Workflow — Phase 1 Spec](docs/agentic-workflow-phase1.md) — *(build brief)* self-contained implementation spec for the planner + per-tool event stream + `/agentic` route. Hand to a Claude agent in `roost/` to implement.
 
 ## License
 

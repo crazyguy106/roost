@@ -61,7 +61,7 @@ SIDECAR_PUBLIC_URL=https://alice.roost.example/sidecar
 ```
 
 The built-in `/sidecar` proxy (FastAPI + WS bridge in
-`roost/web/api_sidecar.py`) handles auth, devtools assets, and the CDP
+`roost/extras/rpa/web/api_sidecar.py`) handles auth, devtools assets, and the CDP
 WebSocket through the same domain Roost itself runs on. No separate
 sidecar hostname required.
 

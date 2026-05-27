@@ -7,7 +7,7 @@ not Python code. This guide walks through writing one.
 
 | Location | Purpose | Tracked in git |
 |---|---|---|
-| `roost/services/rpa_flows/library/<portal>.yaml` | Shipped templates, reviewed in PRs, seeded on boot | yes |
+| `roost/extras/rpa/services/rpa_flows/library/<portal>.yaml` | Shipped templates, reviewed in PRs, seeded on boot | yes |
 | `data/rpa_flows/<portal>.yaml` | Your local working copy (not yet upstreamed) | no (`data/` is gitignored) |
 | `rpa_flow_configs` table | Live, MCP-editable runtime config | no — file is canonical |
 
@@ -51,11 +51,18 @@ plus its required args.
 | `wait_for` | `selector` | `state`, `timeout_ms` |
 | `wait_ms` | `ms` | |
 | `press` | `selector`, `key` | |
+| `select_option` | `selector`, `value` | `label`, `index`, `timeout_ms` |
 | `get_otp` | — | `source` (`telegram`\|`email`), `query`, `regex`, `prompt`, `timeout` |
+| `await_user_session` | — | `prompt`, `confirm_selector`, `timeout` — surface live URL, wait for human (e.g. Singpass login) before continuing |
 | `download_one` | `trigger_selector` | `password_cred`, `extract` |
 | `download_each` | `item_selector`, `trigger_selector_within` | `policy_attr`, `password_cred_pattern`, `extract`, `prompt_if_missing`, `max` |
 | `upload_drive` | `remote_path` | `source` (`last_download`\|`last_extracted`) |
+| `screenshot` | — | `name`, `full_page` — capture PNG into the run's artefact dir |
+| `whatsapp_send` | `to`, `message` | `attachment_source` (`last_download`\|`last_extracted`) — dispatch via the WhatsApp adapter |
+| `telegram_send` | — | `to` (defaults to first allowed chat), `body`/`caption`, `image`/`document`/`source` (`last_screenshot`\|`last_download`\|`last_extracted`), `as` (`photo`\|`document` — use `document` to keep QR codes scannable), `keyboard` (rows of `{text, value}` for inline-button prompts; pauses run until tapped), `as_var`, `timeout` |
 | `log` | — | `message` |
+
+The interpreter cross-checks this list against `_interpreter.HANDLERS` and `schema.KNOWN_OPS` at import time, so any drift between table and code fails fast.
 
 ## Placeholders
 
@@ -73,7 +80,7 @@ Inside any string `value`, `url`, `prompt`, `query`, etc.:
 
 1. **Copy the template:**
    ```bash
-   cp roost/services/rpa_flows/library/example.yaml data/rpa_flows/<portal>.yaml
+   cp roost/extras/rpa/services/rpa_flows/library/example.yaml data/rpa_flows/<portal>.yaml
    ```
 
 2. **Inspect the live portal in DevTools.** Prefer stable selectors —
@@ -103,7 +110,7 @@ Inside any string `value`, `url`, `prompt`, `query`, etc.:
    ```
 
 7. **Once stable, upstream it.** Either:
-   - `rpa_export_flow("<portal>", "roost/services/rpa_flows/library/<portal>.yaml", global_default=True)`, or
+   - `rpa_export_flow("<portal>", "roost/extras/rpa/services/rpa_flows/library/<portal>.yaml", global_default=True)`, or
    - hand-edit the library YAML for cleaner diffs.
    Then open a PR. Set `enabled: false` if selectors might rot per-tenant.
 

@@ -29,36 +29,29 @@ On each poll, `auto_label_recent()` scans recent inbox messages. If a message:
 
 ### Domain → Label Rules
 
-| Sender Domain | Applied Label |
-|---------------|---------------|
-| `nexaguard.tech` | `Partnerships/#nexaguard` |
-| `sginnovate.com` | `Partnerships/#sgiinovate` |
-| `div0.sg` | `Partnerships/#div0` |
-| `nus.edu.sg` | `Partnerships/#nus` |
-| `singaporetech.edu.sg` | `Partnerships/#sit` |
-| `sit.edu.sg` | `Partnerships/#sit` |
-| `cisco.com` | `Partnerships/#cisco` |
-| `mail-id.cisco.com` | `Partnerships/#cisco` |
-| `infosec-city.com` | `Partnerships/#sincon` |
-| `dwtc.com` | `Partnerships/#gisec` |
-| `isaca.org` | `Partnerships/#isaca` |
-| `smu.edu.sg` | `Partnerships/#smu` |
-| `sutd.edu.sg` | `Partnerships/#sutd` |
-| `sim.edu.sg` | `Partnerships/#sim` |
-
-### Adding New Rules
-
-Edit `DOMAIN_LABEL_RULES` in `roost/gmail/auto_label.py`:
+`DOMAIN_LABEL_RULES` in `roost/gmail/auto_label.py` ships **empty**. Populate it with the domains relevant to your inbox.
 
 ```python
 DOMAIN_LABEL_RULES: dict[str, str] = {
-    "nexaguard.tech": "Partnerships/#nexaguard",
-    # Add new rules here:
-    "newdomain.com": "Category/Label",
+    # Add your own rules:
+    # "partner.com": "Partnerships/#partner-name",
+    # "vendor.com":  "Vendor/#vendor-name",
 }
 ```
 
 The label must already exist in Gmail — the module will not create labels automatically.
+
+#### Example pattern (illustrative — not shipped)
+
+A typical filled-in dict for someone running partnership outreach might look like:
+
+| Sender Domain | Applied Label |
+|---------------|---------------|
+| `partner-a.com` | `Partnerships/#partner-a` |
+| `university.edu` | `Partnerships/#university` |
+| `vendor.com` | `Vendor/#vendor` |
+
+This block is for shape only — copy the convention, not the rows. Keep your domain list in the Python file (not here), so it stays git-tracked alongside other rules.
 
 ---
 

@@ -10,6 +10,23 @@ use it: fintech onboarding, crypto KYC, accounting / law / corporate
 secretarial firms, recruiters checking sanctions, marketplaces with
 seller-verification requirements.
 
+### Where it lives in the codebase
+
+The screening service is currently the `cdd_screen` component of the
+`property_agent` bundle (Singapore CEA AML/CFT is the first concrete use
+case). There is no standalone `aml_screening` bundle:
+
+- Service: `roost/extras/property_agent/services/cdd_screening.py`
+- MCP tool: `roost/extras/property_agent/mcp/tools_cdd.py` (`cdd_screen`)
+- Web UI: `/property-agent/cdd-screen`
+- Master flag: `CDD_ENABLED` (also requires `PROPERTY_AGENT_ENABLED` to
+  load the bundle)
+
+When a second vertical (fintech, recruitment, etc.) actually consumes
+this, the natural refactor is to lift `cdd_screening.py` into its own
+`aml_screening` bundle and have `property_agent` depend on it. Until
+then, the property-agent location keeps the surface area honest.
+
 ## Configuration
 
 ```bash
@@ -41,11 +58,11 @@ them", the answer is this object plus a timestamp.
 ## Surfaces
 
 - **MCP:** `cdd_screen(name, dob?, nationality?, ...)` — tool in
-  `roost/mcp/tools_cdd.py`.
+  `roost/extras/property_agent/mcp/tools_cdd.py`.
 - **Web UI:** `/property-agent/cdd-screen` (the page lives under the
   property-agent namespace today; the underlying screen is generic).
 - **Web API:** `POST /api/property-agent/cdd/screen`.
-- **Service:** `roost/services/cdd_screening.py`.
+- **Service:** `roost/extras/property_agent/services/cdd_screening.py`.
 
 ## For Singapore property agents
 
@@ -60,7 +77,7 @@ the retention period and trigger conditions change.
 
 ## Adding a new provider
 
-Implement the `Provider` ABC in `roost/services/cdd_screening.py`:
+Implement the `Provider` ABC in `roost/extras/property_agent/services/cdd_screening.py`:
 
 ```python
 class Provider(ABC):

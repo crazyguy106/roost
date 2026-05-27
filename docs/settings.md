@@ -68,9 +68,11 @@ Each integration shows:
 
 Toggle features on/off without restarting. Changes are stored in the database and override `.env` defaults.
 
-Available flags: AI, Telegram, Google, Microsoft, Gmail, Notion, Curriculum, Guardian, WhatsApp, DNC (PDPC Do-Not-Call), CDD (sanctions/PEP screening).
+Available flags: AI, Telegram, Google, Microsoft, Gmail, Notion, Curriculum, Guardian, WhatsApp, DNC (PDPC Do-Not-Call), CDD (sanctions/PEP screening), SME Ops, Stripe, Shopify, Xero.
 
 The Singapore property-agent toolkit (stamp duty, DNC scrub, CDD screen) is gated by `WHATSAPP_ENABLED`, `DNC_ENABLED`, and `CDD_ENABLED` respectively. The stamp-duty calculator is pure-Python and always available. See [property-agent-toolkit.md](property-agent-toolkit.md).
+
+The SME Ops bundle (Stripe, Shopify, Xero, Zapier) is gated by `SME_OPS_ENABLED` plus per-adapter `STRIPE_ENABLED`, `SHOPIFY_ENABLED`, `XERO_ENABLED`, `ZAPIER_ENABLED`. Money-moving writes (Stripe refunds, Shopify order cancellations, non-DRAFT Xero invoices) are intercepted by Guardian and held as **pending drafts** that require human approval via `/sme/sync-status` or `POST /api/sme/drafts/{id}/approve`. See [sme-ops.md](sme-ops.md).
 
 ### Personality Tab
 
@@ -122,7 +124,7 @@ All credentials stored via the settings page are encrypted at rest.
 
 ---
 
-## 5. Guardian AI & Safety Environment Variables
+## 4. Guardian AI & Safety Environment Variables
 
 These variables control the Guardian AI safety engine, cost tracking, proactive monitoring, and background agent limits. Set them in `.env` or via the settings page.
 
@@ -157,7 +159,7 @@ View usage with the `get_usage_today` and `get_usage_history` MCP tools, or via 
 
 ---
 
-## 6. Implementation Details
+## 5. Implementation Details
 
 - Service: `roost/services/credentials.py`
 - API: `roost/web/api_settings.py`
@@ -166,7 +168,7 @@ View usage with the `get_usage_today` and `get_usage_history` MCP tools, or via 
 
 ---
 
-## 4. Settings API Reference (unchanged)
+## 6. Settings API Reference
 
 All endpoints require authentication. Credential management requires admin/owner role.
 

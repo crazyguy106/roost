@@ -18,9 +18,9 @@ Free tier: 1,000 service-initiated conversations / month per phone number.
 
 | Path | Role |
 |---|---|
-| `roost/services/whatsapp.py` | Cloud API client. `send_text_message`, `send_template_message`, `send_document`, `send_image`, `upload_media`, `mark_as_read`, `verify_webhook_signature`, `parse_webhook_entry`. |
-| `roost/web/api_whatsapp.py` | FastAPI webhook at `/webhook/whatsapp`. GET handles Meta's verify-token handshake; POST receives signed events and routes inbound messages to the agent. |
-| `roost/mcp/tools_whatsapp.py` | MCP tools so the agent can decide to send: `whatsapp_send_text`, `whatsapp_send_document`, `whatsapp_send_image`, `whatsapp_send_template`. Gated by `WHATSAPP_ENABLED`. |
+| `roost/extras/messaging_external/services/whatsapp.py` | Cloud API client. `send_text_message`, `send_template_message`, `send_document`, `send_image`, `upload_media`, `mark_as_read`, `verify_webhook_signature`, `parse_webhook_entry`. |
+| `roost/extras/messaging_external/web/api_whatsapp.py` | FastAPI webhook at `/webhook/whatsapp`. GET handles Meta's verify-token handshake; POST receives signed events and routes inbound messages to the agent. |
+| `roost/extras/messaging_external/mcp/tools_whatsapp.py` | MCP tools so the agent can decide to send: `whatsapp_send_text`, `whatsapp_send_document`, `whatsapp_send_image`, `whatsapp_send_template`. Gated by `WHATSAPP_ENABLED`. |
 | `examples/skills/whatsapp_lead_triage.py` | Reference skill showing inbound-message handling. |
 | RPA `whatsapp_send` step op | Lets a flow deliver `last_download` / `last_screenshot` directly. See `docs/rpa.md`. |
 
@@ -108,7 +108,7 @@ End-to-end pilot path:
 
 1. Enable WhatsApp adapter and complete Meta Business Manager setup
    (phone-number verification: 2–5 business days of waiting).
-2. Wire the AIA flow (`roost/services/rpa_flows/library/aia.yaml`) to
+2. Wire the AIA flow (`roost/extras/rpa/services/rpa_flows/library/aia.yaml`) to
    end with `whatsapp_send` after `download_one`.
 3. Run end-to-end: agent receives "run AIA daily" via Telegram → flow
    logs in → OTP pause/resume → downloads PDF → `whatsapp_send` to a

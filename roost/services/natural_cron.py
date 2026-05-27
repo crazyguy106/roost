@@ -97,7 +97,7 @@ def schedule_to_trigger_config(parsed: dict) -> str:
 
 def _parse_with_gemini(text: str) -> dict | None:
     """Use Gemini to parse natural language schedule."""
-    from roost.config import GEMINI_API_KEY
+    from roost.config import GEMINI_API_KEY, GEMINI_MODEL
     if not GEMINI_API_KEY:
         return None
 
@@ -105,7 +105,7 @@ def _parse_with_gemini(text: str) -> dict | None:
 
     client = genai.Client(api_key=GEMINI_API_KEY)
     response = client.models.generate_content(
-        model="gemini-2.5-flash",  # Fast model for simple parsing
+        model=GEMINI_MODEL,
         contents=_PARSE_PROMPT.format(user_input=text),
         config=genai.types.GenerateContentConfig(
             temperature=0.1,
