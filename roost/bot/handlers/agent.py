@@ -29,6 +29,9 @@ from roost.config import (
     AGENT_ENABLED, AGENT_PROVIDER, AGENT_TIMEOUT, AI_RATE_LIMIT,
     GEMINI_API_KEY, GEMINI_AGENTIC,
     CLAUDE_API_KEY, CLAUDE_MODEL,
+    CLAUDE_CLI_BIN, CLAUDE_CLI_MODEL,
+    GEMINI_CLI_BIN, GEMINI_CLI_MODEL,
+    CODEX_CLI_BIN, CODEX_CLI_MODEL,
     OPENAI_API_KEY, OPENAI_MODEL,
     OLLAMA_URL, OLLAMA_MODEL,
 )
@@ -70,6 +73,15 @@ def _get_agentic_mode() -> str | None:
         return "gemini"
     if AGENT_PROVIDER == "claude" and CLAUDE_API_KEY:
         return "claude"
+    if AGENT_PROVIDER == "claude_cli":
+        # Auth is ~/.claude/ state, not an env-var key — assume present.
+        return "claude_cli"
+    if AGENT_PROVIDER == "gemini_cli":
+        # Auth is ~/.gemini/ OAuth state or GEMINI_API_KEY — assume present.
+        return "gemini_cli"
+    if AGENT_PROVIDER == "codex_cli":
+        # Auth is ~/.codex/ state from `codex login`. SCAFFOLD.
+        return "codex_cli"
     if AGENT_PROVIDER == "openai" and OPENAI_API_KEY:
         return "openai"
     if AGENT_PROVIDER == "ollama":
@@ -130,7 +142,10 @@ async def _run_agentic(update: Update, prompt: str, user_id: int, mode: str):
     """Run the agentic loop with the appropriate provider."""
     session_id = f"{user_id}:agent"
 
-    labels = {"gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT", "ollama": "Ollama"}
+    labels = {
+        "gemini": "Gemini", "claude": "Claude", "openai": "ChatGPT", "ollama": "Ollama",
+        "claude_cli": "Claude CLI", "gemini_cli": "Gemini CLI", "codex_cli": "Codex CLI",
+    }
     status_msg = await update.message.reply_text(f"Thinking ({labels.get(mode, mode)})...")
 
     async def on_progress(text):
@@ -196,6 +211,33 @@ def _create_agent(mode: str, session_id: str, system_prompt: str = ""):
             include_agent_tools=True,
             api_key=CLAUDE_API_KEY,
             model=CLAUDE_MODEL,
+        )
+
+    if mode == "claude_cli":
+        from roost.agents_claude_cli import ClaudeCliAgent
+        return ClaudeCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=CLAUDE_CLI_MODEL,
+        )
+
+    if mode == "gemini_cli":
+        from roost.agents_gemini_cli import GeminiCliAgent
+        return GeminiCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=GEMINI_CLI_MODEL,
+        )
+
+    if mode == "codex_cli":
+        from roost.agents_codex_cli import CodexCliAgent
+        return CodexCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=CODEX_CLI_MODEL,
         )
 
     if mode == "openai":
@@ -272,6 +314,9 @@ async def cmd_agent(update: Update, context: ContextTypes.DEFAULT_TYPE):
     providers = [
         ("gemini", "Gemini", bool(GEMINI_API_KEY and GEMINI_AGENTIC), "Free (Google account)"),
         ("claude", "Claude", bool(CLAUDE_API_KEY), "API key ($)"),
+        ("claude_cli", "Claude CLI", bool(shutil.which(CLAUDE_CLI_BIN)), "Subscription (~/.claude)"),
+        ("gemini_cli", "Gemini CLI", bool(shutil.which(GEMINI_CLI_BIN)), "Subscription (~/.gemini)"),
+        ("codex_cli", "Codex CLI", bool(shutil.which(CODEX_CLI_BIN)), "Subscription (~/.codex) — SCAFFOLD"),
         ("openai", "ChatGPT", bool(OPENAI_API_KEY), "API key ($)"),
         ("ollama", "Ollama", True, f"Local ({OLLAMA_MODEL})"),
     ]

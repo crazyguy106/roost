@@ -25,6 +25,20 @@ fi
 exec gosu dev bash -c '
 set -euo pipefail
 
+# 1.4. Seed per-vendor MCP configs into bind-mounted auth dirs on first
+#      boot. Claude takes its config via --mcp-config flag (no seed
+#      needed). Gemini and Codex only read from fixed paths inside their
+#      auth dirs, so we copy the baked template once unless the user has
+#      already supplied their own.
+if [ -d /home/dev/.gemini ] && [ ! -f /home/dev/.gemini/settings.json ]; then
+    cp /etc/roost/gemini-settings.json /home/dev/.gemini/settings.json
+    echo "[roost] Seeded ~/.gemini/settings.json (MCP: roost-mcp)"
+fi
+if [ -d /home/dev/.codex ] && [ ! -f /home/dev/.codex/config.toml ]; then
+    cp /etc/roost/codex-config.toml /home/dev/.codex/config.toml
+    echo "[roost] Seeded ~/.codex/config.toml (MCP: roost-mcp)"
+fi
+
 # 1.5. Bootstrap setup token on first boot.
 #      If no web password is configured (or still the default placeholder)
 #      and no setup token already exists, mint one and log the URL the user

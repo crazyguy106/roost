@@ -170,6 +170,25 @@
         background: oklch(0.3 0.05 260);
         color: oklch(0.7 0.1 260);
     }
+    .provider-switch {
+        display: flex; gap: 4px; margin-left: 8px;
+    }
+    .provider-switch button {
+        font-size: 0.72rem;
+        padding: 3px 9px;
+        border-radius: 4px;
+        border: 1px solid var(--border, oklch(0.30 0 0));
+        background: transparent;
+        color: var(--text, #cfd6e6);
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .provider-switch button:hover { border-color: oklch(0.55 0.15 260); }
+    .provider-switch button.active {
+        background: oklch(0.45 0.18 260);
+        color: #fff;
+        border-color: oklch(0.45 0.18 260);
+    }
 </style>
 
 <div class="chat-container">
@@ -177,6 +196,11 @@
         <div style="display: flex; align-items: center; justify-content: between; gap: 12px;">
             <h1 style="font-size: 1.1rem; font-weight: 700; margin: 0;">Chat</h1>
             <span class="provider-badge" id="providerBadge">{{ provider or "not configured" }}</span>
+            <div class="provider-switch" id="providerSwitch" role="group" aria-label="Pick AI provider">
+                <button type="button" data-provider="claude_cli">Claude</button>
+                <button type="button" data-provider="gemini_cli">Gemini</button>
+                <button type="button" data-provider="codex_cli">Codex</button>
+            </div>
             {% if not agent_enabled %}
             <span class="badge badge-error badge-sm">Agent disabled</span>
             {% endif %}
@@ -223,6 +247,36 @@ const messagesEl = document.getElementById('chatMessages');
 const inputEl = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 let sending = false;
+
+// ── Provider switcher ─────────────────────────────────────────────
+// `currentProvider` is null = follow AGENT_PROVIDER from .env; otherwise
+// it's one of "claude_cli" / "gemini_cli" / "codex_cli" and is sent on
+// every POST so the server routes the request through that subprocess.
+let currentProvider = (new URLSearchParams(location.search)).get('provider')
+    || ({{ selected_provider | tojson if selected_provider is defined else "null" }})
+    || null;
+
+function paintProviderSwitch() {
+    const buttons = document.querySelectorAll('#providerSwitch button');
+    buttons.forEach(b => {
+        b.classList.toggle('active', b.dataset.provider === currentProvider);
+    });
+    const badge = document.getElementById('providerBadge');
+    if (badge && currentProvider) badge.textContent = currentProvider;
+}
+
+document.querySelectorAll('#providerSwitch button').forEach(b => {
+    b.addEventListener('click', () => {
+        currentProvider = b.dataset.provider;
+        // Reflect in URL so a reload preserves the choice and links share state.
+        const url = new URL(location.href);
+        url.searchParams.set('provider', currentProvider);
+        history.replaceState(null, '', url.toString());
+        paintProviderSwitch();
+    });
+});
+
+paintProviderSwitch();
 
 // Auto-resize textarea
 inputEl.addEventListener('input', () => {
@@ -351,10 +405,12 @@ async function sendMessage() {
     const thinkingEl = addThinking();
 
     try {
+        const payload = {message: text};
+        if (currentProvider) payload.provider = currentProvider;
         const resp = await fetch('/api/chat/message', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: text}),
+            body: JSON.stringify(payload),
         });
 
         if (!resp.ok) {

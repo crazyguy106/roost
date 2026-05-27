@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from roost.database import db_connection
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 ALLOW = "allow"
 WARN = "warn"
 BLOCK = "block"
+NEEDS_APPROVAL = "needs_approval"
 
 
 # ── Destructive tool patterns ────────────────────────────────────────
@@ -73,6 +74,14 @@ _DANGEROUS_PATTERNS = [
     re.compile(r"\bwget\b.*\|\s*sh", re.IGNORECASE),
 ]
 
+# Money-moving SME-Ops writes — never executed directly by an AI agent.
+# Always routed through the draft-and-approve queue.
+_MONEY_MOVING_TOOLS = {
+    "stripe_create_refund",
+    "shopify_cancel_order",
+    "xero_create_invoice",  # only when status != "DRAFT" — checked below
+}
+
 # Email patterns that suggest mass/spam sending
 _BULK_EMAIL_PATTERNS = [
     re.compile(r"(,\s*){3,}"),  # 4+ comma-separated recipients
@@ -95,6 +104,7 @@ def guardian_check(tool_name: str, tool_args: dict,
          "rule": str}
     """
     checks = [
+        _check_money_movement,
         _check_delete_without_confirmation,
         _check_bulk_email,
         _check_unknown_recipient,
@@ -113,6 +123,27 @@ def guardian_check(tool_name: str, tool_args: dict,
 
 
 # ── Individual check rules ──────────────────────────────────────────
+
+
+def _check_money_movement(name: str, args: dict, user_id: str) -> dict:
+    """Route money-moving writes through the draft queue.
+
+    Stripe refunds and Shopify cancels always require approval. Xero
+    invoice creation requires approval only when the status is anything
+    other than DRAFT (DRAFT invoices don't notify anyone in Xero).
+    """
+    if name not in _MONEY_MOVING_TOOLS:
+        return {"decision": ALLOW, "reason": "", "rule": ""}
+    if name == "xero_create_invoice":
+        status = str(args.get("status", "DRAFT")).upper()
+        if status == "DRAFT":
+            return {"decision": ALLOW, "reason": "", "rule": ""}
+    return {
+        "decision": NEEDS_APPROVAL,
+        "reason": f"{name} requires explicit human approval (money-moving write).",
+        "rule": "money_movement_draft",
+    }
+
 
 def _check_delete_without_confirmation(name: str, args: dict,
                                         user_id: str) -> dict:
@@ -216,7 +247,7 @@ def _check_tool_call_burst(name: str, args: dict, user_id: str) -> dict:
     """Warn if too many tool calls in a short window (possible loop)."""
     try:
         with db_connection() as conn:
-            one_minute_ago = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            one_minute_ago = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             count = conn.execute(
                 """SELECT COUNT(*) as cnt FROM guardian_log
                    WHERE user_id = ? AND created_at > datetime(?, '-1 minute')""",
@@ -301,6 +332,188 @@ def get_guardian_log(limit: int = 50, decision: str | None = None,
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── Draft queue (NEEDS_APPROVAL) ─────────────────────────────────────
+
+# Registry of executors keyed by tool name. Populated lazily (first call
+# to `approve_draft`) to avoid import cycles between guardian and the
+# adapter modules it dispatches to.
+_EXECUTORS: dict = {}
+
+
+def _load_executors() -> None:
+    """Wire tool names to the actual API call. Called once on first approve."""
+    if _EXECUTORS:
+        return
+
+    def _stripe_refund(args: dict) -> dict:
+        from roost.extras.sme_ops.services.stripe import StripeClient
+        return StripeClient().create_refund(
+            args["charge_id"],
+            amount=args.get("amount"),
+            reason=args.get("reason"),
+        )
+
+    def _shopify_cancel(args: dict) -> dict:
+        from roost.extras.sme_ops.services.shopify import ShopifyClient
+        return ShopifyClient().cancel_order(
+            args["order_id"],
+            reason=args.get("reason", "other"),
+            refund=args.get("refund", False),
+        )
+
+    def _xero_invoice(args: dict) -> dict:
+        from roost.extras.sme_ops.services.xero import XeroClient
+        return XeroClient().create_invoice(
+            args["contact_id"],
+            args["line_items"],
+            due_date=args.get("due_date"),
+            status=args.get("status", "AUTHORISED"),
+            type_=args.get("type_", "ACCREC"),
+        )
+
+    _EXECUTORS.update({
+        "stripe_create_refund": _stripe_refund,
+        "shopify_cancel_order": _shopify_cancel,
+        "xero_create_invoice": _xero_invoice,
+    })
+
+
+def create_draft(tool_name: str, tool_args: dict, user_id: str = "",
+                 rule_name: str = "money_movement_draft") -> int:
+    """Persist a pending draft. Returns the draft id."""
+    with db_connection() as conn:
+        cur = conn.execute(
+            """INSERT INTO guardian_drafts
+               (tool_name, tool_args, rule_name, user_id, status)
+               VALUES (?, ?, ?, ?, 'pending')""",
+            (tool_name, json.dumps(tool_args, default=str)[:4000],
+             rule_name, user_id),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_pending_drafts(limit: int = 50) -> list[dict]:
+    with db_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, tool_name, tool_args, rule_name, created_at
+               FROM guardian_drafts WHERE status = 'pending'
+               ORDER BY created_at DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["args"] = json.loads(d["tool_args"]) if d["tool_args"] else {}
+        except Exception:
+            d["args"] = {}
+        out.append(d)
+    return out
+
+
+def get_draft(draft_id: int) -> dict | None:
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM guardian_drafts WHERE id = ?", (draft_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def approve_draft(draft_id: int) -> dict:
+    """Approve a pending draft and dispatch the underlying tool call.
+
+    Returns `{ok, draft_id, status, result?}` where status ∈
+    executed | failed | not_pending | unknown_tool | not_found.
+    """
+    _load_executors()
+    draft = get_draft(draft_id)
+    if not draft:
+        return {"ok": False, "status": "not_found", "draft_id": draft_id}
+    if draft["status"] != "pending":
+        return {"ok": False, "status": "not_pending",
+                "current_status": draft["status"], "draft_id": draft_id}
+    executor = _EXECUTORS.get(draft["tool_name"])
+    if not executor:
+        return {"ok": False, "status": "unknown_tool",
+                "tool_name": draft["tool_name"], "draft_id": draft_id}
+    try:
+        args = json.loads(draft["tool_args"]) if draft["tool_args"] else {}
+    except Exception:
+        args = {}
+
+    # Mark approved before dispatch so a crash leaves a recoverable state.
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE guardian_drafts SET status='approved', decided_at=datetime('now')"
+            " WHERE id = ?", (draft_id,),
+        )
+        conn.commit()
+
+    try:
+        result = executor(args)
+    except Exception as e:
+        result = {"error": "executor_exception", "detail": str(e)}
+
+    failed = isinstance(result, dict) and "error" in result
+    final_status = "failed" if failed else "executed"
+    with db_connection() as conn:
+        conn.execute(
+            """UPDATE guardian_drafts
+               SET status = ?, executed_at = datetime('now'),
+                   result_json = ?
+               WHERE id = ?""",
+            (final_status, json.dumps(result, default=str)[:4000], draft_id),
+        )
+        conn.commit()
+    return {"ok": not failed, "status": final_status,
+            "draft_id": draft_id, "result": result}
+
+
+def reject_draft(draft_id: int, reason: str = "") -> dict:
+    draft = get_draft(draft_id)
+    if not draft:
+        return {"ok": False, "status": "not_found", "draft_id": draft_id}
+    if draft["status"] != "pending":
+        return {"ok": False, "status": "not_pending",
+                "current_status": draft["status"], "draft_id": draft_id}
+    with db_connection() as conn:
+        conn.execute(
+            """UPDATE guardian_drafts
+               SET status='rejected', decided_at=datetime('now'),
+                   result_json = ?
+               WHERE id = ?""",
+            (json.dumps({"reason": reason})[:4000], draft_id),
+        )
+        conn.commit()
+    return {"ok": True, "status": "rejected", "draft_id": draft_id}
+
+
+def guardian_gate(tool_name: str, tool_args: dict,
+                  user_id: str = "") -> dict | None:
+    """Pre-flight gate for MCP tool wrappers.
+
+    Returns None when the tool may execute. Returns a dict response
+    when the tool MUST NOT execute (drafted, blocked, or warned).
+    """
+    check = guardian_check(tool_name, tool_args, user_id)
+    decision = check["decision"]
+    if decision == NEEDS_APPROVAL:
+        draft_id = create_draft(tool_name, tool_args, user_id,
+                                rule_name=check["rule"])
+        return {
+            "ok": False,
+            "status": "pending_approval",
+            "draft_id": draft_id,
+            "reason": check["reason"],
+            "preview": tool_args,
+        }
+    if decision == BLOCK:
+        return {"ok": False, "status": "blocked",
+                "reason": check["reason"], "rule": check["rule"]}
+    return None
 
 
 def get_guardian_stats(user_id: str = "") -> dict:

@@ -12,6 +12,9 @@ from roost.config import (
     AGENT_ENABLED, AGENT_PROVIDER, AGENT_TIMEOUT,
     GEMINI_API_KEY, GEMINI_AGENTIC,
     CLAUDE_API_KEY, CLAUDE_MODEL,
+    CLAUDE_CLI_BIN, CLAUDE_CLI_MODEL,
+    GEMINI_CLI_BIN, GEMINI_CLI_MODEL,
+    CODEX_CLI_BIN, CODEX_CLI_MODEL,
     OPENAI_API_KEY, OPENAI_MODEL,
     OLLAMA_URL, OLLAMA_MODEL,
 )
@@ -91,12 +94,41 @@ Safety rules:
 
 # ── Agent runner (shared across all adapters) ─────────────────────
 
-def get_agentic_mode() -> str | None:
-    """Determine which agentic mode is available."""
+# Modes the per-request override may select. Matches the dispatch table in
+# create_agent() below. Anything outside this set falls back to env-var logic.
+_OVERRIDABLE_MODES = {
+    "gemini", "claude",
+    "claude_cli", "gemini_cli", "codex_cli",
+    "openai", "ollama",
+}
+
+
+def get_agentic_mode(override: str | None = None) -> str | None:
+    """Determine which agentic mode is available.
+
+    ``override`` lets a single request (e.g. /chat?provider=codex_cli) pick
+    a provider without changing AGENT_PROVIDER in .env. Only whitelisted
+    values are honoured; anything else is ignored. The override skips the
+    env-var presence check (CLAUDE_API_KEY, etc.) — if auth is missing the
+    agent's first call will surface a clear error.
+    """
+    if override and override in _OVERRIDABLE_MODES:
+        return override
     if AGENT_PROVIDER == "gemini" and GEMINI_API_KEY and GEMINI_AGENTIC:
         return "gemini"
     if AGENT_PROVIDER == "claude" and CLAUDE_API_KEY:
         return "claude"
+    if AGENT_PROVIDER == "claude_cli":
+        # Auth is the `~/.claude/` state, not an env-var key — assume present.
+        # Agent will return a clear error on first call if CLI is missing.
+        return "claude_cli"
+    if AGENT_PROVIDER == "gemini_cli":
+        # Auth is ~/.gemini/ (OAuth) or GEMINI_API_KEY env. Either works.
+        return "gemini_cli"
+    if AGENT_PROVIDER == "codex_cli":
+        # Auth is ~/.codex/ state from `codex login`. SCAFFOLD — see
+        # roost/agents_codex_cli.py docstring before relying on this in prod.
+        return "codex_cli"
     if AGENT_PROVIDER == "openai" and OPENAI_API_KEY:
         return "openai"
     if AGENT_PROVIDER == "ollama":
@@ -105,22 +137,28 @@ def get_agentic_mode() -> str | None:
 
 
 def create_agent(mode: str, session_id: str, system_prompt: str = "",
-                  tool_scope: str = "full"):
-    """Factory: create the right agent class for the provider."""
+                  tool_scope: str = "full", on_tool_event=None):
+    """Factory: create the right agent class for the provider.
+
+    ``on_tool_event`` (optional async callback) is stored on the returned
+    agent instance as ``agent.on_tool_event`` for callers that want to
+    set the per-tool event hook once at construction time. The runner's
+    ``run(..., on_tool_event=...)`` parameter still wins when both are
+    provided. See ``docs/agentic-workflow-phase1.md`` §3 / §6.
+    """
     prompt = system_prompt or BASE_SYSTEM_PROMPT
 
     if mode == "gemini":
         from roost.gemini_agent import GeminiAgent
-        return GeminiAgent(
+        agent = GeminiAgent(
             system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
             tool_scope=tool_scope,
         )
-
-    if mode == "claude":
+    elif mode == "claude":
         from roost.agents import ClaudeAgent
-        return ClaudeAgent(
+        agent = ClaudeAgent(
             system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
@@ -128,10 +166,36 @@ def create_agent(mode: str, session_id: str, system_prompt: str = "",
             model=CLAUDE_MODEL,
             tool_scope=tool_scope,
         )
-
-    if mode == "openai":
+    elif mode == "claude_cli":
+        from roost.agents_claude_cli import ClaudeCliAgent
+        agent = ClaudeCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=CLAUDE_CLI_MODEL,
+            tool_scope=tool_scope,
+        )
+    elif mode == "gemini_cli":
+        from roost.agents_gemini_cli import GeminiCliAgent
+        agent = GeminiCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=GEMINI_CLI_MODEL,
+            tool_scope=tool_scope,
+        )
+    elif mode == "codex_cli":
+        from roost.agents_codex_cli import CodexCliAgent
+        agent = CodexCliAgent(
+            system_prompt=prompt,
+            session_id=session_id,
+            include_agent_tools=True,
+            model=CODEX_CLI_MODEL,
+            tool_scope=tool_scope,
+        )
+    elif mode == "openai":
         from roost.agents import OpenAIAgent
-        return OpenAIAgent(
+        agent = OpenAIAgent(
             system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
@@ -139,10 +203,9 @@ def create_agent(mode: str, session_id: str, system_prompt: str = "",
             model=OPENAI_MODEL,
             tool_scope=tool_scope,
         )
-
-    if mode == "ollama":
+    elif mode == "ollama":
         from roost.agents import OpenAIAgent
-        return OpenAIAgent(
+        agent = OpenAIAgent(
             system_prompt=prompt,
             session_id=session_id,
             include_agent_tools=True,
@@ -151,8 +214,12 @@ def create_agent(mode: str, session_id: str, system_prompt: str = "",
             model=OLLAMA_MODEL,
             tool_scope=tool_scope,
         )
+    else:
+        raise ValueError(f"Unknown agent mode: {mode}")
 
-    raise ValueError(f"Unknown agent mode: {mode}")
+    if on_tool_event is not None:
+        agent.on_tool_event = on_tool_event
+    return agent
 
 
 async def run_agent(
@@ -182,6 +249,9 @@ async def run_agent(
             f"Set one of these in .env:\n"
             f"  AGENT_PROVIDER=gemini + GEMINI_API_KEY\n"
             f"  AGENT_PROVIDER=claude + CLAUDE_API_KEY\n"
+            f"  AGENT_PROVIDER=claude_cli (uses Claude subscription via ~/.claude)\n"
+            f"  AGENT_PROVIDER=gemini_cli (uses Gemini account via ~/.gemini)\n"
+            f"  AGENT_PROVIDER=codex_cli (uses OpenAI Codex via ~/.codex — SCAFFOLD)\n"
             f"  AGENT_PROVIDER=openai + OPENAI_API_KEY\n"
             f"  AGENT_PROVIDER=ollama (free, local)"
         )

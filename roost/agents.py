@@ -21,6 +21,78 @@ from roost.gemini_agent import (
 logger = logging.getLogger("roost.agents")
 
 
+# ── Agentic Workflow event wrapper ───────────────────────────────────
+
+async def _execute_tool_with_events(
+    tool_name: str,
+    args: dict,
+    *,
+    user_id: str,
+    tool_scope: str,
+    confirmation_callback: Callable | None,
+    on_tool_event: Callable | None,
+):
+    """Run ``_execute_tool`` and emit ``tool_called`` / ``tool_returned`` /
+    ``tool_failed`` events around it when ``on_tool_event`` is provided.
+
+    Behaviour with ``on_tool_event=None`` is identical to a bare
+    ``_execute_tool(...)`` call — keeps existing callers regression-free.
+    """
+    import time as _time
+
+    call_id = None
+    if on_tool_event is not None:
+        from roost.services.agentic_events import new_call_id, truncate_args
+        call_id = new_call_id()
+        try:
+            await on_tool_event({
+                "type": "tool_called",
+                "call_id": call_id,
+                "tool": tool_name,
+                "args_preview": truncate_args(args),
+            })
+        except Exception:
+            logger.debug("on_tool_event(tool_called) callback failed", exc_info=True)
+
+    t0 = _time.perf_counter()
+    try:
+        result = _execute_tool(
+            tool_name, args, user_id=user_id,
+            tool_scope=tool_scope,
+            confirmation_callback=confirmation_callback,
+        )
+    except Exception as exec_err:
+        dur_ms = int((_time.perf_counter() - t0) * 1000)
+        if on_tool_event is not None:
+            try:
+                await on_tool_event({
+                    "type": "tool_failed",
+                    "call_id": call_id,
+                    "tool": tool_name,
+                    "error": str(exec_err),
+                    "duration_ms": dur_ms,
+                })
+            except Exception:
+                logger.debug("on_tool_event(tool_failed) callback failed", exc_info=True)
+        raise
+    dur_ms = int((_time.perf_counter() - t0) * 1000)
+
+    if on_tool_event is not None:
+        from roost.services.agentic_events import truncate_result
+        try:
+            await on_tool_event({
+                "type": "tool_returned",
+                "call_id": call_id,
+                "tool": tool_name,
+                "result_preview": truncate_result(result),
+                "duration_ms": dur_ms,
+            })
+        except Exception:
+            logger.debug("on_tool_event(tool_returned) callback failed", exc_info=True)
+
+    return result
+
+
 # ── Shared tool schema (OpenAI/Claude format) ────────────────────────
 
 def _build_openai_tools(include_agent_tools: bool = False) -> list[dict]:
@@ -329,7 +401,8 @@ class OpenAIAgent:
 
     async def run(self, user_prompt: str, user_id: str = "",
                   on_progress: Callable | None = None,
-                  confirmation_callback: Callable | None = None) -> str:
+                  confirmation_callback: Callable | None = None,
+                  on_tool_event: Callable | None = None) -> str:
         # Add system prompt if starting fresh
         if not self.history and self.system_prompt:
             self.history.append({"role": "system", "content": self.system_prompt})
@@ -391,9 +464,12 @@ class OpenAIAgent:
                     args = {}
 
                 logger.info("Tool call: %s(%s)", tc.function.name, json.dumps(args, default=str)[:200])
-                result = _execute_tool(tc.function.name, args, user_id=user_id,
-                                       tool_scope=self.tool_scope,
-                                       confirmation_callback=confirmation_callback)
+                result = await _execute_tool_with_events(
+                    tc.function.name, args, user_id=user_id,
+                    tool_scope=self.tool_scope,
+                    confirmation_callback=confirmation_callback,
+                    on_tool_event=on_tool_event,
+                )
                 tool_call_count += 1
 
                 self.history.append({
@@ -448,7 +524,8 @@ class ClaudeAgent:
 
     async def run(self, user_prompt: str, user_id: str = "",
                   on_progress: Callable | None = None,
-                  confirmation_callback: Callable | None = None) -> str:
+                  confirmation_callback: Callable | None = None,
+                  on_tool_event: Callable | None = None) -> str:
         self.history.append({"role": "user", "content": user_prompt})
 
         tool_call_count = 0
@@ -508,9 +585,12 @@ class ClaudeAgent:
             for tu in tool_uses:
                 args = dict(tu.input) if tu.input else {}
                 logger.info("Tool call: %s(%s)", tu.name, json.dumps(args, default=str)[:200])
-                result = _execute_tool(tu.name, args, user_id=user_id,
-                                       tool_scope=self.tool_scope,
-                                       confirmation_callback=confirmation_callback)
+                result = await _execute_tool_with_events(
+                    tu.name, args, user_id=user_id,
+                    tool_scope=self.tool_scope,
+                    confirmation_callback=confirmation_callback,
+                    on_tool_event=on_tool_event,
+                )
                 tool_call_count += 1
 
                 tool_results.append({

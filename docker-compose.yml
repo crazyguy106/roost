@@ -23,8 +23,23 @@ services:
       # that compose reads via env_file. Without this, wizard changes
       # are stranded in the container's writable layer and lost on rebuild.
       - ./.env:/app/.env
+      # Persist per-vendor CLI auth state for AGENT_PROVIDER=<vendor>_cli.
+      # HOST_*_DIR defaults to ./<vendor>-auth so first-boot `<vendor> login`
+      # state survives `docker compose down/up` and image rebuilds. Each
+      # subprocess agent (Claude Code / Gemini CLI / Codex) reads its own dir.
+      - ${HOST_CLAUDE_DIR:-./claude-auth}:/home/dev/.claude
+      - ${HOST_GEMINI_DIR:-./gemini-auth}:/home/dev/.gemini
+      - ${HOST_CODEX_DIR:-./codex-auth}:/home/dev/.codex
     env_file:
       - .env
+    environment:
+      # Container runs as root, but the per-vendor CLI auth volumes mount
+      # to /home/dev/.{claude,gemini,codex} (chowned to dev:dev in the
+      # Dockerfile). Point HOME at /home/dev so `claude` / `gemini` / `codex`
+      # read and write their state in the bind-mounted dirs and survive
+      # restarts. Without this, subscription auth lands in /root and is
+      # lost on the next `docker compose up`.
+      HOME: "/home/dev"
     restart: unless-stopped
     depends_on:
       chromium:

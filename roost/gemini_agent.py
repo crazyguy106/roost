@@ -1135,15 +1135,20 @@ class GeminiAgent:
 
     async def run(self, user_prompt: str, user_id: str = "",
                   on_progress: Callable | None = None,
-                  confirmation_callback: Callable | None = None) -> str:
+                  confirmation_callback: Callable | None = None,
+                  on_tool_event: Callable | None = None) -> str:
         """Run the agentic loop. Returns final text response.
 
         Args:
             user_prompt: The user's message.
             user_id: For audit logging.
-            on_progress: Optional async callback(text) for streaming updates.
+            on_progress: Optional async callback(text) for coarse streaming updates.
             confirmation_callback: For TIER_WEB — called when a destructive tool
                 needs OTP confirmation. Receives (tool_name, tool_args, description).
+            on_tool_event: Optional async callback({event_type, ...}) emitted around
+                each tool call. Used by the Agentic Workflow surface to stream
+                ``tool_called`` / ``tool_returned`` / ``tool_failed`` per spec
+                §4.2 in docs/agentic-workflow-phase1.md. Additive to on_progress.
         """
         # Inject learned skills and cross-channel memory into system prompt
         try:
@@ -1283,9 +1288,56 @@ class GeminiAgent:
                 args = dict(fc.args) if fc.args else {}
                 logger.info("Tool call: %s(%s)", fc.name, json.dumps(args, default=str)[:200])
 
-                result = _execute_tool(fc.name, args, user_id=user_id,
-                                       tool_scope=self.tool_scope,
-                                       confirmation_callback=confirmation_callback)
+                # Agentic Workflow: emit tool_called before execution.
+                call_id = None
+                if on_tool_event is not None:
+                    from roost.services.agentic_events import new_call_id, truncate_args
+                    call_id = new_call_id()
+                    try:
+                        await on_tool_event({
+                            "type": "tool_called",
+                            "call_id": call_id,
+                            "tool": fc.name,
+                            "args_preview": truncate_args(args),
+                        })
+                    except Exception:
+                        logger.debug("on_tool_event(tool_called) callback failed", exc_info=True)
+
+                import time as _time
+                _t0 = _time.perf_counter()
+                try:
+                    result = _execute_tool(fc.name, args, user_id=user_id,
+                                           tool_scope=self.tool_scope,
+                                           confirmation_callback=confirmation_callback)
+                except Exception as exec_err:
+                    _dur_ms = int((_time.perf_counter() - _t0) * 1000)
+                    if on_tool_event is not None:
+                        try:
+                            await on_tool_event({
+                                "type": "tool_failed",
+                                "call_id": call_id,
+                                "tool": fc.name,
+                                "error": str(exec_err),
+                                "duration_ms": _dur_ms,
+                            })
+                        except Exception:
+                            logger.debug("on_tool_event(tool_failed) callback failed", exc_info=True)
+                    raise
+                _dur_ms = int((_time.perf_counter() - _t0) * 1000)
+
+                if on_tool_event is not None:
+                    from roost.services.agentic_events import truncate_result
+                    try:
+                        await on_tool_event({
+                            "type": "tool_returned",
+                            "call_id": call_id,
+                            "tool": fc.name,
+                            "result_preview": truncate_result(result),
+                            "duration_ms": _dur_ms,
+                        })
+                    except Exception:
+                        logger.debug("on_tool_event(tool_returned) callback failed", exc_info=True)
+
                 tool_call_count += 1
                 tracker.record_tool_call()
                 _collected_tool_calls.append({

@@ -1,0 +1,10 @@
+# Codex CLI config — baked into the image and copied into the
+# bind-mounted ~/.codex/ on first boot by entrypoint.sh.
+#
+# Registers Roost's MCP server (the `roost-mcp` console-script) so
+# `AGENT_PROVIDER=codex_cli` exposes Roost's tools to the Codex
+# subprocess. Codex reads ~/.codex/config.toml by default.
+
+[mcp_servers.roost]
+command = "roost-mcp"
+args = []

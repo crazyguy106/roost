@@ -87,6 +87,10 @@ async def send_message(request: Request):
 
     session_id = body.get("session_id", f"web:{user_id}:agent")
 
+    # Optional per-request provider override (e.g. {"provider": "codex_cli"}).
+    # Whitelisted in get_agentic_mode(); ignored if not recognised.
+    provider_override = body.get("provider") or None
+
     # Held actions collector — filled by confirmation_callback
     held_actions = []
 
@@ -126,7 +130,7 @@ async def send_message(request: Request):
             # SSE format: we'll collect and send after
 
         # Build system prompt for web
-        mode = get_agentic_mode()
+        mode = get_agentic_mode(override=provider_override)
         if not mode:
             yield f"data: {json.dumps({'type': 'error', 'text': 'No AI provider configured'})}\n\n"
             return

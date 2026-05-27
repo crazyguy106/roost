@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Updated April 2026. These are approximate.
 
 _COST_PER_1M = {
+    "gemini-3.5-flash":        {"input": 0.10, "output": 0.40},
     "gemini-3-flash-preview":  {"input": 0.10, "output": 0.40},
     "gemini-2.5-flash":        {"input": 0.15, "output": 0.60},
     "gemini-2.5-pro":          {"input": 1.25, "output": 5.00},

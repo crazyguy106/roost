@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Agentic Workflow — Roost{% endblock %}
+{% block content %}
+<style>
+    .agentic-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 16px);
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 0 16px;
+    }
+    .agentic-header {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .agentic-header h1 {
+        font-size: 1.1rem;
+        margin: 0;
+    }
+    .agentic-header .subtitle {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        margin-top: 4px;
+    }
+    .agentic-stream {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .user-msg {
+        align-self: flex-end;
+        max-width: 80%;
+        background: oklch(0.45 0.15 260);
+        color: #fff;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border-bottom-right-radius: 4px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+    .plan-card {
+        border: 1px solid oklch(0.45 0.12 200);
+        background: oklch(0.18 0.04 200);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 0.85rem;
+    }
+    .plan-card.fallback {
+        border-color: oklch(0.55 0.15 60);
+        background: oklch(0.18 0.04 60);
+    }
+    .plan-card h3 {
+        font-size: 0.95rem;
+        margin: 0 0 6px 0;
+        color: oklch(0.85 0.1 200);
+    }
+    .plan-card.fallback h3 {
+        color: oklch(0.85 0.12 60);
+    }
+    .plan-summary {
+        font-style: italic;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+    }
+    .plan-step {
+        margin: 4px 0;
+        padding: 6px 10px;
+        background: var(--surface);
+        border-radius: 6px;
+        border-left: 3px solid oklch(0.45 0.12 200);
+    }
+    .plan-step .step-id {
+        font-weight: bold;
+        color: oklch(0.7 0.12 200);
+        margin-right: 6px;
+    }
+    .plan-step .tool-chip {
+        display: inline-block;
+        font-family: monospace;
+        font-size: 0.75rem;
+        background: oklch(0.25 0.06 200);
+        padding: 1px 6px;
+        border-radius: 4px;
+        margin-right: 4px;
+        margin-top: 4px;
+    }
+    .plan-meta {
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        margin-top: 6px;
+    }
+    .tool-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: start;
+        padding: 8px 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.82rem;
+    }
+    .tool-row .status {
+        width: 18px;
+        height: 18px;
+        text-align: center;
+        line-height: 18px;
+        font-size: 0.8rem;
+    }
+    .tool-row .name {
+        font-family: monospace;
+        color: oklch(0.85 0.1 200);
+    }
+    .tool-row .duration {
+        color: var(--text-dim);
+        font-size: 0.72rem;
+    }
+    .tool-row .args, .tool-row .result, .tool-row .error {
+        grid-column: 1 / -1;
+        font-family: monospace;
+        font-size: 0.72rem;
+        color: var(--text-dim);
+        background: oklch(0.12 0 0);
+        padding: 6px 8px;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .tool-row .error {
+        color: oklch(0.7 0.18 25);
+        background: oklch(0.15 0.04 25);
+    }
+    .tool-row .step-label {
+        font-size: 0.7rem;
+        color: var(--text-dim);
+        margin-right: 6px;
+    }
+    .thinking-line {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        padding: 4px 8px;
+        font-style: italic;
+    }
+    .held-card {
+        border: 1px solid oklch(0.55 0.15 60);
+        background: oklch(0.2 0.05 60);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 0.85rem;
+    }
+    .held-card h4 {
+        margin: 0 0 6px 0;
+        color: oklch(0.85 0.12 60);
+        font-size: 0.9rem;
+    }
+    .final-response {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+    .error-line {
+        color: oklch(0.7 0.18 25);
+        padding: 8px 12px;
+        border: 1px solid oklch(0.4 0.12 25);
+        border-radius: 8px;
+        background: oklch(0.15 0.04 25);
+        font-size: 0.85rem;
+    }
+    .agentic-input-area {
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+    .agentic-input-row {
+        display: flex;
+        gap: 8px;
+        align-items: end;
+    }
+    #agenticInput {
+        flex: 1;
+        min-height: 42px;
+        max-height: 150px;
+        resize: none;
+        font-size: 0.9rem;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        outline: none;
+        line-height: 1.4;
+    }
+    #agenticInput:focus { border-color: oklch(0.55 0.15 260); }
+    #agenticSendBtn {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: oklch(0.55 0.2 260);
+        border: none;
+        cursor: pointer;
+        color: #fff;
+        flex-shrink: 0;
+    }
+    #agenticSendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .provider-switch { display: inline-flex; gap: 4px; margin-left: 10px; }
+    .provider-switch button {
+        font-size: 0.72rem;
+        padding: 3px 9px;
+        border-radius: 4px;
+        border: 1px solid var(--border, oklch(0.30 0 0));
+        background: transparent;
+        color: var(--text, #cfd6e6);
+        cursor: pointer;
+    }
+    .provider-switch button:hover { border-color: oklch(0.55 0.15 260); }
+    .provider-switch button.active {
+        background: oklch(0.45 0.18 260);
+        color: #fff;
+        border-color: oklch(0.45 0.18 260);
+    }
+</style>
+<div class="agentic-container">
+    <div class="agentic-header">
+        <h1>Agentic Workflow</h1>
+        <div class="subtitle">
+            Plan-then-execute. The model writes a plan first, then carries it out — each tool call streams its own status.
+            <span id="providerLabel">{% if agent_enabled %}{{ provider }}{% else %}disabled{% endif %}</span>
+            <div class="provider-switch" id="providerSwitch" role="group" aria-label="Pick AI provider">
+                <button type="button" data-provider="claude_cli">Claude</button>
+                <button type="button" data-provider="gemini_cli">Gemini</button>
+                <button type="button" data-provider="codex_cli">Codex</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Seed window.__roostProvider for agentic.js. URL ?provider= wins, then
+        // the server-rendered selection, else null (follow .env).
+        window.__roostProvider = (new URLSearchParams(location.search)).get('provider')
+            || ({{ selected_provider | tojson if selected_provider is defined else "null" }})
+            || null;
+    </script>
+    <div class="agentic-stream" id="agenticStream"></div>
+    <div class="agentic-input-area">
+        <form id="agenticForm" autocomplete="off">
+            <div class="agentic-input-row">
+                <textarea id="agenticInput" rows="1" placeholder="Ask Roost to do something…"
+                          {% if not agent_enabled %}disabled{% endif %}></textarea>
+                <button id="agenticSendBtn" type="submit"
+                        {% if not agent_enabled %}disabled{% endif %}>↑</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script src="/static/agentic.js"></script>
+{% endblock %}

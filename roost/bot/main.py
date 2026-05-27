@@ -255,7 +255,9 @@ def main():
     # RPA input handler (group -1: intercepts plain messages for awaiting_input runs)
     from roost.config import RPA_ENABLED
     if RPA_ENABLED:
-        from roost.extras.rpa.bot.rpa_input import handle_rpa_input_message, cmd_rpa
+        from roost.extras.rpa.bot.rpa_input import (
+            handle_rpa_input_message, handle_rpa_choice_callback, cmd_rpa,
+        )
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rpa_input_message), group=-1)
         app.add_handler(CommandHandler("rpa", cmd_rpa))
 
@@ -280,6 +282,10 @@ def main():
     app.add_handler(CallbackQueryHandler(
         handle_nurture_callback, pattern=r"^(napprove|nskip):\d+$",
     ))
+    if RPA_ENABLED:
+        app.add_handler(CallbackQueryHandler(
+            handle_rpa_choice_callback, pattern=r"^rpa_choice:\d+:",
+        ))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
     # Voice notes (must be before generic file handler)

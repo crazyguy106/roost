@@ -37,8 +37,14 @@ RUN curl -fsSL -o /usr/local/bin/ttyd \
     https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
     && chmod +x /usr/local/bin/ttyd
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install subscription-billed CLI agents: Claude Code, Gemini CLI, Codex.
+# Each ships with its own auth flow (`claude login` / `gemini /auth` /
+# `codex login`) that writes state under /home/dev/.<vendor>/, which is
+# bind-mounted from the host so it survives rebuilds.
+RUN npm install -g \
+    @anthropic-ai/claude-code \
+    @google/gemini-cli \
+    @openai/codex
 
 # Create non-root user
 RUN groupadd -g 1000 dev \
@@ -97,6 +103,25 @@ RUN pip install --no-cache-dir -e .
 # Copy entrypoint
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
+
+# Bake the MCP-server config for each CLI agent. Each one points at the
+# in-image `roost-mcp` console-script so AGENT_PROVIDER=<vendor>_cli can
+# expose Roost's MCP tools to the subprocess.
+#   - Claude: takes a config file via --mcp-config <path>
+#   - Gemini: reads ~/.gemini/settings.json (no flag override exists),
+#             so entrypoint.sh seeds the bind-mounted dir on first boot
+#   - Codex:  reads ~/.codex/config.toml — same first-boot copy pattern
+RUN mkdir -p /etc/roost
+COPY docker/claude-mcp-config.json /etc/roost/claude-mcp-config.json
+COPY docker/gemini-settings.json   /etc/roost/gemini-settings.json
+COPY docker/codex-config.toml      /etc/roost/codex-config.toml
+
+# Pre-create the per-vendor auth state dirs so host bind-mounts land on
+# dev-owned targets. AGENT_PROVIDER=<vendor>_cli stores its subscription
+# session here; bind-mount from host to persist across rebuilds (see
+# HOST_CLAUDE_DIR / HOST_GEMINI_DIR / HOST_CODEX_DIR in docker-compose.yml).
+RUN mkdir -p /home/dev/.claude /home/dev/.gemini /home/dev/.codex \
+    && chown -R dev:dev /home/dev/.claude /home/dev/.gemini /home/dev/.codex
 
 # Fix ownership
 RUN chown -R dev:dev /app

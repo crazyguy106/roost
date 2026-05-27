@@ -76,11 +76,12 @@ templates.env.globals["property_agent_enabled"] = _PA_ENABLED
 
 def _base_context(request: Request) -> dict:
     """Base template context: request + current_user."""
-    from roost.config import PROPERTY_AGENT_ENABLED
+    from roost.config import PROPERTY_AGENT_ENABLED, AGENTIC_WORKFLOW_ENABLED
     return {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "property_agent_enabled": PROPERTY_AGENT_ENABLED,
+        "agentic_workflow_enabled": AGENTIC_WORKFLOW_ENABLED,
     }
 
 
@@ -410,10 +411,7 @@ def inbox_page(request: Request):
     return templates.TemplateResponse("email_inbox.html", {**_base_context(request)})
 
 
-@router.get("/rpa")
-def rpa_page(request: Request):
-    """Minimal RPA run viewer — list runs, surface 'Take over browser' for paused runs."""
-    return templates.TemplateResponse("rpa.html", {**_base_context(request)})
+# /rpa page — moved to roost.extras.rpa
 
 
 # ── Notes pages ──────────────────────────────────────────────────────
@@ -1141,15 +1139,36 @@ def notion_bulk_export(request: Request):
 # ── Chat ──────────────────────────────────────────────────────────
 
 @router.get("/chat")
-def chat_page(request: Request):
+def chat_page(request: Request, provider: str | None = None):
     from roost.config import AGENT_ENABLED, AGENT_PROVIDER
     from roost.adapters import get_agentic_mode
-    mode = get_agentic_mode()
-    provider = mode or AGENT_PROVIDER or "none"
+    mode = get_agentic_mode(override=provider)
+    chosen = mode or AGENT_PROVIDER or "none"
     return templates.TemplateResponse("chat.html", {
         **_base_context(request),
         "agent_enabled": AGENT_ENABLED and mode is not None,
-        "provider": provider,
+        "provider": chosen,
+        "selected_provider": provider or "",
+    })
+
+
+# ── Agentic Workflow (Phase 1) ────────────────────────────────────
+# Gated by AGENTIC_WORKFLOW_ENABLED — see docs/agentic-workflow-phase1.md.
+
+@router.get("/agentic")
+def agentic_page(request: Request, provider: str | None = None):
+    from fastapi.responses import RedirectResponse
+    from roost.config import AGENT_ENABLED, AGENT_PROVIDER, AGENTIC_WORKFLOW_ENABLED
+    from roost.adapters import get_agentic_mode
+    if not AGENTIC_WORKFLOW_ENABLED:
+        return RedirectResponse(url="/chat", status_code=302)
+    mode = get_agentic_mode(override=provider)
+    chosen = mode or AGENT_PROVIDER or "none"
+    return templates.TemplateResponse("agentic.html", {
+        **_base_context(request),
+        "agent_enabled": AGENT_ENABLED and mode is not None,
+        "provider": chosen,
+        "selected_provider": provider or "",
     })
 
 
@@ -1406,50 +1425,3 @@ def settings_page(request: Request):
     })
 
 
-# ── Property-agent toolkit (Singapore) ──────────────────────────────
-
-
-def _require_property_agent():
-    from roost.config import PROPERTY_AGENT_ENABLED
-    if not PROPERTY_AGENT_ENABLED:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Property-agent toolkit disabled")
-
-
-@router.get("/property-agent/stamp-duty")
-def property_agent_stamp_duty(request: Request):
-    """IRAS stamp-duty calculator: BSD + ABSD, SSD, lease duty."""
-    _require_property_agent()
-    return templates.TemplateResponse("property_agent/stamp_duty.html", {
-        **_base_context(request),
-        "active_tab": "",
-        "page_title": "Stamp Duty Calculator",
-    })
-
-
-@router.get("/property-agent/dnc-scrub")
-def property_agent_dnc_scrub(request: Request):
-    """PDPC DNC Registry scrub UI."""
-    _require_property_agent()
-    from roost.config import DNC_ENABLED
-    return templates.TemplateResponse("property_agent/dnc_scrub.html", {
-        **_base_context(request),
-        "enabled": DNC_ENABLED,
-        "active_tab": "",
-        "page_title": "DNC Scrub",
-    })
-
-
-@router.get("/property-agent/cdd-screen")
-def property_agent_cdd_screen(request: Request):
-    """CDD screening (sanctions / PEP / adverse media)."""
-    _require_property_agent()
-    from roost.config import CDD_ENABLED, CDD_REFRESH_DAYS, CDD_VENDOR
-    return templates.TemplateResponse("property_agent/cdd_screen.html", {
-        **_base_context(request),
-        "enabled": CDD_ENABLED,
-        "vendor": CDD_VENDOR,
-        "refresh_days": CDD_REFRESH_DAYS,
-        "active_tab": "",
-        "page_title": "CDD Screening",
-    })
