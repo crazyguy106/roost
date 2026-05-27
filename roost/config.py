@@ -220,6 +220,10 @@ AUTO_PROVISION: bool = os.getenv("AUTO_PROVISION", "true").lower() == "true"
 # Dev access token (bypasses web auth for local tools like Playwright)
 DEV_TOKEN: str = os.getenv("DEV_TOKEN", "")
 
+# Demo magic-link token. When set, ?demo=<token> on any URL mints a session
+# cookie as the owner and redirects to a clean URL. Treat like a password.
+DEMO_ACCESS_TOKEN: str = os.getenv("DEMO_ACCESS_TOKEN", "")
+
 
 # Dropbox + Otter.ai
 DROPBOX_APP_KEY: str = os.getenv("DROPBOX_APP_KEY", "")

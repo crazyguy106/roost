@@ -14,7 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from roost.config import (
     GOOGLE_CLIENT_ID, SESSION_SECRET,
-    WEB_USERNAME, WEB_PASSWORD, DEV_TOKEN,
+    WEB_USERNAME, WEB_PASSWORD, DEV_TOKEN, DEMO_ACCESS_TOKEN,
     MS_CLIENT_ID,
 )
 from roost.web.api import router as api_router
@@ -224,6 +224,25 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
             client_ip = request.client.host if request.client else ""
             if client_ip in ("127.0.0.1", "::1"):
                 return await call_next(request)
+
+        # 2b. Demo magic-link bypass: ?demo=<token> mints a session cookie
+        # as the owner, then 303-redirects to the same path with the query
+        # param stripped. Subsequent navigation is authenticated by the
+        # cookie alone. Treat the token like a password.
+        demo_param = request.query_params.get("demo")
+        if (DEMO_ACCESS_TOKEN and demo_param
+                and secrets.compare_digest(demo_param, DEMO_ACCESS_TOKEN)):
+            request.session["user"] = {
+                "name": "demo",
+                "role": "owner",
+                "user_id": 1,
+            }
+            # Build the clean URL = path + any non-demo query params.
+            other = [(k, v) for k, v in request.query_params.multi_items()
+                     if k != "demo"]
+            from urllib.parse import urlencode
+            clean = path + (("?" + urlencode(other)) if other else "")
+            return RedirectResponse(clean, status_code=303)
 
         # 3. Session cookie (set by Google or Microsoft OAuth)
         user = request.session.get("user")
