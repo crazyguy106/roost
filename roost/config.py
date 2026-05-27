@@ -96,8 +96,7 @@ MSAL_CACHE_PATH: str = os.getenv("MSAL_CACHE_PATH", "")
 
 # Gemini Agentic (google-genai SDK)
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-# Known-good fallback if the configured model 404s: "gemini-3-flash-preview".
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 GEMINI_AGENTIC: bool = os.getenv("GEMINI_AGENTIC", "true").lower() == "true"
 
 # Daily summary — prepend a short AI narrative + flags above the deterministic counts.
@@ -242,6 +241,14 @@ WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
+
+# SMS (outbound) — vendor-agnostic dispatch via SMS_PROVIDER.
+# Only Twilio is implemented today; flag-gated so adapter fails closed when off.
+SMS_ENABLED: bool = os.getenv("SMS_ENABLED", "false").lower() == "true"
+SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "twilio")
+TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER: str = os.getenv("TWILIO_FROM_NUMBER", "")
 
 # Property-Agent Toolkit (Singapore) — master flag for the sidebar group + pages.
 # Stamp-duty calculator is pure-Python and gated only by this flag.

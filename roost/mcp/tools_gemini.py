@@ -29,7 +29,6 @@ _USAGE_DB = os.path.join(
 
 # Per-million-token pricing (USD)
 _PRICING = {
-    "gemini-3.5-flash": {"input": 0.50, "output": 3.00},
     "gemini-3-flash-preview": {"input": 0.50, "output": 3.00},
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
     "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
@@ -116,7 +115,7 @@ def _get_client():
 def _get_model() -> str:
     """Get the configured Gemini model name."""
     from roost.config import GEMINI_MODEL
-    return GEMINI_MODEL or "gemini-3.5-flash"
+    return GEMINI_MODEL or "gemini-3-flash-preview"
 
 
 def _generate(prompt: str, max_output_tokens: int = _DEFAULT_MAX_OUTPUT,

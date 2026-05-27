@@ -63,12 +63,17 @@ class _GeminiStreamEventParser(BaseStreamEventParser):
             text = event.get("content", "") or ""
             if not text:
                 return
-            # Gemini emits both deltas (delta=True) and the final
-            # consolidated message (delta=False/absent). Keep the most
-            # recent non-delta as final_text; pipe everything to
-            # on_progress so live UIs see the stream.
+            # CLI versions differ. Some emit a single delta=true message
+            # carrying the full reply (no consolidated follow-up); others
+            # stream multiple delta=true chunks then a delta=false final.
+            # Strategy: a non-delta message is authoritative and replaces;
+            # delta chunks are appended only while we haven't yet seen a
+            # consolidated final.
             if not event.get("delta"):
                 self.final_text = text
+                self._saw_consolidated_final = True
+            elif not getattr(self, "_saw_consolidated_final", False):
+                self.final_text = (self.final_text or "") + text
             if on_progress:
                 try:
                     await on_progress(text)

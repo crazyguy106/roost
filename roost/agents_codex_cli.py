@@ -182,14 +182,17 @@ class CodexCliAgent(BaseSubprocessCliAgent):
         # `codex exec` is the documented non-interactive entrypoint.
         # `--json` selects newline-delimited JSON event output. `-` (or
         # `--prompt-stdin`) makes the CLI read the prompt from stdin.
-        cmd: list[str] = [self.bin, "exec", "--json"]
+        # `--skip-git-repo-check` bypasses the trusted-directory guard
+        # (Roost's CWD inside the container is not a git repo).
+        cmd: list[str] = [self.bin, "exec", "--json", "--skip-git-repo-check"]
 
         # Codex's permission concept maps roughly: yolo/auto = no
-        # confirmations. The CLI flag has shifted across versions —
-        # `--full-auto`, `--bypass-approvals` and `--ask-for-approval`
-        # have all been used. We surface whatever the user sets verbatim.
+        # confirmations. The CLI flag has shifted across versions — older
+        # codex used `--full-auto`, current expects `--sandbox <mode>`
+        # (workspace-write is the closest equivalent: writes inside the
+        # workspace, no network unless explicitly granted).
         if self.permission_mode in ("yolo", "full-auto", "auto"):
-            cmd.append("--full-auto")
+            cmd.extend(["--sandbox", "workspace-write"])
         elif self.permission_mode and self.permission_mode != "default":
             cmd.extend(["--ask-for-approval", self.permission_mode])
 
