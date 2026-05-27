@@ -12,3 +12,5 @@ generated/
 *.db
 .claude/
 node_modules/
+.demo-access.md
+.local/
