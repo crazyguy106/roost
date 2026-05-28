@@ -122,6 +122,85 @@ def _get_pack(cadence_slug: str) -> list[dict] | None:
     return QUESTIONS_BY_CADENCE.get(cadence_slug)
 
 
+# ── Human escape ───────────────────────────────────────────────────────
+# A lead who says "just let me talk to someone" should not be force-marched
+# through the rest of the questionnaire. We detect that intent, stop asking,
+# reassure them, pause the enrollment, and ping the operator as a hot lead.
+# Substring match, case-insensitive. Kept deliberately tight so a normal
+# qualification answer ("I can call you back next week") doesn't false-trip
+# the escape — though erring toward human contact is the safe bias here.
+
+_HUMAN_ESCAPE_PHRASES = (
+    "talk to someone", "speak to someone", "speak with someone",
+    "talk to a person", "speak to a person", "talk to a human",
+    "speak to a human", "real person", "real human", "talk to a real",
+    "speak to a real", "talk to an agent", "speak to an agent",
+    "talk to an advisor", "speak to an advisor", "talk to an actual",
+    "human please", "agent please", "call me", "give me a call",
+    "phone me", "can i call", "just call",
+)
+
+
+def _wants_human(text: str) -> bool:
+    """True if the lead is explicitly asking to reach a person rather than
+    continue the automated questionnaire."""
+    t = (text or "").lower()
+    return any(p in t for p in _HUMAN_ESCAPE_PHRASES)
+
+
+def _load_enrollment(enrollment_id: int) -> dict | None:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM nurture_enrollments WHERE id = ?", (enrollment_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return _enrollment_row_to_dict(row) if row else None
+
+
+def _escalate_to_human(
+    enrollment: dict, fields: dict, channel: str, identifier: str, text: str
+) -> None:
+    """Lead asked for a person. Stop qualification, pause the enrollment so
+    the cadence stops auto-messaging, reassure the lead, and alert the
+    operator (hot, with the original ask quoted). Never raises."""
+    fields["_qualify_status"] = "escalated_human"
+    fields["_qualify_escalation_text"] = (text or "").strip()[:300]
+    update_enrollment(
+        enrollment["id"],
+        fields=fields,
+        status="paused",
+        pause_reason="human_requested",
+    )
+    _send_question(
+        channel, identifier,
+        "Of course — I'll get someone to reach out to you personally shortly.",
+    )
+    try:
+        from roost.extras.lead_nurture.services.leads import _notify_hot_lead
+        _notify_hot_lead(
+            name=enrollment.get("contact_name") or "",
+            email=enrollment.get("contact_email") or "",
+            phone=enrollment.get("contact_phone") or "",
+            channel=channel,
+            classification={
+                "intent": "human_handoff_requested",
+                "urgency": "hot",
+                "confidence": 1.0,
+                "reasoning": (
+                    f'Lead asked to speak to a person: '
+                    f'"{(text or "").strip()[:160]}"'
+                ),
+            },
+            crm_person_id=enrollment.get("crm_person_id") or "",
+            crm_deal_id=enrollment.get("crm_deal_id") or "",
+            enrollment_id=enrollment.get("id"),
+        )
+    except Exception:
+        logger.exception("human-escalation notify failed (non-fatal)")
+
+
 # ── Send dispatcher (channel-aware) ────────────────────────────────────
 
 
@@ -171,10 +250,15 @@ def start_qualification_if_needed(
     channel: str,
     identifier: str,
     contact_name: str = "",
+    trigger_text: str = "",
 ) -> dict:
     """If there's a question pack for `cadence_slug` AND we have a valid
     addressable channel+identifier, send question 1 and pause the
     enrollment with `pause_reason='qualifying'`.
+
+    `trigger_text` is the lead's opening inbound message; if it already
+    asks for a person we escalate immediately instead of starting the
+    questionnaire.
 
     Returns `{"started": bool, "reason": str, ...}`. Never raises.
     """
@@ -183,6 +267,18 @@ def start_qualification_if_needed(
         return {"started": False, "reason": "no_questions"}
     if not identifier or channel not in ("whatsapp", "wechat", "telegram"):
         return {"started": False, "reason": "no_addressable_channel"}
+
+    # First-message human escape: the opening message already asks for a
+    # person. Skip the questionnaire, reassure + alert the operator.
+    if _wants_human(trigger_text):
+        enr = _load_enrollment(enrollment_id)
+        if enr:
+            fields = dict(enr.get("fields") or {})
+            fields["_qualify_channel"] = channel
+            fields["_qualify_identifier"] = str(identifier)
+            fields["_qualify_cadence_slug"] = cadence_slug
+            _escalate_to_human(enr, fields, channel, identifier, trigger_text)
+            return {"started": False, "reason": "human_requested", "escalated": True}
 
     first_q = questions[0]["question"]
     first_name = (contact_name or "").strip().split()[0] if contact_name else ""
@@ -291,7 +387,14 @@ def process_answer(channel: str, identifier: str, text: str) -> dict:
 
     fields = dict(enr.get("fields") or {})
     cadence_slug = fields.get("_qualify_cadence_slug") or ""
-    questions = QUESTIONS_BY_CADENCE.get(cadence_slug, [])
+
+    # Mid-questionnaire human escape: lead is done with the questions and
+    # wants a person. Stop, reassure, alert the operator.
+    if _wants_human(text):
+        _escalate_to_human(enr, fields, channel, identifier, text)
+        return {"handled": True, "done": True, "label": "human_requested"}
+
+    questions = _get_pack(cadence_slug) or []
     if not questions:
         return {"handled": False}
 

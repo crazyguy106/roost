@@ -13,7 +13,19 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+- **Lead qualification stalled on YAML-only question packs.** `process_answer`
+  resolved questions from the in-code `QUESTIONS_BY_CADENCE` dict instead of the
+  YAML loader, so packs that exist only in YAML (e.g. `financial_advisor_intro`)
+  never advanced past question 1. Now goes through `_get_pack()`, matching
+  `start_qualification_if_needed`.
+
+### Added
+- **Human escape in qualification.** A lead who asks to speak to a person
+  ("just call me", "talk to someone") is escalated to the operator — enrollment
+  paused (`pause_reason="human_requested"`), hot alert fired with the ask quoted
+  — instead of being marched through the rest of the questionnaire. Handled both
+  on the opening inbound message and mid-questionnaire.
 
 ## [0.1.0] — 2026-05-28
 

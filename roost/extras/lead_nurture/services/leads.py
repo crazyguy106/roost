@@ -457,6 +457,7 @@ def ingest_lead(
                     channel=channel,
                     identifier=ident,
                     contact_name=name,
+                    trigger_text=message_text,
                 )
                 qualification_started = bool(q_result.get("started"))
             except Exception:
