@@ -72,6 +72,26 @@ python3 -m pytest -q     # full suite
 
 572 tests at last count (2026-05-27). RPA interpreter and library tests stub Playwright; the live smoke test against `the-internet.herokuapp.com` is documented in `docs/rpa-authoring.md` and not part of CI.
 
+## Versioning
+
+Roost follows [Semantic Versioning](https://semver.org/). Pre-1.0, **MINOR** = new
+feature, **PATCH** = fix; backward-incompatible changes are flagged `### Breaking`.
+
+- **Single source of truth:** `roost/__init__.py::__version__`. `setup.py` reads it
+  at build time — never hardcode a version in two places.
+- **`CHANGELOG.md`** is [Keep a Changelog](https://keepachangelog.com/) format. Add
+  every user-facing change under `## [Unreleased]` as you land it (don't batch at
+  release time — the entry rots if you wait).
+- **Cutting a release:** move the `[Unreleased]` items into a new dated
+  `## [X.Y.Z] — YYYY-MM-DD` section, bump `__version__`, commit as
+  `release: vX.Y.Z`, then annotated-tag: `git tag -a vX.Y.Z -m "vX.Y.Z"`.
+- **What bumps the version:** a new bundle, a new MCP tool surface, a new external
+  adapter, a changed STOP/HELP keyword set, or a schema change. A docs-only or
+  test-only commit does not.
+- **Self-hosters `git pull` against `main`** (the workshop install scripts clone it
+  directly), so the changelog and tags are how they decide whether an upgrade is
+  safe. Treat them as a real audience.
+
 ## When working in this repo
 
 - Edit existing services before introducing new modules. Watch the `roost/services/` and `roost/extras/<bundle>/services/` indexes to keep them coherent.
