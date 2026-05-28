@@ -371,12 +371,22 @@ def main():
 
     # Seed shipped lead-nurture cadence library as global defaults (idempotent).
     try:
-        from roost.extras.lead_nurture.services.cadences import seed_library as seed_cadences
+        from roost.extras.lead_nurture.services.cadences import (
+            seed_library as seed_cadences,
+            seed_user_config as seed_cadences_user_config,
+        )
         cad_result = seed_cadences()
         if cad_result.get("seeded"):
             logger.info(
                 "Seeded %d cadence library file(s); %d skipped (already present)",
                 cad_result["seeded"], cad_result.get("skipped", 0),
+            )
+        # Operator overrides from roost-config/cadences/ — wins over library.
+        user_result = seed_cadences_user_config()
+        if user_result.get("seeded"):
+            logger.info(
+                "Applied %d cadence override(s) from roost-config/",
+                user_result["seeded"],
             )
     except Exception:
         logger.exception("Failed to seed cadence library")

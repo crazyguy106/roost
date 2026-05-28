@@ -1,0 +1,101 @@
+# READ-ONLY STUDY REFERENCE
+# ──────────────────────────────────────────────────────────────────────
+# This file is a verbatim copy of the cadence Roost ships at:
+#   roost/extras/lead_nurture/services/cadences/library/financial_advisor_intro.yaml
+#
+# It is here so you (and your AI assistant) can study the schema before
+# writing your own. Editing this file has no effect on the running system.
+#
+# To customise this cadence, copy it to:
+#   roost-config/cadences/financial_advisor_intro.yaml
+# and edit there. Files in roost-config/cadences/ override the library
+# version on the next reload.
+#
+# Schema notes are inline as comments where the field is first used.
+# ──────────────────────────────────────────────────────────────────────
+
+slug: financial_advisor_intro          # stable id — referenced by vertical mapping; do not rename
+name: Financial Advisor — Intro Sequence
+description: |
+  Financial advisor / planner intake. Day 0 confirms the enquiry, day 3
+  asks the qualification questions needed for a fact-find, day 7 nudges
+  for a discovery call. MAS-aware — no product recommendations until
+  fact-find is complete.
+vertical: financial_advisor            # used by DEFAULT_CADENCE_BY_VERTICAL to auto-enrol leads
+enabled: true                          # set false to silently skip enrolment
+
+templates:
+  - name: fa_intro_day0                # local to this cadence; referenced by `steps[].template`
+    sequence_day: 0                    # informational; the scheduler reads `steps[].day_offset`
+    category: greeting                 # greeting | qualification | nurture | follow_up
+    channel: any                       # any | email | whatsapp | telegram (step-level overrides)
+    subject: Thanks for reaching out
+    body: |
+      Hi {{first_name}},
+
+      Thanks for getting in touch. I'm {{advisor_name}} ({{advisor_firm}}).
+
+      Before we have a proper conversation, I keep things product-agnostic
+      until I understand your situation — so the next step is usually a
+      short fact-find. I'll share a checklist in a couple of days.
+
+      In the meantime, if there's a specific concern that prompted you to
+      reach out (insurance, retirement planning, kids' education, estate),
+      feel free to flag it.
+
+      {{advisor_signoff}}
+
+  - name: fa_intro_day3
+    sequence_day: 3
+    category: qualification
+    channel: any
+    subject: Quick fact-find before we meet
+    body: |
+      Hi {{first_name}},
+
+      To make our first conversation useful, it helps if I have a rough
+      picture of:
+
+      1. Household composition (spouse, dependants, ages)
+      2. Current insurance coverage (rough sums assured)
+      3. CPF balances and any existing investments
+      4. Top 1-2 financial concerns you'd like to address
+
+      You can share as much or as little as you're comfortable with. Anything
+      you send is treated as confidential.
+
+      {{advisor_signoff}}
+
+  - name: fa_intro_day7
+    sequence_day: 7
+    category: nurture
+    channel: any
+    subject: "Discovery call?"
+    body: |
+      Hi {{first_name}},
+
+      Following up — would a 30-minute discovery call work for you in the
+      next week or two? No prep required, no obligation.
+
+      My calendar: {{advisor_booking_link}}
+
+      {{advisor_signoff}}
+
+# `steps` is the schedule. Each step picks one template and a delivery
+# channel + time. The runner skips a step silently if the contact has no
+# address for that channel (e.g. no email on a WhatsApp-only lead).
+steps:
+  - day_offset: 0                      # relative to enrolment time
+    minute_offset: 5                   # short delay so the inbound webhook returns first
+    template: fa_intro_day0
+    channel: email
+  - day_offset: 3
+    hour: 10                           # send at 10:00 local time
+    tz: Asia/Singapore
+    template: fa_intro_day3
+    channel: email
+  - day_offset: 7
+    hour: 10
+    tz: Asia/Singapore
+    template: fa_intro_day7
+    channel: email

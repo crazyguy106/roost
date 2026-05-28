@@ -80,11 +80,22 @@ async def lifespan(app: FastAPI):
         _logger.exception("Failed to initialize Gmail subscriber (web)")
 
     try:
-        from roost.extras.lead_nurture.services.cadences import seed_library as seed_cadences
+        from roost.extras.lead_nurture.services.cadences import (
+            seed_library as seed_cadences,
+            seed_user_config as seed_cadences_user_config,
+        )
         cad_result = seed_cadences()
         if cad_result.get("seeded"):
             _logger.info(
                 "Seeded %d cadence library file(s) (web)", cad_result["seeded"]
+            )
+        # roost-config/cadences/*.yaml overrides the library — process second so
+        # the operator's customisations win.
+        user_result = seed_cadences_user_config()
+        if user_result.get("seeded"):
+            _logger.info(
+                "Seeded %d cadence override(s) from roost-config/ (web)",
+                user_result["seeded"],
             )
     except Exception:
         _logger.exception("Failed to seed cadence library (web)")
@@ -99,7 +110,21 @@ async def lifespan(app: FastAPI):
     except Exception:
         _logger.exception("Failed to seed RPA library (web)")
 
+    # Watch roost-config/ for live edits so the operator can iterate
+    # without restarting the container.
+    try:
+        from roost.extras.lead_nurture.services import config_watcher
+        config_watcher.start()
+    except Exception:
+        _logger.exception("Failed to start roost-config/ watcher")
+
     yield
+
+    try:
+        from roost.extras.lead_nurture.services import config_watcher
+        config_watcher.stop()
+    except Exception:
+        pass
 
 import re
 

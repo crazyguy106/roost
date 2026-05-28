@@ -21,9 +21,11 @@ don't collide with template variables used by the cadence engine):
     _qualify_score       float 0..1 (set after finalise)
     _qualify_label       "hot" | "warm" | "cold" (set after finalise)
 
-Question packs live in this module as `QUESTIONS_BY_CADENCE` so we can
-iterate on copy without a DB schema change. Future iterations may move
-them into the cadence YAML.
+Question packs are loaded from YAML by `question_packs.py` — both
+shipped defaults (`cadences/library/question-packs/`) and operator
+overrides (`roost-config/question-packs/`). The in-code
+`QUESTIONS_BY_CADENCE` below is kept as a last-resort fallback so a
+broken YAML never makes a lead un-qualifiable.
 """
 
 from __future__ import annotations
@@ -106,6 +108,20 @@ QUESTIONS_BY_CADENCE: dict[str, list[dict[str, Any]]] = {
 }
 
 
+def _get_pack(cadence_slug: str) -> list[dict] | None:
+    """Indirection: try the YAML loader first, fall back to the in-code
+    dict above. Done as a function so a hot reload picks up new YAML
+    without restarting the process."""
+    try:
+        from roost.extras.lead_nurture.services import question_packs
+        pack = question_packs.get_questions_for_cadence(cadence_slug)
+        if pack is not None:
+            return pack
+    except Exception:  # noqa: BLE001
+        logger.exception("question_packs loader failed; using in-code fallback")
+    return QUESTIONS_BY_CADENCE.get(cadence_slug)
+
+
 # ── Send dispatcher (channel-aware) ────────────────────────────────────
 
 
@@ -162,7 +178,7 @@ def start_qualification_if_needed(
 
     Returns `{"started": bool, "reason": str, ...}`. Never raises.
     """
-    questions = QUESTIONS_BY_CADENCE.get(cadence_slug)
+    questions = _get_pack(cadence_slug)
     if not questions:
         return {"started": False, "reason": "no_questions"}
     if not identifier or channel not in ("whatsapp", "wechat", "telegram"):

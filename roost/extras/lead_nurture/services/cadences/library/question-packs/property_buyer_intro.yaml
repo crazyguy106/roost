@@ -1,0 +1,79 @@
+cadence_slug: property_buyer_intro
+enabled: true
+
+questions:
+  - key: timeline
+    question: |
+      Thanks for reaching out! Quick question to help me find the right
+      places for you — when are you hoping to move in by? (e.g. 'this
+      month', 'in 3 months', 'no rush')
+    weight: 0.4
+    hot_keywords:
+      - this week
+      - this month
+      - asap
+      - immediately
+      - urgent
+      - right now
+      - next week
+      - 1 month
+      - one month
+    warm_keywords:
+      - next month
+      - 2 months
+      - 3 months
+      - soon
+      - this year
+      - in a few months
+
+  - key: budget_band
+    question: |
+      What's your rough budget? (e.g. 'under 1M', '1-2M', '2-5M', or 'flexible')
+    weight: 0.35
+    hot_keywords:
+      - 2m
+      - 3m
+      - 4m
+      - 5m
+      - 6m
+      - 7m
+      - 8m
+      - 9m
+      - 10m
+      - 2 million
+      - 3 million
+      - flexible
+      - no limit
+      - no budget
+    warm_keywords:
+      - 1m
+      - 1.5m
+      - 1.2m
+      - 1.8m
+      - 800k
+      - 900k
+      - 1-2m
+      - 1 to 2
+      - 1 million
+      - 750k
+
+  - key: mortgage_status
+    question: |
+      Have you spoken to a bank about an in-principle approval (IPA) yet?
+      (yes / not yet / paying cash)
+    weight: 0.25
+    hot_keywords:
+      - "yes"
+      - approved
+      - ipa
+      - in-principle
+      - in principle
+      - cash
+      - paying cash
+      - no mortgage needed
+    warm_keywords:
+      - looking into
+      - next week
+      - soon
+      - this week
+      - planning to

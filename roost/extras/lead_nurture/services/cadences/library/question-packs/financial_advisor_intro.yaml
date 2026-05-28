@@ -1,0 +1,71 @@
+cadence_slug: financial_advisor_intro
+enabled: true
+
+# Fact-find triage. Three open-ended questions calibrated for the SG
+# market — CPF, employer-group insurance, and life-event triggers are
+# the strongest signals. MAS-aware: nothing here pushes a product.
+
+questions:
+  - key: timeline
+    question: |
+      Thanks for reaching out! Quick question to help me understand what
+      you're looking for — when are you thinking of getting your finances
+      reviewed? (e.g. 'this month', 'in a few months', 'no rush')
+    weight: 0.4
+    hot_keywords:
+      - this week
+      - this month
+      - asap
+      - immediately
+      - urgent
+      - right now
+      - next week
+    warm_keywords:
+      - next month
+      - 2 months
+      - 3 months
+      - soon
+      - this year
+      - in a few months
+
+  - key: trigger
+    question: |
+      What prompted you to reach out? (e.g. new job, new baby, marriage,
+      retirement planning, insurance review, something else)
+    weight: 0.3
+    hot_keywords:
+      - new baby
+      - just married
+      - getting married
+      - retiring
+      - retirement
+      - new job
+      - bought a house
+      - buying a house
+      - inheritance
+      - bonus
+    warm_keywords:
+      - thinking about
+      - reviewing
+      - curious
+      - planning
+      - exploring
+
+  - key: existing_coverage
+    question: |
+      Do you already have insurance / investments in place, or starting
+      fresh? (e.g. 'have some life insurance', 'CPF only', 'starting fresh')
+    weight: 0.3
+    hot_keywords:
+      - nothing
+      - starting fresh
+      - no insurance
+      - just cpf
+      - cpf only
+      - none
+    warm_keywords:
+      - have some
+      - basic
+      - employer
+      - group insurance
+      - reviewing existing

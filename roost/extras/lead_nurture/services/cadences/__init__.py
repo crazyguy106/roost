@@ -12,6 +12,7 @@ global default — same pattern as `roost.services.rpa_flows`.
 
 from roost.extras.lead_nurture.services.cadences.loader import (
     LIBRARY_DIR,
+    USER_CONFIG_DIR,
     USER_DIR,
     dump_yaml,
     export_from_db,
@@ -19,6 +20,7 @@ from roost.extras.lead_nurture.services.cadences.loader import (
     list_library,
     load_yaml,
     seed_library,
+    seed_user_config,
 )
 from roost.extras.lead_nurture.services.cadences.store import (
     create_preapproval,
@@ -46,6 +48,7 @@ from roost.extras.lead_nurture.services.cadences.store import (
 
 __all__ = [
     "LIBRARY_DIR",
+    "USER_CONFIG_DIR",
     "USER_DIR",
     "create_preapproval",
     "delete_cadence",
@@ -72,6 +75,7 @@ __all__ = [
     "pause_enrollments_by_deal",
     "resume_enrollment",
     "seed_library",
+    "seed_user_config",
     "set_cadence",
     "update_enrollment",
 ]

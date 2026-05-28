@@ -24,6 +24,9 @@ logger = logging.getLogger("roost.cadences.loader")
 
 LIBRARY_DIR = Path(__file__).parent / "library"
 USER_DIR = PROJECT_ROOT / "data" / "cadences"
+# Operator-facing config directory. Files here override library/ on the
+# next reload — see roost-config/AGENTS.md for the brief.
+USER_CONFIG_DIR = PROJECT_ROOT / "roost-config" / "cadences"
 
 REQUIRED_TOP_KEYS = {"slug", "name", "steps"}
 ALLOWED_CHANNELS = {"email", "whatsapp", "telegram", "sms"}
@@ -114,8 +117,16 @@ def dump_yaml(cfg: dict, path: Path | str) -> Path:
     return p
 
 
-def _seed_inline_templates(cfg: dict, *, user_id: str = "") -> int:
-    """Upsert templates inlined under cfg['templates']. Returns count seeded."""
+def _seed_inline_templates(
+    cfg: dict, *, user_id: str = "", overwrite: bool = False,
+) -> int:
+    """Upsert templates inlined under cfg['templates']. Returns count seeded.
+
+    With ``overwrite=False`` (library seeding) we only create missing
+    templates — never disturb a user-customised copy. With
+    ``overwrite=True`` (user-config seeding) we update existing rows so
+    the operator's roost-config/ override actually takes effect.
+    """
     count = 0
     for t in cfg.get("templates") or []:
         name = t.get("name")
@@ -135,14 +146,28 @@ def _seed_inline_templates(cfg: dict, *, user_id: str = "") -> int:
                 user_id=user_id,
             )
             count += 1
+        elif overwrite and existing.get("id"):
+            try:
+                templates_svc.update_template(
+                    template_id=existing["id"],
+                    body=t.get("body", ""),
+                    subject=t.get("subject", ""),
+                    category=t.get("category", "nurture"),
+                    channel=t.get("channel", "any"),
+                )
+                count += 1
+            except Exception:  # noqa: BLE001 — update is best-effort
+                logger.exception("user-config template update failed: %s", name)
     return count
 
 
 def import_to_db(path: Path | str, *, user_id: str = "", source: str = "user") -> dict:
     """Load a YAML file and write the cadence + inline templates to the DB."""
-    safe = _safe_resolve(path, allowed_roots=[LIBRARY_DIR, USER_DIR])
+    safe = _safe_resolve(path, allowed_roots=[LIBRARY_DIR, USER_DIR, USER_CONFIG_DIR])
     cfg = load_yaml(safe)
-    seeded_templates = _seed_inline_templates(cfg, user_id=user_id)
+    seeded_templates = _seed_inline_templates(
+        cfg, user_id=user_id, overwrite=source == "user-config",
+    )
     cadence = store.set_cadence(
         slug=cfg["slug"],
         name=cfg["name"],
@@ -196,6 +221,47 @@ def list_library() -> list[dict]:
         except Exception as e:  # noqa: BLE001 — surface any parse error per file
             out.append({"file": p.name, "valid": False, "errors": [str(e)]})
     return out
+
+
+def seed_user_config() -> dict:
+    """Walk ``roost-config/cadences/`` and upsert each YAML.
+
+    Files here OVERRIDE same-slug library cadences. Unlike library seeding,
+    we always write (no "skip if exists" branch) so the operator's edits
+    actually take effect on the next reload.
+
+    Idempotent: safe to call every few seconds from the mtime poller.
+    Stored with ``source='user'`` (the only non-library value allowed by
+    the schema CHECK constraint) — provenance can be inferred from the
+    fact that the cadence lives at user_id="" but the row was last
+    touched by this seeder.
+    """
+    if not USER_CONFIG_DIR.exists():
+        return {"seeded": 0, "skipped": 0, "errors": []}
+
+    seeded = 0
+    errors: list[str] = []
+    for p in sorted(USER_CONFIG_DIR.glob("*.yaml")):
+        try:
+            cfg = load_yaml(p)
+            slug = cfg["slug"]
+            _seed_inline_templates(cfg, user_id="", overwrite=True)
+            store.set_cadence(
+                slug=slug,
+                name=cfg["name"],
+                description=cfg.get("description", ""),
+                vertical=cfg.get("vertical", "generic"),
+                steps=cfg["steps"],
+                enabled=bool(cfg.get("enabled", True)),
+                source="user",
+                user_id="",
+            )
+            seeded += 1
+            logger.info("Seeded user-config cadence: %s (from %s)", slug, p.name)
+        except Exception as e:  # noqa: BLE001 — keep seeding remaining files
+            errors.append(f"{p.name}: {e}")
+            logger.exception("Failed seeding user-config cadence %s", p.name)
+    return {"seeded": seeded, "skipped": 0, "errors": errors}
 
 
 def seed_library() -> dict:

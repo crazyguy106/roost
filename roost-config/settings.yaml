@@ -1,0 +1,55 @@
+# Roost runtime settings — cross-cutting tunables you can edit
+# ────────────────────────────────────────────────────────────────────
+# Every key in this file is OPTIONAL — Roost ships with sensible
+# defaults baked in, and any key you omit will use that default. So a
+# minimal settings.yaml is a valid settings.yaml.
+#
+# Edits here are picked up live (within a few seconds) — no container
+# restart needed. Tail the logs to confirm:
+#   docker logs roost --tail 20 -f
+# ────────────────────────────────────────────────────────────────────
+
+# ── Fragmented inbound messages ──────────────────────────────────────
+# WhatsApp users routinely send a single thought across three or four
+# messages, hitting "send" between every phrase. If Roost classified
+# every fragment immediately it would:
+#
+#   • mis-classify the first 2-3 words as low-intent ("hi", "hello?")
+#   • interrupt the person mid-sentence with a qualifying question
+#   • spam your CRM with duplicate "new lead" rows
+#
+# The debouncer fixes this by buffering inbound messages from the
+# same sender and waiting until they pause typing. When the pause
+# crosses the threshold, Roost concatenates the fragments and treats
+# them as one message — *then* classifies and replies.
+#
+# How "are they done?" is decided (any of these triggers release):
+#
+#   1. They've been silent for `debounce_seconds`              [primary]
+#   2. The last message ends in . ? or ! AND they've been
+#      silent for `early_release_seconds`                       [fast-path]
+#   3. `max_wait_seconds` has elapsed since the first fragment [safety cap]
+#
+# You can disable the whole thing for testing by setting `enabled: false`.
+
+fragmented_messages:
+  enabled: true                    # set false to process every fragment immediately
+  debounce_seconds: 20             # silence required before flushing (default 20)
+  early_release_seconds: 4         # if message ends in . ? !  release after this much silence
+  max_wait_seconds: 90             # never wait longer than this from first fragment
+  terminal_punctuation: [".", "?", "!"]   # characters that trigger the fast-path
+
+# ── Default vertical for new inbound leads ───────────────────────────
+# When a brand-new contact pings you on WhatsApp / WeChat and the
+# message doesn't strongly signal a vertical, Roost uses this to pick
+# the right cadence. Options that ship with Roost:
+#   property            — Singapore property buyer / tenant pipeline
+#   financial_advisor   — MAS-aware fact-find pipeline
+#   insurance           — policy enquiry pipeline
+#   sme                 — generic SME ops pipeline
+#   generic             — catch-all
+default_vertical: financial_advisor
+
+# ── Debug ────────────────────────────────────────────────────────────
+# Verbose logging for the loaders + debouncer. Useful during demos.
+debug: false
