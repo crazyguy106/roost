@@ -20,6 +20,12 @@ services:
       SIDECAR_PUBLIC_URL: "https://${ROOST_DOMAIN}/sidecar"
       # Trust the proxy's X-Forwarded-* headers for redirects.
       WEB_BEHIND_PROXY: "true"
+    volumes:
+      # Operator-editable YAML override layer (cadences/, question-packs/,
+      # settings.yaml). Lives on the host so the user — or their AI CLI —
+      # can iterate without rebuilding the image; the mtime poller picks
+      # up edits within ~3s.
+      - ./roost-config:/app/roost-config
 
   chromium:
     # No public port — Caddy reaches chromium over the internal docker
