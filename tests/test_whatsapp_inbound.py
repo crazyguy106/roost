@@ -86,6 +86,20 @@ def test_inbound_message_calls_lead_ingest(client, monkeypatch):
         return {"ok": True, "crm_person_id": "p1", "enrollment_id": 7}
 
     monkeypatch.setattr("roost.extras.lead_nurture.services.leads.ingest_lead", fake_ingest)
+    # The inbound vertical comes from the configured default_vertical setting,
+    # not a hardcoded string — pin it to a distinct sentinel to prove the
+    # wiring. Delegate every *other* key to the real accessor so the inbound
+    # debouncer's get_fragmented_messages() lookup still resolves (a blanket
+    # stub would return None for it, silently deferring the processor and
+    # leaving `captured` empty).
+    import roost.extras.lead_nurture.services.settings as _ln_settings
+    _real_get = _ln_settings.get
+    monkeypatch.setattr(
+        "roost.extras.lead_nurture.services.settings.get",
+        lambda key, default=None: (
+            "sentinel_vertical" if key == "default_vertical" else _real_get(key, default)
+        ),
+    )
     # Force the no-recipe branch
     monkeypatch.setattr(
         "roost.services.recipes.list_recipes", lambda **kw: [],
@@ -114,7 +128,7 @@ def test_inbound_message_calls_lead_ingest(client, monkeypatch):
     assert r.json()["processed"] == 1
     assert captured["channel"] == "whatsapp"
     assert captured["phone"] == "+6591234567"
-    assert captured["vertical"] == "property"
+    assert captured["vertical"] == "sentinel_vertical"
 
 
 def test_non_whatsapp_object_acks_without_processing(client, monkeypatch):

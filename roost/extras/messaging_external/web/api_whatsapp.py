@@ -244,16 +244,18 @@ async def _process_inbound(msg: dict) -> None:
             "mark_inbound_for_contact (whatsapp) failed (non-fatal)"
         )
 
-    # Best-effort lead ingest: dedupes on phone via CRM, enrolls in default
-    # property cadence if new. Never blocks the recipe pipeline.
+    # Best-effort lead ingest: dedupes on phone via CRM, enrolls in the
+    # cadence for the configured default vertical if new. Never blocks the
+    # recipe pipeline.
     try:
         from roost.extras.lead_nurture.services import leads as leads_svc
+        from roost.extras.lead_nurture.services import settings as ln_settings
         leads_svc.ingest_lead(
             channel="whatsapp",
             phone=sender_phone,
             name=sender if sender != sender_phone else "",
             message_text=text,
-            vertical="property",
+            vertical=ln_settings.get("default_vertical", "property"),
             source="whatsapp",
             qualifying_identifier=sender_phone,
         )

@@ -156,12 +156,13 @@ async def _process_inbound(msg: dict) -> None:
     # qualification.process_answer().
     try:
         from roost.extras.lead_nurture.services import leads as leads_svc
+        from roost.extras.lead_nurture.services import settings as ln_settings
         leads_svc.ingest_lead(
             channel="wechat",
             phone=f"wechat:{sender}",
             name="",
             message_text=text,
-            vertical="property",
+            vertical=ln_settings.get("default_vertical", "property"),
             source="wechat",
             qualifying_identifier=sender,
             fields={"wechat_openid": sender},
