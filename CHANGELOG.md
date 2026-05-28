@@ -14,6 +14,12 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Fixed
+- **Inbound WhatsApp/WeChat leads ignored `default_vertical`.** Both webhooks
+  hardcoded `vertical="property"` on lead ingest, so a new inbound always
+  enrolled in `property_buyer_intro` regardless of the configured
+  `default_vertical` (`roost-config/settings.yaml`). Now both read
+  `settings.get("default_vertical", "property")`, so a financial-advisor
+  install enrols inbound leads in `financial_advisor_intro` as expected.
 - **Lead qualification stalled on YAML-only question packs.** `process_answer`
   resolved questions from the in-code `QUESTIONS_BY_CADENCE` dict instead of the
   YAML loader, so packs that exist only in YAML (e.g. `financial_advisor_intro`)
