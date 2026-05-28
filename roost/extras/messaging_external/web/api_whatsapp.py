@@ -149,6 +149,20 @@ async def _process_inbound(msg: dict) -> None:
     text = msg["text"]
     sender_phone = msg.get("sender", "")
 
+    # Record the inbound message in the conversation thread so the operator
+    # sees the full back-and-forth on the /leads detail view. Best-effort.
+    try:
+        from roost.extras.lead_nurture.services import conversation
+        conversation.log_message(
+            channel="whatsapp",
+            identifier=sender_phone,
+            direction="in",
+            body=text,
+            sender_name=sender if sender != sender_phone else "",
+        )
+    except Exception:
+        _logger.exception("inbound conversation log failed (non-fatal)")
+
     # ── STOP — unsubscribe + confirm, skip everything else. ─────────
     # Customers can opt out from any channel. We exit every enrollment
     # for this phone (active or paused) and reply with the standard

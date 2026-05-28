@@ -18,7 +18,9 @@ heading so self-hosters know to read before `git pull`.
   resolved questions from the in-code `QUESTIONS_BY_CADENCE` dict instead of the
   YAML loader, so packs that exist only in YAML (e.g. `financial_advisor_intro`)
   never advanced past question 1. Now goes through `_get_pack()`, matching
-  `start_qualification_if_needed`.
+  `start_qualification_if_needed`. The same dict-only lookup in the `/leads`
+  dashboard (card progress + detail Q&A) is fixed too, so YAML-only packs now
+  render their questions and the "N/M" progress chip.
 
 ### Added
 - **Human escape in qualification.** A lead who asks to speak to a person
@@ -26,6 +28,13 @@ heading so self-hosters know to read before `git pull`.
   paused (`pause_reason="human_requested"`), hot alert fired with the ask quoted
   — instead of being marched through the rest of the questionnaire. Handled both
   on the opening inbound message and mid-questionnaire.
+- **Customer conversation inbox on `/leads`.** Every inbound/outbound message is
+  recorded per contact (new `lead_messages` table) and the lead detail panel now
+  shows the full threaded conversation with a reply box that sends on the lead's
+  own channel (WhatsApp / WeChat / Telegram). New `POST /api/leads/{id}/reply`
+  endpoint and `conversation` service; outbound logging hangs off the single
+  `_send_question` send chokepoint so questionnaire messages appear in the thread
+  too.
 
 ## [0.1.0] — 2026-05-28
 

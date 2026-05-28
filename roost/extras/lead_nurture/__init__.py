@@ -97,6 +97,21 @@ def _schema_sql() -> str:
     );
     CREATE INDEX IF NOT EXISTS idx_cadence_preapprovals_lookup
         ON cadence_preapprovals(cadence_slug, source, channel, vertical);
+
+    CREATE TABLE IF NOT EXISTS lead_messages (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        enrollment_id INTEGER DEFAULT NULL,
+        channel       TEXT NOT NULL DEFAULT '',
+        identifier    TEXT NOT NULL DEFAULT '',
+        direction     TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+        body          TEXT NOT NULL DEFAULT '',
+        sender_name   TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_lead_messages_contact
+        ON lead_messages(channel, identifier);
+    CREATE INDEX IF NOT EXISTS idx_lead_messages_enrollment
+        ON lead_messages(enrollment_id);
     """
 
 

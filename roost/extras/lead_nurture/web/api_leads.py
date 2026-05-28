@@ -105,3 +105,20 @@ def get_lead_detail(enrollment_id: int):
     if payload is None:
         raise HTTPException(status_code=404, detail="enrollment not found")
     return JSONResponse(content=payload)
+
+
+class ReplyRequest(BaseModel):
+    """Operator's hand-typed reply to a lead."""
+
+    text: str
+
+
+@router.post("/{enrollment_id}/reply")
+def reply_to_lead(enrollment_id: int, body: ReplyRequest):
+    """Send an operator reply to the lead on their channel and record it in
+    the conversation thread. Auth is handled by the global web middleware."""
+    from roost.extras.lead_nurture.services import conversation
+    result = conversation.send_reply(enrollment_id=enrollment_id, text=body.text)
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return JSONResponse(content=result)

@@ -204,9 +204,31 @@ def _escalate_to_human(
 # ── Send dispatcher (channel-aware) ────────────────────────────────────
 
 
+def _log_outbound(channel: str, identifier: str, text: str) -> None:
+    """Record an outbound message in the conversation thread. Best-effort;
+    never blocks the send."""
+    try:
+        from roost.extras.lead_nurture.services import conversation
+        conversation.log_message(
+            channel=channel, identifier=str(identifier), direction="out", body=text
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("outbound conversation log failed (non-fatal)")
+
+
 def _send_question(channel: str, identifier: str, text: str) -> dict:
     """Send `text` to the lead on their channel. Returns adapter response
-    dict; on failure returns `{"error": ...}`. Never raises."""
+    dict; on failure returns `{"error": ...}`. Never raises.
+
+    Every outbound lead message goes through here, so this is also where we
+    record it in the conversation thread (on success)."""
+    result = _do_send(channel, identifier, text)
+    if "error" not in result:
+        _log_outbound(channel, identifier, text)
+    return result
+
+
+def _do_send(channel: str, identifier: str, text: str) -> dict:
     try:
         if channel == "whatsapp":
             from roost.extras.messaging_external.services.whatsapp import (

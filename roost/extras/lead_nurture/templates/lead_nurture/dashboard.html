@@ -65,6 +65,24 @@
     .qa-q { font-size: 0.8rem; opacity: 0.75; }
     .qa-a { font-size: 0.9rem; margin-top: 2px; }
     .qa-a.empty { opacity: 0.4; font-style: italic; }
+
+    /* Conversation thread */
+    .msg-thread { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; padding: 4px 0; }
+    .msg { max-width: 80%; padding: 6px 10px; border-radius: 10px; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
+    .msg-in  { align-self: flex-start; background: oklch(0.32 0.03 250); border-bottom-left-radius: 2px; }
+    .msg-out { align-self: flex-end; background: oklch(0.50 0.14 235); color: white; border-bottom-right-radius: 2px; }
+    .msg-meta { font-size: 0.65rem; opacity: 0.55; margin-top: 2px; }
+    .reply-box { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .reply-box textarea {
+        width: 100%; min-height: 56px; resize: vertical; padding: 8px;
+        font-size: 0.85rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);
+        background: rgba(0,0,0,0.2); color: inherit;
+    }
+    .reply-box button {
+        align-self: flex-end; padding: 6px 16px; border-radius: 6px;
+        background: oklch(0.55 0.18 235); color: white; font-size: 0.85rem; font-weight: 600;
+    }
+    .reply-box button:disabled { opacity: 0.5; }
 </style>
 
 <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3" id="leads-grid">
@@ -208,6 +226,12 @@ async function openLeadDetail(id) {
             </div>
         `).join('');
         const cl = d.classification || {};
+        const replyUI = d.can_reply ? `
+            <div class="reply-box">
+                <textarea id="reply-text" placeholder="Type a reply to send on ${escapeHTML(d.card.channel)}…"></textarea>
+                <div id="reply-status" class="text-xs opacity-60"></div>
+                <button id="reply-send" onclick="sendReply(${id})">Send</button>
+            </div>` : `<div class="text-xs opacity-50 mt-2">No addressable channel — can't reply here.</div>`;
         document.getElementById('ld-body').innerHTML = `
             <div class="text-sm opacity-70 mb-3">
                 ${chipFor(d.card.channel)}
@@ -215,6 +239,9 @@ async function openLeadDetail(id) {
                 ${d.card.email ? `<span class="opacity-70 ml-2">${escapeHTML(d.card.email)}</span>` : ''}
                 ${d.card.phone ? `<span class="opacity-70 ml-2">${escapeHTML(d.card.phone)}</span>` : ''}
             </div>
+            <h3 class="text-sm font-semibold mt-4 mb-2 opacity-80">Conversation</h3>
+            <div class="msg-thread" id="ld-thread">${renderThread(d.messages || [])}</div>
+            ${replyUI}
             <h3 class="text-sm font-semibold mt-4 mb-2 opacity-80">AI CDR classification</h3>
             <div class="text-xs">
                 <div>intent: <span class="font-mono">${escapeHTML(cl.intent || '—')}</span></div>
@@ -231,8 +258,56 @@ async function openLeadDetail(id) {
                 ${d.enrollment.next_run_at ? `<div class="opacity-70">next: ${escapeHTML(d.enrollment.next_run_at)}</div>` : ''}
             </div>
         `;
+        scrollThreadToEnd();
     } catch (e) {
         document.getElementById('ld-body').textContent = 'Error: ' + e;
+    }
+}
+
+function renderThread(messages) {
+    if (!messages.length) {
+        return '<div class="text-xs opacity-50">No messages yet.</div>';
+    }
+    return messages.map(m => {
+        const who = m.direction === 'out'
+            ? 'You'
+            : (m.sender_name || 'Lead');
+        return `<div class="msg msg-${m.direction === 'out' ? 'out' : 'in'}">${escapeHTML(m.body)}` +
+               `<div class="msg-meta">${escapeHTML(who)} · ${escapeHTML(m.created_at || '')}</div></div>`;
+    }).join('');
+}
+
+function scrollThreadToEnd() {
+    const t = document.getElementById('ld-thread');
+    if (t) t.scrollTop = t.scrollHeight;
+}
+
+async function sendReply(id) {
+    const ta = document.getElementById('reply-text');
+    const btn = document.getElementById('reply-send');
+    const status = document.getElementById('reply-status');
+    const text = (ta.value || '').trim();
+    if (!text) { status.textContent = 'Type a message first.'; return; }
+    btn.disabled = true;
+    status.textContent = 'Sending…';
+    try {
+        const r = await fetch('/api/leads/' + id + '/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            status.textContent = 'Failed: ' + (res.error || r.status);
+            btn.disabled = false;
+            return;
+        }
+        ta.value = '';
+        status.textContent = 'Sent.';
+        openLeadDetail(id);  // reload to show the new message in the thread
+    } catch (e) {
+        status.textContent = 'Error: ' + e;
+        btn.disabled = false;
     }
 }
 

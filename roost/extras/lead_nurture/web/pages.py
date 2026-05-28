@@ -112,10 +112,8 @@ def _enrollment_card(e: dict) -> dict:
         # The total comes from the question pack — compute on demand to keep
         # the card decoupled from the qualification module's data.
         try:
-            from roost.extras.lead_nurture.services.qualification import (
-                QUESTIONS_BY_CADENCE,
-            )
-            total = len(QUESTIONS_BY_CADENCE.get(e.get("cadence_slug") or "", []))
+            from roost.extras.lead_nurture.services.qualification import _get_pack
+            total = len(_get_pack(e.get("cadence_slug") or "") or [])
             idx = int(e.get("qualify_idx") or 0)
             if total:
                 qualifying_progress = f"{idx + 1}/{total}"
@@ -187,10 +185,8 @@ def enrollment_detail(enrollment_id: int) -> dict | None:
     # Qualification answers replayed against their questions
     qualify_qa: list[dict] = []
     try:
-        from roost.extras.lead_nurture.services.qualification import (
-            QUESTIONS_BY_CADENCE,
-        )
-        questions = QUESTIONS_BY_CADENCE.get(e.get("cadence_slug") or "", [])
+        from roost.extras.lead_nurture.services.qualification import _get_pack
+        questions = _get_pack(e.get("cadence_slug") or "") or []
         answers = (enr.get("fields") or {}).get("_qualify_answers") or {}
         for q in questions:
             qualify_qa.append({
@@ -200,6 +196,27 @@ def enrollment_detail(enrollment_id: int) -> dict | None:
             })
     except Exception:
         logger.exception("failed to render qualification Q&A")
+
+    # Conversation thread — full inbound/outbound history for this contact.
+    messages: list[dict] = []
+    can_reply = False
+    try:
+        from roost.extras.lead_nurture.services import conversation
+        fields = enr.get("fields") or {}
+        ch = fields.get("_qualify_channel") or enr.get("channel") or ""
+        ident = fields.get("_qualify_identifier") or ""
+        if not ident:
+            ident = (
+                enr.get("contact_telegram_chat_id")
+                if ch == "telegram"
+                else enr.get("contact_phone")
+            ) or ""
+        messages = conversation.get_thread(
+            enrollment_id=enrollment_id, channel=ch, identifier=str(ident)
+        )
+        can_reply = bool(ident) and ch in ("whatsapp", "wechat", "telegram")
+    except Exception:
+        logger.exception("failed to load conversation thread")
 
     classification = {
         "intent": (enr.get("fields") or {}).get("_lead_intent") or "",
@@ -233,6 +250,8 @@ def enrollment_detail(enrollment_id: int) -> dict | None:
             "channel": e["qualify_channel"],
             "qa": qualify_qa,
         },
+        "messages": messages,
+        "can_reply": can_reply,
     }
 
 
