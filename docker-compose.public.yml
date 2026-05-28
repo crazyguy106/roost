@@ -12,6 +12,12 @@
 
 services:
   roost:
+    # Enable Telegram in the public/demo image — operator notifications,
+    # the approve/skip guardian flow, daily summary, and the customer-side
+    # Telegram channel all need python-telegram-bot installed at build time.
+    build:
+      args:
+        ENABLE_TELEGRAM: "true"
     # Only expose Roost internally; Caddy fronts it.
     ports: !reset []
     environment:
