@@ -103,10 +103,18 @@ async def receive_webhook(request: Request):
         msg["sender"][:8], msg["text"][:100],
     )
 
-    # Process via recipe pipeline (async — reply "success" to WeChat)
-    # Then send response via customer service API
+    # Hand to the fragment debouncer (see roost-config/settings.yaml).
+    # WeChat requires the webhook to return "success" fast or it retries
+    # — submit() returns as soon as the buffer is updated (no awaiting
+    # the debounce window itself).
     import asyncio
-    asyncio.create_task(_process_inbound(msg))
+    from roost.extras.messaging_external.services.inbound_buffer import submit
+    asyncio.create_task(submit(
+        channel="wechat",
+        sender=msg.get("sender", ""),
+        message=msg,
+        processor=_process_inbound,
+    ))
 
     # Reply "success" to prevent WeChat retry
     return PlainTextResponse(content="success")

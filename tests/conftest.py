@@ -53,6 +53,18 @@ def _patch_database_path():
     conn.commit()
     conn.close()
 
+    # Disable the inbound fragment debouncer by default for the suite —
+    # the buffer's own behaviour is exercised in test_inbound_buffer.py,
+    # which sets its own short windows. Other tests post a single message
+    # and assert synchronous side effects (lead ingest, STOP exit, etc.),
+    # which the 20s default debounce window would break.
+    try:
+        from roost.extras.lead_nurture.services import settings as svc_settings
+        svc_settings._cache.setdefault("fragmented_messages", {})
+        svc_settings._cache["fragmented_messages"]["enabled"] = False
+    except Exception:
+        pass
+
     yield tmp_path
 
     # Cleanup

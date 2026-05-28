@@ -108,12 +108,28 @@ async def receive_webhook(request: Request):
                 msg["sender"], msg["sender_name"], msg["text"][:100],
             )
 
-            # Mark as read
+            # Mark as read immediately so the user sees the double-tick
+            # — buffering the *processing* shouldn't delay the read receipt.
             from roost.extras.messaging_external.services.whatsapp import mark_as_read
             mark_as_read(msg["message_id"])
 
-            # Find a WhatsApp recipe to run, or use default classification
-            await _process_inbound(msg)
+            # STOP / HELP must NOT be buffered — unsubscribe and support
+            # responses are time-sensitive UX. Everything else goes through
+            # the fragment debouncer (concatenates fast-typed fragments
+            # before classification).
+            keyword = _first_token(msg["text"])
+            if keyword in _STOP_KEYWORDS or keyword in _HELP_KEYWORDS:
+                await _process_inbound(msg)
+            else:
+                from roost.extras.messaging_external.services.inbound_buffer import (
+                    submit,
+                )
+                await submit(
+                    channel="whatsapp",
+                    sender=msg.get("sender", ""),
+                    message=msg,
+                    processor=_process_inbound,
+                )
             processed += 1
 
     return JSONResponse(content={"ok": True, "processed": processed})
