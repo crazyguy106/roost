@@ -1,0 +1,11 @@
+# Force LF on text files so Windows clones (git core.autocrlf=true) can't
+# corrupt shell-script shebangs. A CRLF "#!/usr/bin/env bash" makes the
+# kernel look for an interpreter literally named `bash\r`, which doesn't
+# exist — the container then dies with exit 127 / `env: 'bash\r'`.
+* text=auto eol=lf
+
+# Be explicit for the files that actually get executed by their shebang.
+*.sh text eol=lf
+*.py text eol=lf
+scripts/ai text eol=lf
+scripts/ai-start text eol=lf

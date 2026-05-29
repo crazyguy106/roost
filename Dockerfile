@@ -117,9 +117,12 @@ COPY setup.py ./
 # Editable install
 RUN pip install --no-cache-dir -e .
 
-# Copy entrypoint
+# Copy entrypoint. Strip any CRLF the host's git may have introduced
+# (core.autocrlf=true on Windows checkouts) — a CRLF shebang makes the
+# kernel look for `bash\r` and the container crashes with exit 127.
+# Belt-and-suspenders alongside .gitattributes (which fixes it at checkout).
 COPY entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
 
 # Bake the MCP-server config for each CLI agent. Each one points at the
 # in-image `roost-mcp` console-script so AGENT_PROVIDER=<vendor>_cli can

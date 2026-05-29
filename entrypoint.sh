@@ -92,10 +92,14 @@ TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 
 BOT_PID=""
 if [ "$TELEGRAM_ENABLED" = "true" ] && [ -n "$TELEGRAM_BOT_TOKEN" ]; then
-    echo "[roost] Starting roost-bot (Telegram)..."
-    python -m roost.bot.main &
-    BOT_PID=$!
-    echo "[roost] roost-bot started (PID: $BOT_PID)"
+    if python -c "import telegram" 2>/dev/null; then
+        echo "[roost] Starting roost-bot (Telegram)..."
+        python -m roost.bot.main &
+        BOT_PID=$!
+        echo "[roost] roost-bot started (PID: $BOT_PID)"
+    else
+        echo "[roost] Telegram bot not started — python-telegram-bot is not installed. Rebuild with build arg ENABLE_TELEGRAM=true to include it, or set TELEGRAM_ENABLED=false to silence this."
+    fi
 elif [ "$TELEGRAM_ENABLED" = "true" ]; then
     echo "[roost] Telegram bot not started — TELEGRAM_BOT_TOKEN is empty (TELEGRAM_ENABLED=true)"
 else

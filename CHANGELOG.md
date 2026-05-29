@@ -19,8 +19,25 @@ heading so self-hosters know to read before `git pull`.
   line so the default install greets every operator neutrally. (Side effect: the
   digest's "Nothing urgent today" empty-day fallback now fires correctly, since
   the message no longer always starts with two lines.)
+- **`env-templates/demo.env` defaults to username/password web login.** The Google
+  and Microsoft OAuth client IDs are now blank in the demo template, so a fresh
+  demo install presents the `WEB_USERNAME`/`WEB_PASSWORD` sign-in form instead of
+  a "Sign in with Google" button nobody can use without real OAuth creds. Fill the
+  client IDs back in to restore the OAuth buttons.
 
 ### Fixed
+- **Container crashed on Windows clones (CRLF line endings).** `entrypoint.sh` was
+  re-written with `\r\n` endings by `git core.autocrlf=true` on Windows checkouts,
+  so the kernel tried to exec an interpreter named `bash\r` and the container died
+  with exit 127 (`env: 'bash\r': No such file or directory`). Added a
+  `.gitattributes` pinning shell/Python scripts to `eol=lf` (fixes it at checkout,
+  including the host-side `scripts/install.sh`), plus a defensive `sed` CRLF strip
+  on `entrypoint.sh` in the Dockerfile.
+- **Telegram bot crash-looped when its package wasn't installed.** A build without
+  the bot (`ENABLE_TELEGRAM=false`, the default) combined with `TELEGRAM_ENABLED=true`
+  in the env made the entrypoint try to start the bot and hit
+  `No module named 'telegram'`. The entrypoint now checks the package is importable
+  first and skips with a clear message instead.
 - **Inbound WhatsApp/WeChat leads ignored `default_vertical`.** Both webhooks
   hardcoded `vertical="property"` on lead ingest, so a new inbound always
   enrolled in `property_buyer_intro` regardless of the configured
