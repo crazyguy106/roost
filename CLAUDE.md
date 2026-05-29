@@ -51,6 +51,7 @@ Core capabilities live under `roost/services/`, `roost/mcp/`, `roost/web/`. Vert
 | Recipes / SOP triggers | `services/recipes.py`, `sop_triggers.py` | `tools_recipes.py` | `api.py` | — |
 | Guardian (pre-flight safety + draft queue) | `services/guardian.py` (incl. `guardian_drafts` table, `guardian_gate`, `approve_draft`, `reject_draft`) | `tools_guardian.py` (+ sme_ops money-moving tools route through the gate) | settings tab; pending-drafts card on `/sme/sync-status`; `extras/sme_ops/web/api_sme_drafts.py` (`/api/sme/drafts/*`) | — |
 | Daily summary (Telegram) | `services/daily_summary.py` | — | `bot/handlers/daily_summary.py` + scheduler tick | `docs/daily-summary.md` |
+| Web file uploads | `services/uploads.py` (basename sanitise + containment guard, 25MB cap) | — | `/files` page + `api_uploads.py` (`/api/files/*`) → `UPLOADS_DIR` | — |
 
 ## Property-Agent Toolkit — quick orientation
 

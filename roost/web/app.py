@@ -29,6 +29,7 @@ except ImportError:
 from roost.web.api_chat import router as chat_router
 from roost.web.api_agentic import router as agentic_router
 from roost.web.api_settings import router as settings_api_router
+from roost.web.api_uploads import router as uploads_router
 # api_property_agent — loaded by roost.extras.property_agent
 # api_zapier / api_stripe / api_shopify / api_xero / api_sme_drafts — loaded by roost.extras.sme_ops
 # api_crm / api_attio_webhook / auth_zoho — loaded by roost.extras.crm
@@ -502,6 +503,7 @@ function msg(t){log.textContent += t + '\\n';}
     app.include_router(chat_router)
     app.include_router(agentic_router)
     app.include_router(settings_api_router)
+    app.include_router(uploads_router)
     # property_agent + sme_ops + crm + rpa + messaging_external routers — registered by roost.extras.* bundles
 
     # Vertical bundles register themselves after core routers are mounted.

@@ -1152,6 +1152,16 @@ def chat_page(request: Request, provider: str | None = None):
     })
 
 
+@router.get("/files")
+def files_page(request: Request):
+    from roost.services import uploads
+    return templates.TemplateResponse("files.html", {
+        **_base_context(request),
+        "files": [f.as_dict() for f in uploads.list_files()],
+        "max_mb": uploads.MAX_UPLOAD_BYTES // (1024 * 1024),
+    })
+
+
 # ── Agentic Workflow (Phase 1) ────────────────────────────────────
 # Gated by AGENTIC_WORKFLOW_ENABLED — see docs/agentic-workflow-phase1.md.
 

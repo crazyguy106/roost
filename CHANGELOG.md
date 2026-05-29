@@ -13,6 +13,13 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Changed
+- **Morning briefing no longer ships a hardcoded personal quote.** The `/briefing`
+  command and the scheduled morning digest dropped the embedded inspirational
+  line so the default install greets every operator neutrally. (Side effect: the
+  digest's "Nothing urgent today" empty-day fallback now fires correctly, since
+  the message no longer always starts with two lines.)
+
 ### Fixed
 - **Inbound WhatsApp/WeChat leads ignored `default_vertical`.** Both webhooks
   hardcoded `vertical="property"` on lead ingest, so a new inbound always
@@ -29,6 +36,12 @@ heading so self-hosters know to read before `git pull`.
   render their questions and the "N/M" progress chip.
 
 ### Added
+- **Web file uploads.** A new `/files` page (Core nav) lets operators drag-drop
+  or browse-upload reference files (CSVs, PDFs, images, spreadsheets) straight
+  into `UPLOADS_DIR` — the same directory the Telegram bot and chat tools already
+  read from, so uploads are immediately usable by the agent. New `/api/files`
+  endpoints (list / upload / download / delete) backed by `services/uploads.py`
+  with basename sanitisation, an uploads-dir containment guard, and a 25MB cap.
 - **Human escape in qualification.** A lead who asks to speak to a person
   ("just call me", "talk to someone") is escalated to the operator — enrollment
   paused (`pause_reason="human_requested"`), hot alert fired with the ask quoted

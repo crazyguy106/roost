@@ -63,7 +63,6 @@ async def cmd_briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lines = [
         "*Morning Briefing*\n",
-        "_Life provides. You respond. The wake forms behind you._ (以悟归空)\n",
     ]
     warnings = []
 

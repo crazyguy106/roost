@@ -145,6 +145,7 @@ Roost runs Claude Code inside a Docker container — **the container IS the sand
 | Method | URL/Command | Use Case |
 |--------|-------------|----------|
 | **Web UI** | `http://localhost:8080` | Dashboard, tasks, contacts, projects, calendar |
+| **Files** | `http://localhost:8080/files` | Drag-drop reference files into `UPLOADS_DIR` for the agent to use |
 | **Settings** | `http://localhost:8080/settings` | Credentials, feature flags, personality editor |
 | **Browser Terminal** | `http://localhost:8080/terminal/` | Claude Code via ttyd → tmux |
 | **SSH** | `ssh -p 2222 dev@127.0.0.1` ([guide](docs/container-ssh-access.md)) | Claude Code via tmux attach (loopback-only; remote via ProxyJump) |

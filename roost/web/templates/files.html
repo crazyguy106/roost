@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Files — Roost{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-5">
+    <h1 class="text-xl font-bold">Files</h1>
+    <span class="text-sm opacity-60">Up to {{ max_mb }}MB per file</span>
+</div>
+
+<p class="text-sm opacity-70 mb-4">
+    Upload reference files (CSVs, PDFs, images, spreadsheets) for the agent to use.
+    Uploaded files are stored on the server and available to the Telegram bot and chat tools.
+</p>
+
+<div id="dropzone"
+     class="border-2 border-dashed border-base-300 rounded-lg p-8 text-center mb-6 cursor-pointer hover:border-primary transition-colors">
+    <input type="file" id="fileInput" class="hidden" multiple>
+    <div class="opacity-70">
+        <p class="font-medium">Drop files here or click to browse</p>
+        <p class="text-sm mt-1" id="uploadStatus"></p>
+    </div>
+</div>
+
+<div class="overflow-x-auto">
+    <table class="table">
+        <thead>
+            <tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr>
+        </thead>
+        <tbody id="fileTable">
+            {% for f in files %}
+            <tr data-name="{{ f.name }}">
+                <td class="font-mono text-sm break-all">{{ f.name }}</td>
+                <td class="whitespace-nowrap">{{ f.size_human }}</td>
+                <td class="whitespace-nowrap file-mtime" data-mtime="{{ f.modified }}"></td>
+                <td class="whitespace-nowrap text-right">
+                    <a class="btn btn-xs btn-ghost" href="/api/files/{{ f.name | urlencode }}/download">Download</a>
+                    <button class="btn btn-xs btn-ghost text-error" data-delete="{{ f.name }}">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not files %}
+    <p class="text-center opacity-50 py-8" id="emptyMsg">No files uploaded yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const dz = document.getElementById('dropzone');
+    const input = document.getElementById('fileInput');
+    const status = document.getElementById('uploadStatus');
+
+    // Format epoch-second timestamps rendered server-side.
+    document.querySelectorAll('.file-mtime').forEach(function (el) {
+        const ts = parseFloat(el.dataset.mtime);
+        if (ts) el.textContent = new Date(ts * 1000).toLocaleString();
+    });
+
+    dz.addEventListener('click', () => input.click());
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('border-primary'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('border-primary'));
+    dz.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dz.classList.remove('border-primary');
+        if (e.dataTransfer.files.length) uploadAll(e.dataTransfer.files);
+    });
+    input.addEventListener('change', () => {
+        if (input.files.length) uploadAll(input.files);
+    });
+
+    async function uploadAll(files) {
+        for (let i = 0; i < files.length; i++) {
+            status.textContent = 'Uploading ' + files[i].name + '…';
+            const fd = new FormData();
+            fd.append('file', files[i]);
+            try {
+                const res = await fetch('/api/files/upload', { method: 'POST', body: fd });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    status.textContent = 'Failed: ' + (err.detail || res.statusText);
+                    return;
+                }
+            } catch (err) {
+                status.textContent = 'Upload error: ' + err;
+                return;
+            }
+        }
+        status.textContent = 'Done.';
+        location.reload();
+    }
+
+    document.getElementById('fileTable').addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-delete]');
+        if (!btn) return;
+        const name = btn.dataset.delete;
+        if (!confirm('Delete ' + name + '?')) return;
+        const res = await fetch('/api/files/' + encodeURIComponent(name), { method: 'DELETE' });
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert('Delete failed.');
+        }
+    });
+})();
+</script>
+{% endblock %}

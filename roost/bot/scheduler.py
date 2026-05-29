@@ -164,7 +164,6 @@ async def _morning_digest(context) -> None:
 
         lines = [
             "Good morning! Here's your daily briefing:\n",
-            "_Life provides. You respond. The wake forms behind you._ (以悟归空)\n",
         ]
 
         # Overdue
