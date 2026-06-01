@@ -242,6 +242,18 @@ WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
 
+# Chatwoot (self-hosted helpdesk — FA edition fronts WhatsApp via a Chatwoot
+# inbox). Inbound: Chatwoot fires HMAC-signed webhooks to /api/chatwoot/webhook.
+# Outbound: REST API with api_access_token header. CHATWOOT_WEBHOOK_SECRET is
+# the per-webhook secret from Chatwoot UI (rotates if the webhook row is
+# recreated); CHATWOOT_API_KEY is the user-level access token.
+CHATWOOT_ENABLED: bool = os.getenv("CHATWOOT_ENABLED", "false").lower() == "true"
+CHATWOOT_URL: str = os.getenv("CHATWOOT_URL", "").rstrip("/")
+CHATWOOT_API_KEY: str = os.getenv("CHATWOOT_API_KEY", "")
+CHATWOOT_ACCOUNT_ID: str = os.getenv("CHATWOOT_ACCOUNT_ID", "")
+CHATWOOT_INBOX_ID: str = os.getenv("CHATWOOT_INBOX_ID", "")
+CHATWOOT_WEBHOOK_SECRET: str = os.getenv("CHATWOOT_WEBHOOK_SECRET", "")
+
 # SMS (outbound) — vendor-agnostic dispatch via SMS_PROVIDER.
 # Only Twilio is implemented today; flag-gated so adapter fails closed when off.
 SMS_ENABLED: bool = os.getenv("SMS_ENABLED", "false").lower() == "true"

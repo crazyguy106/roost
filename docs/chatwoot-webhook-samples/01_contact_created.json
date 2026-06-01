@@ -1,0 +1,17 @@
+{
+  "account": {
+    "id": 4,
+    "name": "Verixiom"
+  },
+  "additional_attributes": {},
+  "avatar": "",
+  "custom_attributes": {},
+  "email": "contact@example.com",
+  "id": 1,
+  "identifier": null,
+  "name": "Roost Test",
+  "phone_number": "+6591234567",
+  "thumbnail": "",
+  "blocked": false,
+  "event": "contact_created"
+}

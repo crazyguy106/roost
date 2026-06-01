@@ -13,6 +13,18 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Added
+- **Chatwoot adapter** (`messaging_external` bundle, sub-flag
+  `CHATWOOT_ENABLED`). Lets Roost sit behind a self-hosted Chatwoot
+  instance — Chatwoot fronts WhatsApp / WeChat / Email behind one queue,
+  Roost reads HMAC-signed inbound webhooks (`/api/chatwoot/webhook`) and
+  replies via REST. Outbound surface: `send_message`,
+  `create_conversation`, `find_or_create_contact`, `mark_as_read`,
+  `mark_as_resolved`. Only `message_created` + `incoming` runs the AI
+  pipeline; `conversation_updated` (chatty) and outgoing/lifecycle events
+  are ignored. Reference 4.14.1 payloads captured under
+  `docs/chatwoot-webhook-samples/`. See `docs/chatwoot.md`. (FA-A)
+
 ### Changed
 - **Morning briefing no longer ships a hardcoded personal quote.** The `/briefing`
   command and the scheduled morning digest dropped the embedded inspirational

@@ -200,6 +200,7 @@ See `docs/` for detailed guides:
 - [Neurodivergent Features](docs/neurodivergent-features.md)
 - [RPA / Browser Automation](docs/rpa.md) — data-driven flows, OTP pause/resume, Singpass-assisted via `await_user_session`
 - [WhatsApp Adapter](docs/whatsapp-adapter.md) — Meta Cloud API integration; STOP/HELP + `mark_inbound` parity for lead-nurture
+- [Chatwoot Adapter](docs/chatwoot.md) — self-hosted helpdesk front-end (FA edition); HMAC-signed inbound webhooks + REST outbound, only `message_created`/`incoming` drives the pipeline
 - [Telegram Customer Channel](docs/telegram-customer-channel.md) — same bot serves operators (allowlisted) and customer DMs (STOP/HELP, qualification, lead-capture, nurture)
 - [Property-Agent Toolkit](docs/property-agent-toolkit.md) — Singapore IRAS / PDPC / CEA compliance tools
 - [Lead Nurture](docs/lead-nurture.md) — multi-channel ingest + cadence engine on Attio Free, Telegram approval gate

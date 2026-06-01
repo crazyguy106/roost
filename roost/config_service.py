@@ -55,6 +55,12 @@ FEATURE_FLAGS = {
         "env_default": "false",
         "restart": True,
     },
+    "CHATWOOT_ENABLED": {
+        "label": "Chatwoot",
+        "description": "Inbound webhook + outbound API for the FA-edition Chatwoot front-end. Requires CHATWOOT_URL, CHATWOOT_API_KEY, CHATWOOT_ACCOUNT_ID, CHATWOOT_INBOX_ID, CHATWOOT_WEBHOOK_SECRET.",
+        "env_default": "false",
+        "restart": True,
+    },
     "SMS_ENABLED": {
         "label": "SMS (Twilio)",
         "description": "Outbound SMS for lead-nurture cadences. Requires Twilio account SID / auth token / from-number.",
@@ -123,6 +129,12 @@ _INTEGRATION_CHECKS = [
         "name": "WhatsApp Cloud API",
         "icon": "whatsapp",
         "check_env": ["WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN"],
+        "check_token": None,
+    },
+    {
+        "name": "Chatwoot",
+        "icon": "chat",
+        "check_env": ["CHATWOOT_URL", "CHATWOOT_API_KEY", "CHATWOOT_ACCOUNT_ID"],
         "check_token": None,
     },
     {

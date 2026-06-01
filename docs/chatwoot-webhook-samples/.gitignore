@@ -1,0 +1,4 @@
+# Capture artifacts contain admin tokens + raw webhook dumps. Sanitised
+# samples land in *.json (commit-safe); raw + secrets stay local.
+.creds.local
+raw-webhook-site-dump.json

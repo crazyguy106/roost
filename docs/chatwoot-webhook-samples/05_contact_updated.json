@@ -1,0 +1,31 @@
+{
+  "account": {
+    "id": 4,
+    "name": "Verixiom"
+  },
+  "additional_attributes": {},
+  "avatar": "",
+  "custom_attributes": {},
+  "email": "contact@example.com",
+  "id": 1,
+  "identifier": null,
+  "name": "Roost Test",
+  "phone_number": "+6591234567",
+  "thumbnail": "",
+  "blocked": false,
+  "event": "contact_updated",
+  "changed_attributes": [
+    {
+      "updated_at": {
+        "previous_value": "2026-06-01T15:47:21.552Z",
+        "current_value": "2026-06-01T15:47:22.691Z"
+      }
+    },
+    {
+      "last_activity_at": {
+        "previous_value": null,
+        "current_value": "2026-06-01T15:47:22.679Z"
+      }
+    }
+  ]
+}
