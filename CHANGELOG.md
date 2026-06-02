@@ -13,6 +13,15 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-02
+
+The **FA (Financial Adviser) edition** release. Roost now ships as a turnkey
+self-hosted stack fronted by Chatwoot, with WhatsApp / WeChat / Email flowing
+through one customer-facing inbox and Telegram as the adviser's operator
+surface. Includes the full FA-A → FA-K series, plus the unrelated quality
+fixes accumulated since v0.1.0 (CRLF builds, default_vertical handling,
+YAML question packs, conversation inbox on `/leads`, file uploads).
+
 ### Fixed
 - **Lead-nurture dispatch handles `channel="chatwoot"`.** The Chatwoot inbound
   router stamps `channel="chatwoot"` on lead ingest (with the WhatsApp phone as
