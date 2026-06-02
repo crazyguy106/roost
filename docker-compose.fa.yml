@@ -1,0 +1,297 @@
+# =============================================================================
+# Roost — FA (Financial Adviser) Edition overlay
+#
+# Run alongside the base compose:
+#   docker compose -f docker-compose.yml -f docker-compose.fa.yml up -d
+#
+# Adds:
+#   chatwoot          — open-source customer messaging UI (Rails)
+#   chatwoot-worker   — Sidekiq worker (required for inbound processing)
+#   chatwoot-init     — one-shot rails db:chatwoot_prepare on first boot
+#   chatwoot-postgres — DB for Chatwoot (pgvector-enabled)
+#   chatwoot-redis    — cache + sidekiq queue for Chatwoot
+#   tailscale         — sidecar; exposes Chatwoot over Funnel
+#
+# Amends the base `roost` service:
+#   * loopback-only port binding (Tailscale handles external reachability)
+#   * depend on chatwoot being healthy so the first webhook in doesn't 404
+#   * keep the same CLI auth bind-mounts so FA logins survive container
+#     recreate (memory: fa-edition-cli-persistence)
+#
+# Does NOT layer docker-compose.override.yml — the SSH-into-Claude shortcut
+# isn't part of the FA edition. Install script enforces this.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # roost: amendments to the base service
+  # ---------------------------------------------------------------------------
+  roost:
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Match base compose: ./data is a host bind-mount so updates don't risk
+      # the lead/conversation DB (see scripts/roost-update.sh).
+      - ./data:/app/data
+      - roost-config:/app/config
+      - ./.env:/app/.env
+      - ${HOST_CLAUDE_DIR:-./claude-auth}:/home/dev/.claude
+      - ${HOST_GEMINI_DIR:-./gemini-auth}:/home/dev/.gemini
+      - ${HOST_CODEX_DIR:-./codex-auth}:/home/dev/.codex
+    depends_on:
+      chromium:
+        condition: service_started
+      chatwoot:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # chatwoot: web (Rails)
+  # ---------------------------------------------------------------------------
+  chatwoot:
+    image: chatwoot/chatwoot:v4.14.1
+    # No host port binding — Tailscale sidecar shares this container's netns
+    # (network_mode: service:chatwoot) and routes Funnel → 127.0.0.1:3000.
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      DEFAULT_LOCALE: en
+      FORCE_SSL: "false"   # Funnel terminates TLS; container speaks HTTP
+      ENABLE_ACCOUNT_SIGNUP: "false"
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    depends_on:
+      chatwoot-init:
+        condition: service_completed_successfully
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+    volumes:
+      - chatwoot-storage:/app/storage
+      - chatwoot-public:/app/public
+    restart: unless-stopped
+    healthcheck:
+      # Alpine image has wget, not curl. /api returns 200 + JSON when Rails
+      # + DB + Redis are all up (does not cover sidekiq — that's the worker).
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-worker: Sidekiq
+  # ---------------------------------------------------------------------------
+  # Without this, inbound WhatsApp messages queue forever and never reach the
+  # Chatwoot UI (or fire the webhook to Roost). It must be the same image and
+  # see the same env as `chatwoot`.
+  chatwoot-worker:
+    image: chatwoot/chatwoot:v4.14.1
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    depends_on:
+      chatwoot:
+        condition: service_healthy
+    volumes:
+      - chatwoot-storage:/app/storage
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-init: one-shot DB prep
+  # ---------------------------------------------------------------------------
+  # `rails db:chatwoot_prepare` is idempotent: first run does
+  # create+schema:load+seed; later runs do migrate. Exits 0 on success.
+  chatwoot-init:
+    image: chatwoot/chatwoot:v4.14.1
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-postgres: pgvector-enabled Postgres 15
+  # ---------------------------------------------------------------------------
+  # Chatwoot 4.x recommends pgvector for AI features; behaves as plain
+  # postgres if those features are off.
+  chatwoot-postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+    volumes:
+      - chatwoot-postgres-data:/var/lib/postgresql/data
+    # No host port binding — only chatwoot + chatwoot-worker + chatwoot-init
+    # talk to it via the compose network.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "chatwoot", "-d", "chatwoot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-redis
+  # ---------------------------------------------------------------------------
+  chatwoot-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - chatwoot-redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  # ---------------------------------------------------------------------------
+  # tailscale: sidecar that exposes Chatwoot over Funnel
+  # ---------------------------------------------------------------------------
+  # network_mode: service:chatwoot puts this container in Chatwoot's network
+  # namespace. Tailscale Serve+Funnel reads ./tailscale/serve.json which
+  # proxies https://roost-fa.<tailnet>.ts.net → http://127.0.0.1:3000 (which,
+  # in this shared netns, IS the Chatwoot Rails process).
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: roost-fa
+    network_mode: service:chatwoot
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      TS_AUTHKEY: ${TAILSCALE_AUTHKEY}
+      TS_HOSTNAME: roost-fa
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_EXTRA_ARGS: "--accept-routes"
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale/serve.json:/config/serve.json:ro
+    depends_on:
+      chatwoot:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+volumes:
+  chatwoot-storage:
+  chatwoot-public:
+  chatwoot-postgres-data:
+  chatwoot-redis-data:
+  tailscale-state:

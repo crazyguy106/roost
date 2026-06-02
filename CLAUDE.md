@@ -33,6 +33,7 @@ MCP server   ─┘                                  │
 - **Whole-string placeholders only** in RPA YAML (`"$param:KEY"`). Embedded form (`"AIA $param:KEY"`) is silently not substituted — pass full strings as params instead.
 - **Docs live in `docs/`** as Markdown. New external-system integrations get their own `docs/<name>.md`.
 - **Three deployment shapes** (laptop / hosted-by-you / VPS+domain) — see `docs/deployment.md`. The VPS+domain shape uses the bundled Caddy overlay at `docker-compose.public.yml` + `caddy/Caddyfile` + `env-templates/public-vps.env`; don't reinvent reverse-proxy plumbing.
+- **FA-edition laptop install** is the Chatwoot-fronted shape: `scripts/install-fa.sh` + `docker-compose.fa.yml` + `env-templates/fa.env` + `tailscale/serve.json`. Runbook at `docs/fa-laptop-install.md`. The VPS analogue is `docker-compose.fa-vps.yml` (Caddy instead of Tailscale Funnel). Don't add new Chatwoot-bootstrap plumbing; extend what's there.
 - **SSH-into-Claude shortcut lives in `docker-compose.override.yml`, not the base compose.** The override loopback-binds `:2222`, adds `cap_add: [AUDIT_WRITE]` (mandatory — sshd's PAM session writes an audit record and tears down the session without it), and bind-mounts `ssh/authorized_keys`, `ssh/sshd_config.d/`, `ssh/bash_profile` so the ephemeral container `/home/dev` survives recreate. `cap_add` and volume changes need `docker compose up -d` (recreate), not `restart`. Full doc: `docs/container-ssh-access.md`.
 
 ## Key features

@@ -185,6 +185,7 @@ pytest tests/ -v
 See `docs/` for detailed guides:
 - [Container SSH Access](docs/container-ssh-access.md) — SSH straight into the `ai-claude` tmux session; loopback-only port, ProxyJump for remote, `CAP_AUDIT_WRITE` gotcha
 - [Deployment Shapes](docs/deployment.md) — laptop / hosted-by-you / VPS+domain (Caddy auto-TLS bundled via `docker-compose.public.yml`)
+- [FA Edition (laptop)](docs/fa-laptop-install.md) — one-command Roost + Chatwoot + Tailscale Funnel install; WhatsApp goes through Chatwoot
 - [What It Costs](docs/costs.md) — realistic pricing breakdown in SGD
 - [Platform Overview](docs/platform-overview.md) — architecture, APIs, file structure
 - [Onboarding Guide](docs/onboarding-guide.md) — first login, connecting integrations

@@ -16,7 +16,12 @@ services:
       - "8080:8080"
       - "2222:22"
     volumes:
-      - roost-data:/app/data
+      # Host bind-mount: ./data holds roost.db + RPA flow state + browser_state.
+      # Bind-mount (not named volume) so `docker compose down -v` cannot wipe
+      # it by accident, and so `scripts/roost-update.sh` can tar it directly
+      # without a helper container. Container runs as root; bind dir is owned
+      # by the host user that ran `docker compose up`.
+      - ./data:/app/data
       - roost-config:/app/config
       # Bind-mount .env so the setup wizard's writes (WEB_PASSWORD,
       # ROOST_DOMAIN, SIDECAR_PUBLIC_URL) land back on the host file
@@ -118,5 +123,4 @@ services:
         max-file: "3"
 
 volumes:
-  roost-data:
   roost-config:

@@ -14,6 +14,28 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition laptop install** (`scripts/install-fa.sh` +
+  `docs/fa-laptop-install.md`). One command brings up Roost +
+  Chatwoot 4.14.1 + Sidekiq + Postgres (pgvector) + Redis + a Tailscale
+  Funnel sidecar that publishes Chatwoot at `https://<host>.<tailnet>.ts.net`
+  for Meta to webhook into. The script auto-generates `SESSION_SECRET`
+  (hex 32), `CHATWOOT_POSTGRES_PASSWORD` (hex 24), and
+  `CHATWOOT_SECRET_KEY_BASE` (hex 64) — only when they still hold the
+  `CHANGE_ME_*` sentinel, so re-runs are safe — prompts for
+  `TAILSCALE_AUTHKEY` when interactive, creates the host bind-mount dirs
+  (`data/`, `claude-auth/`, `gemini-auth/`, `codex-auth/`, `backups/`,
+  `roost-config/`), pulls and starts the stack, waits up to 5 min for the
+  Chatwoot healthcheck, then greps the Tailscale log to surface the Funnel
+  URL. Bundles the FA compose overlays (`docker-compose.fa.yml` for
+  laptop, `docker-compose.fa-vps.yml` for Caddy-fronted VPS),
+  `env-templates/fa.env`, `tailscale/serve.json`, and the
+  `scripts/roost-update.sh` snapshot-before-update wrapper. The runbook
+  walks the manual Chatwoot wizard steps that can't be scripted: super-admin
+  creation, WhatsApp Cloud inbox setup (Meta creds go into Chatwoot, not
+  Roost's `.env`), Roost webhook registration with secret capture, and the
+  Meta-side webhook pointing at Chatwoot. Base `docker-compose.yml`
+  switched to a host bind-mount on `./data/` so updates can't accidentally
+  blow away `roost.db` + RPA flow state. (FA-D)
 - **Chatwoot adapter** (`messaging_external` bundle, sub-flag
   `CHATWOOT_ENABLED`). Lets Roost sit behind a self-hosted Chatwoot
   instance — Chatwoot fronts WhatsApp / WeChat / Email behind one queue,

@@ -1,0 +1,214 @@
+# =============================================================================
+# Roost — FA-edition Chatwoot sandbox for the VPS shape
+#
+# Run alongside the base + public overlays:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.public.yml \
+#     -f docker-compose.fa-vps.yml up -d
+#
+# Differences from docker-compose.fa.yml (laptop FA edition):
+#   * No tailscale sidecar — Caddy + Let's Encrypt at chat.<domain> handles
+#     public reachability + TLS instead.
+#   * No port bind on chatwoot — Caddy reaches it on the compose network.
+#   * Tighter resource limits to fit a 3.7G VPS (Chatwoot 1G/1CPU).
+#   * Does NOT amend the `roost` service. Chatwoot is a sandbox here:
+#     Roost has no CHATWOOT_ENABLED yet, will be wired in via FA-A + FA-B.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # chatwoot: web (Rails)
+  # ---------------------------------------------------------------------------
+  chatwoot:
+    image: chatwoot/chatwoot:v4.14.1
+    command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      DEFAULT_LOCALE: en
+      FORCE_SSL: "false"   # Caddy terminates TLS upstream
+      ENABLE_ACCOUNT_SIGNUP: "false"
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+      # Rails is behind a reverse proxy — trust X-Forwarded-* from Caddy.
+      RAILS_INBOUND_PROXY_IPS: "0.0.0.0/0"
+    depends_on:
+      chatwoot-init:
+        condition: service_completed_successfully
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+    volumes:
+      - chatwoot-storage:/app/storage
+      - chatwoot-public:/app/public
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 384M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-worker: Sidekiq
+  # ---------------------------------------------------------------------------
+  chatwoot-worker:
+    image: chatwoot/chatwoot:v4.14.1
+    command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      NODE_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+      RAILS_LOG_TO_STDOUT: "true"
+    depends_on:
+      chatwoot:
+        condition: service_healthy
+    volumes:
+      - chatwoot-storage:/app/storage
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-init: one-shot DB prep
+  # ---------------------------------------------------------------------------
+  chatwoot-init:
+    image: chatwoot/chatwoot:v4.14.1
+    command: ["bundle", "exec", "rails", "db:chatwoot_prepare"]
+    env_file:
+      - .env
+    environment:
+      RAILS_ENV: production
+      INSTALLATION_ENV: docker
+      SECRET_KEY_BASE: ${CHATWOOT_SECRET_KEY_BASE}
+      FRONTEND_URL: ${CHATWOOT_FRONTEND_URL}
+      POSTGRES_HOST: chatwoot-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USERNAME: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: chatwoot
+      REDIS_URL: redis://chatwoot-redis:6379
+    depends_on:
+      chatwoot-postgres:
+        condition: service_healthy
+      chatwoot-redis:
+        condition: service_healthy
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-postgres
+  # ---------------------------------------------------------------------------
+  chatwoot-postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: chatwoot
+      POSTGRES_USER: chatwoot
+      POSTGRES_PASSWORD: ${CHATWOOT_POSTGRES_PASSWORD}
+    volumes:
+      - chatwoot-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "chatwoot", "-d", "chatwoot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+        reservations:
+          cpus: '0.1'
+          memory: 96M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # chatwoot-redis
+  # ---------------------------------------------------------------------------
+  chatwoot-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - chatwoot-redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 192M
+        reservations:
+          cpus: '0.05'
+          memory: 48M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+volumes:
+  chatwoot-storage:
+  chatwoot-public:
+  chatwoot-postgres-data:
+  chatwoot-redis-data:
