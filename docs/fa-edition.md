@@ -165,6 +165,95 @@ re-run won't churn them).
 - **No raw Meta webhook into Roost.** The `/api/whatsapp/webhook` route
   is for non-FA installs. FA installs only accept `/api/chatwoot/webhook`.
 
+## Build status
+
+The FA edition shipped on the `feature/fa-edition` branch as five
+landable commits. Each one stands on its own — tests pass at every step,
+so a self-hoster can fork at any tag and run.
+
+| Tag | Commit | What landed |
+|---|---|---|
+| **FA-A** | `e60008a` | Chatwoot adapter — HMAC-signed inbound webhook (`/api/chatwoot/webhook`), REST outbound primitives (`send_message`, `find_or_create_contact`, `create_conversation`, `mark_as_read`/`_resolved`). 4.14.1 webhook payload samples captured under `docs/chatwoot-webhook-samples/` |
+| **FA-B** | `4d91248` | `whatsapp.send_text_message` delegates to `chatwoot.route_text_to_whatsapp` when `CHATWOOT_ENABLED` — text outbound flows through Chatwoot, no caller changes needed |
+| **FA-D** | `c96e734` | One-line laptop install: `scripts/install-fa.sh` + `docker-compose.fa.yml` (Chatwoot + Sidekiq + pgvector/Redis + Tailscale Funnel sidecar) + `docker-compose.fa-vps.yml` (Caddy variant) + `env-templates/fa.env` + `docs/fa-laptop-install.md` runbook |
+| **FA-E** | `8f8a9ef` | End-to-end signed-POST round-trip test (`tests/test_chatwoot_end_to_end.py`) + operator smoke against a live stack (`scripts/smoke_chatwoot.py`) |
+| **FA-G** | `4c57be2` | Consolidated outbound — templates (`template_params` payload), media (multipart `attachments[]`), template discovery (`list_templates`) all on `POST /conversations/:cid/messages`. One dispatch path; no Meta-direct surface left in FA edition |
+
+Test suite at 703 green at FA-G.
+
+**Open, not yet a commit:**
+
+- **FA-F** — push `feature/fa-edition` to remote, cut a release tag, roll
+  `[Unreleased]` into a dated section in `CHANGELOG.md`.
+- **FA-H** (proposed) — Chatwoot read-side rollups for the existing
+  `services/daily_summary.py`: open-conversation count, response-time
+  stats via `GET /reports/conversations_filter`, top contacts by activity.
+  Adds ~3 thin wrappers (`list_conversations`, `get_messages`,
+  `conversation_meta`) and one section in the morning Telegram brief.
+- **MCP surface gap** — `chatwoot.list_templates` is a Python helper but
+  not exposed as an MCP tool yet. Nice-to-have for agent-driven
+  first-touch flows.
+- **No real-laptop install yet.** Script is bash-clean, e2e + smoke pass,
+  but no adviser has run it against a live Meta WhatsApp Cloud number.
+
+## A day in the FA inbox
+
+Concrete walkthrough for a Singapore financial adviser running FA
+edition on a laptop. Times are illustrative.
+
+**07:45 — laptop wakes.** Chatwoot, Roost, and the Tailscale Funnel
+sidecar come back up. The Funnel URL is stable across reboots; Meta's
+webhook deliveries that queued overnight start arriving.
+
+**08:00 — overnight inbound lands.** Three new WhatsApp messages from
+prospects hit Chatwoot. Meta → Chatwoot's webhook → Chatwoot inbox →
+Chatwoot's outbound webhook (signed) → Roost. For each one Roost:
+
+1. Verifies the HMAC signature.
+2. Drops it into `inbound_buffer` (20s debounce window — fragmented
+   "hi" / "i was thinking" / "about retirement" collapse to one).
+3. Calls `lead_nurture.services.leads.ingest_lead(channel="chatwoot", ...)`.
+4. Classifies intent + urgency via `ai_cdr.classify_message`.
+5. If urgent, fires a Telegram hot-alert ("warm lead asking about
+   endowment policies — see thread").
+
+**08:15 — adviser opens Chatwoot.** They see the three threads in their
+inbox, each tagged by Roost. Hot ones float to the top via Chatwoot's
+own priority sort. Roost's classification appears as a *private note*
+(internal, customer-invisible) under the inbound, summarising what
+the prospect asked and what stage they're at.
+
+**08:30 — adviser approves a draft.** For one of the warm leads, Roost
+posted a suggested reply as another private note ("Draft: 'Hi Mei, I'd
+love to walk you through endowment options — does Thursday 2pm work?'").
+The adviser copies it (or asks Roost via the Guardian queue to send it
+as-is), and the message goes back through `route_text_to_whatsapp` →
+Chatwoot REST → Meta → the prospect's phone.
+
+**11:00 — first-touch template fire.** The adviser has a list of three
+referrals from last week. They ask Roost (via the web UI or Telegram)
+to "send the fa_welcome template to each, with their name". Roost calls
+`send_template_message(...)` which routes through
+`route_template_to_whatsapp` — Chatwoot fires the template against
+WABA, three new conversations appear in the inbox.
+
+**14:00 — sending a policy document.** The adviser uploads a PDF
+illustration via Roost's `/files` page, then asks Roost to "send it to
+Mei". `send_document(to, path=...)` multipart-uploads to Chatwoot,
+which forwards to WABA. The attachment appears in the conversation
+thread (and on Mei's phone) within seconds.
+
+**18:00 — adviser closes.** Threads they've handled get
+`mark_as_resolved` in Chatwoot (manual or via Roost). Tomorrow morning
+the daily summary (FA-H once landed) will tell them what was opened,
+closed, and outstanding.
+
+**Throughout the day:** Roost never echo-loops on its own outbound. Every
+Roost-posted message fires a `message_created` webhook back at Roost
+with `message_type="outgoing"` — the envelope filter drops it (covered
+by `test_post_ignores_outgoing_message`), so the AI pipeline never
+processes its own replies.
+
 ## See also
 
 - [`docs/chatwoot.md`](chatwoot.md) — adapter reference: signature

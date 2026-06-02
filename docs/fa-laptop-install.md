@@ -7,7 +7,17 @@ Chatwoot; Roost speaks Chatwoot REST for both directions.
 
 This page is the laptop runbook. For the VPS shape — Caddy + Let's Encrypt
 instead of Tailscale — start from [`docs/deployment.md`](deployment.md) and
-add `docker-compose.fa-vps.yml`.
+add `docker-compose.fa-vps.yml`. For the architecture (inbound + outbound
+paths, configuration surface, build status), see
+[`docs/fa-edition.md`](fa-edition.md).
+
+> **Already installed before 2026-06-02?** As of FA-G (commit `4c57be2`)
+> WhatsApp **templates** and **media attachments** route through Chatwoot
+> automatically — no `.env` changes, no compose changes, no code on your
+> side. Just `git pull && docker compose -f docker-compose.yml -f
+> docker-compose.fa.yml up -d` to pick it up. Old refusals
+> ("templates use Chatwoot's UI", "media outbound not yet supported") are
+> gone; existing call sites that hit them will now succeed.
 
 ## What you get
 
