@@ -23,6 +23,25 @@ A self-hosted bundle that delivers, on one laptop or VPS:
 The salesperson reads and writes in Chatwoot; Roost is the off-stage
 agent posting drafts and follow-ups into the same thread.
 
+## Operator surface vs customer surface
+
+FA edition splits the two channels deliberately:
+
+| Surface | Channel | Who uses it | What flows through |
+|---|---|---|---|
+| **Customer** | Chatwoot (web + mobile app) | Customers reaching the adviser | Inbound WhatsApp / WeChat / Email; outbound replies (text, templates, media); conversation threads |
+| **Operator** | Telegram bot (FA's personal Telegram) | The adviser, on their phone | Hot-lead alerts, `/nlist` Guardian draft approvals, `/briefing` morning digest, conversational commands to Roost |
+
+Why both: the adviser shouldn't have to sit inside Chatwoot all day to know
+a warm lead arrived. Pings land where they already get personal Telegram
+messages; they jump into Chatwoot to actually reply. Chatwoot stays the
+single customer-facing inbox; Telegram is the agent talking *to the
+adviser*, never to customers.
+
+Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` in `.env` — the
+installer prompts for both. The allow-list scopes who can drive the bot;
+non-listed Telegram users get a polite refusal.
+
 ## Architecture
 
 ```
@@ -43,7 +62,8 @@ agent posting drafts and follow-ups into the same thread.
                        │  /api/chatwoot/...   │
                        │  /api/leads, /api/.. │
                        │  MCP server          │
-                       │  Telegram bot (opt)  │
+                       │  Telegram operator   │──► adviser's phone
+                       │  bot (alerts/nlist)  │    (Telegram app)
                        └──────┬───────────────┘
                               │
                               ▼
@@ -178,6 +198,7 @@ so a self-hoster can fork at any tag and run.
 | **FA-D** | `c96e734` | One-line laptop install: `scripts/install-fa.sh` + `docker-compose.fa.yml` (Chatwoot + Sidekiq + pgvector/Redis + Tailscale Funnel sidecar) + `docker-compose.fa-vps.yml` (Caddy variant) + `env-templates/fa.env` + `docs/fa-laptop-install.md` runbook |
 | **FA-E** | `8f8a9ef` | End-to-end signed-POST round-trip test (`tests/test_chatwoot_end_to_end.py`) + operator smoke against a live stack (`scripts/smoke_chatwoot.py`) |
 | **FA-G** | `4c57be2` | Consolidated outbound — templates (`template_params` payload), media (multipart `attachments[]`), template discovery (`list_templates`) all on `POST /conversations/:cid/messages`. One dispatch path; no Meta-direct surface left in FA edition |
+| **FA-J** | (this commit) | Telegram defaults on as the operator surface. `env-templates/fa.env` flips `TELEGRAM_ENABLED=true` and adds `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` sentinels. `docker-compose.fa.yml` overrides `ENABLE_TELEGRAM=true` so the image builds with `python-telegram-bot`. Install script prompts for both values via @BotFather / @userinfobot |
 
 Test suite at 703 green at FA-G.
 
@@ -217,18 +238,27 @@ Chatwoot's outbound webhook (signed) → Roost. For each one Roost:
 5. If urgent, fires a Telegram hot-alert ("warm lead asking about
    endowment policies — see thread").
 
+**08:05 — Telegram pings.** Of the three overnight messages, one is
+flagged urgent ("warm lead asking about endowment policies — Mei, see
+thread"). The adviser sees it on their phone before they've even opened
+Chatwoot. The non-urgent two arrive as part of the 08:00 morning brief,
+not as individual alerts.
+
 **08:15 — adviser opens Chatwoot.** They see the three threads in their
 inbox, each tagged by Roost. Hot ones float to the top via Chatwoot's
 own priority sort. Roost's classification appears as a *private note*
 (internal, customer-invisible) under the inbound, summarising what
 the prospect asked and what stage they're at.
 
-**08:30 — adviser approves a draft.** For one of the warm leads, Roost
-posted a suggested reply as another private note ("Draft: 'Hi Mei, I'd
-love to walk you through endowment options — does Thursday 2pm work?'").
-The adviser copies it (or asks Roost via the Guardian queue to send it
-as-is), and the message goes back through `route_text_to_whatsapp` →
-Chatwoot REST → Meta → the prospect's phone.
+**08:30 — adviser approves a draft from Telegram.** For one of the warm
+leads, Roost posted a suggested reply into the Guardian draft queue and
+pinged the adviser on Telegram: *"Draft #42: 'Hi Mei, I'd love to walk
+you through endowment options — does Thursday 2pm work?' — approve with
+/napprove 42"*. The adviser taps `/napprove 42` from the Telegram app on
+their phone; the message goes through `route_text_to_whatsapp` →
+Chatwoot REST → Meta → Mei's phone. The full thread (their approved
+reply alongside Mei's inbound) is visible in Chatwoot when they next
+open it.
 
 **11:00 — first-touch template fire.** The adviser has a list of three
 referrals from last week. They ask Roost (via the web UI or Telegram)

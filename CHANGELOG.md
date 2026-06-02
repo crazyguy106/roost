@@ -14,6 +14,18 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA edition defaults Telegram on as the operator surface.** Chatwoot is the
+  customer-facing inbox; Telegram is where the *adviser* gets pinged — hot-lead
+  alerts on inbound WhatsApp, `/nlist` Guardian draft approvals, and the morning
+  `/briefing` digest all land in the adviser's personal Telegram. `env-templates/fa.env`
+  flips `TELEGRAM_ENABLED=true` and adds `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS`
+  sentinels. `docker-compose.fa.yml` adds `ENABLE_TELEGRAM=true` as a build-arg override
+  so the FA image installs `python-telegram-bot` (base compose still ships it off).
+  `scripts/install-fa.sh` prompts for both values via @BotFather (token) and
+  @userinfobot (numeric user id) — skip-friendly: the entrypoint warns and keeps
+  the rest of the stack up if either is blank. Existing FA hosts need a rebuild
+  (`docker compose ... build roost && up -d`), not just a pull — see the
+  "Already installed before 2026-06-02" callout in `docs/fa-laptop-install.md`. (FA-J)
 - **All WhatsApp outbound routes through Chatwoot in FA edition.** Templates
   and media joined text on the Chatwoot REST path, so FA installs have one
   dispatch surface end-to-end. `send_template_message` now hits

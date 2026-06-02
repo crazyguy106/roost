@@ -11,13 +11,23 @@ add `docker-compose.fa-vps.yml`. For the architecture (inbound + outbound
 paths, configuration surface, build status), see
 [`docs/fa-edition.md`](fa-edition.md).
 
-> **Already installed before 2026-06-02?** As of FA-G (commit `4c57be2`)
-> WhatsApp **templates** and **media attachments** route through Chatwoot
-> automatically — no `.env` changes, no compose changes, no code on your
-> side. Just `git pull && docker compose -f docker-compose.yml -f
-> docker-compose.fa.yml up -d` to pick it up. Old refusals
-> ("templates use Chatwoot's UI", "media outbound not yet supported") are
-> gone; existing call sites that hit them will now succeed.
+> **Already installed before 2026-06-02?** Two upgrades since you installed:
+>
+> 1. **FA-G (commit `4c57be2`)** — WhatsApp **templates** and **media
+>    attachments** route through Chatwoot automatically. No `.env` changes,
+>    no compose changes. Old refusals ("templates use Chatwoot's UI",
+>    "media outbound not yet supported") are gone.
+> 2. **FA-J** — Telegram is now the default operator surface. Your existing
+>    `.env` still has `TELEGRAM_ENABLED=false`; flip it to `true` and add
+>    `TELEGRAM_BOT_TOKEN=` / `TELEGRAM_ALLOWED_USERS=` (see the bot creation
+>    section below). FA-J also adds `ENABLE_TELEGRAM=true` as a Docker build
+>    arg, so you need a **rebuild**, not just a pull:
+>
+>    ```bash
+>    git pull
+>    docker compose -f docker-compose.yml -f docker-compose.fa.yml build roost
+>    docker compose -f docker-compose.yml -f docker-compose.fa.yml up -d
+>    ```
 
 ## What you get
 
@@ -88,6 +98,27 @@ Before the script prompts you:
 
 If you skip it, the Tailscale sidecar will sit in a retry loop; fill it into
 `.env` later and `docker compose ... restart tailscale`.
+
+## Create your Telegram operator bot
+
+Telegram is the **adviser's** notification channel in FA edition — hot-lead
+alerts, `/nlist` draft approvals, and the morning brief land there. Customers
+never message this bot; they reach you through Chatwoot.
+
+You need two values before the installer prompts:
+
+1. **Bot token.** Open Telegram, message **@BotFather**, send `/newbot`,
+   pick a name and handle. BotFather replies with a token like
+   `7891234567:AAH...`. Copy it.
+2. **Your numeric user id.** From the same Telegram account, message
+   **@userinfobot**. It replies immediately with your `Id:` value (an
+   integer). Copy it. (Comma-separate if more than one adviser shares the
+   laptop.)
+
+Paste both when the installer asks. Skipping is fine — the bot just won't
+start; the rest of the stack comes up regardless. Fill into `.env` later as
+`TELEGRAM_BOT_TOKEN=` and `TELEGRAM_ALLOWED_USERS=` then
+`docker compose ... restart roost`.
 
 ## Chatwoot first-boot wizard
 
@@ -183,8 +214,10 @@ docker compose -f docker-compose.yml -f docker-compose.fa.yml restart roost
 2. Open Chatwoot — the message should appear in the inbox.
 3. Open Roost (`http://127.0.0.1:8080`) → `/leads` — the contact should appear
    with the inbound message logged on the conversation thread.
-4. If Telegram is on, you should also get a notification with the parsed
-   intent/urgency.
+4. Your Telegram operator bot should ping you with the parsed intent/urgency.
+   If it doesn't, check `docker compose ... logs roost` for "Telegram bot
+   disabled" — usually `TELEGRAM_BOT_TOKEN` is empty or
+   `TELEGRAM_ALLOWED_USERS` doesn't include your id.
 
 If nothing reaches Roost, check `roost` logs:
 

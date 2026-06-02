@@ -27,6 +27,14 @@ services:
   # roost: amendments to the base service
   # ---------------------------------------------------------------------------
   roost:
+    build:
+      context: .
+      args:
+        # FA edition uses Telegram as the operator surface (hot alerts,
+        # /nlist draft approvals, morning brief). The base compose pins
+        # ENABLE_TELEGRAM=false, so override here to install python-telegram-bot
+        # into the image. Requires a rebuild after pull — see fa-laptop-install.md.
+        ENABLE_TELEGRAM: "true"
     ports: !override
       - "127.0.0.1:8080:8080"
     volumes:

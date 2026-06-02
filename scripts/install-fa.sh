@@ -2,9 +2,12 @@
 # install-fa.sh — One-command bootstrap for the Roost FA (Financial Adviser) edition.
 #
 # What this brings up:
-#   * Roost (web UI + MCP + Telegram off by default)
+#   * Roost (web UI + MCP + Telegram operator bot)
 #   * Chatwoot 4.14.1 + Sidekiq + Postgres + Redis (fronts WhatsApp / WeChat / Email)
 #   * Tailscale sidecar exposing Chatwoot over a Tailscale Funnel URL
+#
+# Surfaces: Chatwoot = customer-facing (their WhatsApp lands there).
+#           Telegram = adviser-facing (alerts + /nlist draft approvals + brief).
 #
 # What this script handles:
 #   * Distro / docker / openssl preflight
@@ -180,6 +183,45 @@ if grep -q '^TAILSCALE_AUTHKEY=CHANGE_ME$' .env; then
         fi
     else
         warn "TAILSCALE_AUTHKEY=CHANGE_ME and stdin is not a TTY — set it manually in .env before bring-up."
+    fi
+fi
+
+# ── 7b. Telegram operator bot prompts ──
+# Telegram is the adviser's notification channel in FA edition. Two values
+# come from outside the laptop:
+#   * Bot token  — @BotFather → /newbot → copy.
+#   * User id    — DM @userinfobot from your own Telegram → copy the number.
+# Skipping is OK: entrypoint.sh logs a warning and brings the rest of the stack
+# up. You can paste these into .env later and `docker compose ... restart roost`.
+if grep -q '^TELEGRAM_BOT_TOKEN=CHANGE_ME_AFTER_BOTFATHER$' .env; then
+    if [[ -t 0 && -t 1 ]]; then
+        echo ""
+        warn "Telegram operator bot needs a token to come up."
+        warn "Open @BotFather in Telegram, send /newbot, follow the prompts."
+        read -r -p "Paste TELEGRAM_BOT_TOKEN (or leave blank to fill in later): " _tgtoken
+        if [[ -n "$_tgtoken" ]]; then
+            replace_sentinel TELEGRAM_BOT_TOKEN CHANGE_ME_AFTER_BOTFATHER "$_tgtoken" .env
+        else
+            warn "Skipped — Telegram operator bot will not start until TELEGRAM_BOT_TOKEN is set."
+        fi
+    else
+        warn "TELEGRAM_BOT_TOKEN=CHANGE_ME_AFTER_BOTFATHER and stdin is not a TTY — set it manually in .env before bring-up."
+    fi
+fi
+
+if grep -q '^TELEGRAM_ALLOWED_USERS=CHANGE_ME_YOUR_TELEGRAM_USER_ID$' .env; then
+    if [[ -t 0 && -t 1 ]]; then
+        echo ""
+        warn "Telegram needs your numeric user id so only you can drive the bot."
+        warn "Open @userinfobot in Telegram, send any message, copy the 'Id' value."
+        read -r -p "Paste TELEGRAM_ALLOWED_USERS (numeric, comma-separated for multi; blank to skip): " _tgusers
+        if [[ -n "$_tgusers" ]]; then
+            replace_sentinel TELEGRAM_ALLOWED_USERS CHANGE_ME_YOUR_TELEGRAM_USER_ID "$_tgusers" .env
+        else
+            warn "Skipped — bot will deny all commands until TELEGRAM_ALLOWED_USERS is set."
+        fi
+    else
+        warn "TELEGRAM_ALLOWED_USERS=CHANGE_ME_YOUR_TELEGRAM_USER_ID and stdin is not a TTY — set it manually in .env before bring-up."
     fi
 fi
 
