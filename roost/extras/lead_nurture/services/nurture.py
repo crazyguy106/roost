@@ -182,6 +182,27 @@ def _dispatch_send(*, enrollment: dict, message: dict, when_utc: datetime) -> di
             logger.exception("schedule_email failed")
             return {"ok": False, "channel": channel, "detail": str(e)}
 
+    if channel == "chatwoot":
+        # Inbound from Chatwoot stamps identifier as the WhatsApp phone.
+        # Delegate to the WhatsApp service — since FA-G it routes through
+        # Chatwoot REST when CHATWOOT_ENABLED=true. The Chatwoot route returns
+        # {ok, message_id, via, conversation_id}; Meta-direct returns
+        # {ok, messages: [{id}]}. Read both shapes when extracting ref.
+        from roost.extras.messaging_external.services.whatsapp import send_text_message
+        to = enrollment.get("contact_phone") or ""
+        if not to:
+            return {"ok": False, "channel": channel, "detail": "no contact_phone"}
+        try:
+            res = send_text_message(to=to, text=message["body"])
+            ref = (
+                (res or {}).get("message_id")
+                or (res or {}).get("messages", [{}])[0].get("id", "")
+            )
+            return {"ok": True, "channel": channel, "ref": str(ref), "detail": "sent"}
+        except Exception as e:
+            logger.exception("chatwoot send failed")
+            return {"ok": False, "channel": channel, "detail": str(e)}
+
     if channel == "whatsapp":
         # NOTE: WhatsApp Cloud API requires the recipient to have messaged us
         # within the last 24h before we can send free-form text. The engine

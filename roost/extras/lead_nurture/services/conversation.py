@@ -119,7 +119,7 @@ def send_reply(*, enrollment_id: int, text: str) -> dict:
         else:
             identifier = enr.get("contact_phone") or ""
 
-    if not identifier or channel not in ("whatsapp", "wechat", "telegram"):
+    if not identifier or channel not in ("whatsapp", "wechat", "telegram", "chatwoot"):
         return {"error": f"no addressable channel for enrollment {enrollment_id}"}
 
     from roost.extras.lead_nurture.services.qualification import _send_question

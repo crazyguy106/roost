@@ -120,6 +120,44 @@ def test_dispatch_whatsapp_raises(monkeypatch):
     assert "131047" in out["detail"]
 
 
+# ── Chatwoot (FA-I) ───────────────────────────────────────────────────
+
+
+def test_dispatch_chatwoot_routes_through_whatsapp(monkeypatch):
+    """`channel="chatwoot"` cadence sends delegate to the WhatsApp service,
+    which since FA-G routes through Chatwoot REST. The Chatwoot route
+    returns `{ok, message_id, ...}` (not `{messages: [{id}]}`); the
+    dispatcher reads both shapes and surfaces the id in `ref`."""
+    from roost.extras.lead_nurture.services import nurture as n
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.whatsapp.send_text_message",
+        lambda to, text: {
+            "ok": True,
+            "message_id": 4242,
+            "via": "chatwoot",
+            "conversation_id": 7,
+        },
+    )
+    out = n._dispatch_send(
+        enrollment=_enr(), message=_msg("chatwoot"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is True
+    assert out["channel"] == "chatwoot"
+    assert out["ref"] == "4242"
+    assert out["detail"] == "sent"
+
+
+def test_dispatch_chatwoot_missing_phone():
+    from roost.extras.lead_nurture.services import nurture as n
+    out = n._dispatch_send(
+        enrollment=_enr(contact_phone=""), message=_msg("chatwoot"),
+        when_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    assert out["ok"] is False
+    assert "no contact_phone" in out["detail"]
+
+
 # ── SMS ───────────────────────────────────────────────────────────────
 
 

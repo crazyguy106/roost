@@ -340,3 +340,30 @@ def test_start_aborts_when_send_fails(clean_cadence_tables, monkeypatch):
     enr = get_enrollment(enr_id)
     assert enr["status"] == "active"  # untouched
     assert "_qualify_status" not in (enr["fields"] or {})
+
+
+# ── FA-I: Chatwoot channel dispatch ─────────────────────────────────────
+
+
+def test_do_send_chatwoot_delegates_to_whatsapp(monkeypatch):
+    """A `channel="chatwoot"` qualification send must route through the
+    WhatsApp service so FA edition stays on the single Chatwoot REST
+    dispatch path. Verifies _do_send picks up the chatwoot branch (added
+    in FA-I) instead of falling through to the unknown-channel error."""
+    from roost.extras.lead_nurture.services import qualification
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_whatsapp_send(to, text):
+        calls.append((to, text))
+        return {"ok": True, "message_id": "42", "via": "chatwoot", "conversation_id": 7}
+
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.whatsapp.send_text_message",
+        fake_whatsapp_send,
+    )
+
+    res = qualification._do_send("chatwoot", "+6591234567", "hello from FA")
+
+    assert res == {"ok": True, "message_id": "42", "via": "chatwoot", "conversation_id": 7}
+    assert calls == [("+6591234567", "hello from FA")]

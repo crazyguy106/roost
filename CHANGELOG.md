@@ -13,6 +13,20 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Fixed
+- **Lead-nurture dispatch handles `channel="chatwoot"`.** The Chatwoot inbound
+  router stamps `channel="chatwoot"` on lead ingest (with the WhatsApp phone as
+  identifier), but the cadence engine, qualification questionnaire, and the
+  `/leads` reply box all hard-whitelisted `whatsapp / wechat / telegram` — so
+  Chatwoot-sourced leads couldn't be replied to from any of them. Added a
+  `chatwoot` branch to `qualification._do_send`, `nurture._dispatch_send`, and
+  the `conversation.send_reply` whitelist. All three delegate to
+  `whatsapp.send_text_message`, which since FA-G already routes through Chatwoot
+  REST when `CHATWOOT_ENABLED=true` (FA edition stays on one dispatch path).
+  The dispatcher reads both the Chatwoot return shape (`{ok, message_id, via,
+  conversation_id}`) and the Meta-direct shape (`{messages: [{id}]}`) for the
+  send-receipt id. Suite at 707 green. (FA-I)
+
 ### Added
 - **FA edition defaults Telegram on as the operator surface.** Chatwoot is the
   customer-facing inbox; Telegram is where the *adviser* gets pinged — hot-lead

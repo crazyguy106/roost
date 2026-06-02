@@ -230,6 +230,16 @@ def _send_question(channel: str, identifier: str, text: str) -> dict:
 
 def _do_send(channel: str, identifier: str, text: str) -> dict:
     try:
+        if channel == "chatwoot":
+            # Inbound from Chatwoot stamps identifier as the WhatsApp phone
+            # (E.164, from contact_inbox.source_id). Delegate to the WhatsApp
+            # service — since FA-G it already routes through Chatwoot REST
+            # when CHATWOOT_ENABLED=true, keeping FA edition on one dispatch
+            # path. Non-FA installs would fall through to Meta-direct.
+            from roost.extras.messaging_external.services.whatsapp import (
+                send_text_message,
+            )
+            return send_text_message(identifier, text)
         if channel == "whatsapp":
             from roost.extras.messaging_external.services.whatsapp import (
                 send_text_message,

@@ -186,6 +186,21 @@ def test_send_reply_no_channel_errors(clean_conversation_tables, stub_dispatch):
     assert stub_dispatch == []
 
 
+def test_send_reply_accepts_chatwoot_channel(clean_conversation_tables, stub_dispatch):
+    """Chatwoot leads (ingested by api_chatwoot with channel='chatwoot')
+    must be replyable from the /leads UI. FA-I added 'chatwoot' to the
+    addressable-channel whitelist; before that this returned
+    'no addressable channel'."""
+    from roost.extras.lead_nurture.services import conversation
+    enr_id = _seed_and_enroll(identifier="+6591234567", channel="chatwoot")
+
+    res = conversation.send_reply(enrollment_id=enr_id, text="Thanks — Thursday 2pm works.")
+    assert res["ok"] is True
+    assert res["channel"] == "chatwoot"
+    assert res["identifier"] == "+6591234567"
+    assert stub_dispatch == [("chatwoot", "+6591234567", "Thanks — Thursday 2pm works.")]
+
+
 # ── enrollment_detail payload ───────────────────────────────────────────
 
 
