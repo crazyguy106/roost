@@ -42,6 +42,20 @@ Set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` in `.env` — the
 installer prompts for both. The allow-list scopes who can drive the bot;
 non-listed Telegram users get a polite refusal.
 
+**Three approval queues, all routed through Telegram.** Roost keeps
+draft-and-approve queues for three different classes of action; the
+adviser sees and approves all of them from the same operator surface:
+
+| Queue | What sits in it | Approve command |
+|---|---|---|
+| **Recipe drafts** | Output of a recipe / SOP trigger that's marked "needs human review" before it sends | `/approve_<run_id>` in Telegram (link arrives with the draft) |
+| **Cadence drafts** | Guardian-paused steps inside a nurture cadence (`status=awaiting_approval:N`); also surface in the morning brief | `/nlist` to list, `/napprove <enrollment_id>` / `/nskip <id>` to act |
+| **Money-moving drafts** | SME-ops tools that hit `guardian_gate` — refunds, order cancels, authorised invoices, payouts | Web UI (`/sme/sync-status` pending-drafts card) + API (`/api/sme/drafts/*`); not chat-driven |
+
+The morning brief surfaces backlog from all three queues (and now,
+post-FA-H, also the raw open-conversation count from Chatwoot itself)
+so the adviser starts the day with a single rollup.
+
 ## Architecture
 
 ```
@@ -109,7 +123,11 @@ are exact for the FA edition as shipped.
 5. **Lead ingest + AI processing.** The debounced text is handed to
    `lead_nurture.services.leads.ingest_lead` with `channel="chatwoot"`,
    then to the classifier and the qualification engine. Anything urgent
-   fires a Telegram hot-alert.
+   fires a Telegram hot-alert. If a CRM provider is configured
+   (`CRM_PROVIDER=attio|zoho|hubspot|...`), `ingest_lead` also calls
+   `provider.create_person(...)` on first contact — the prospect lands
+   in the CRM with no extra wiring. Subsequent inbound on the same
+   phone is matched and appended via the CRM's communications log.
 
 ## Outbound path (post FA-G)
 
@@ -198,22 +216,17 @@ so a self-hoster can fork at any tag and run.
 | **FA-D** | `c96e734` | One-line laptop install: `scripts/install-fa.sh` + `docker-compose.fa.yml` (Chatwoot + Sidekiq + pgvector/Redis + Tailscale Funnel sidecar) + `docker-compose.fa-vps.yml` (Caddy variant) + `env-templates/fa.env` + `docs/fa-laptop-install.md` runbook |
 | **FA-E** | `8f8a9ef` | End-to-end signed-POST round-trip test (`tests/test_chatwoot_end_to_end.py`) + operator smoke against a live stack (`scripts/smoke_chatwoot.py`) |
 | **FA-G** | `4c57be2` | Consolidated outbound — templates (`template_params` payload), media (multipart `attachments[]`), template discovery (`list_templates`) all on `POST /conversations/:cid/messages`. One dispatch path; no Meta-direct surface left in FA edition |
-| **FA-J** | (this commit) | Telegram defaults on as the operator surface. `env-templates/fa.env` flips `TELEGRAM_ENABLED=true` and adds `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` sentinels. `docker-compose.fa.yml` overrides `ENABLE_TELEGRAM=true` so the image builds with `python-telegram-bot`. Install script prompts for both values via @BotFather / @userinfobot |
+| **FA-J** | `579c5db` | Telegram defaults on as the operator surface. `env-templates/fa.env` flips `TELEGRAM_ENABLED=true` and adds `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` sentinels. `docker-compose.fa.yml` overrides `ENABLE_TELEGRAM=true` so the image builds with `python-telegram-bot`. Install script prompts for both values via @BotFather / @userinfobot |
+| **FA-I** | `e186f84` | Lead-nurture dispatch handles `channel="chatwoot"`. Cadence engine, qualification questionnaire, and the `/leads` reply box now all recognise Chatwoot leads — they delegate to `whatsapp.send_text_message`, which since FA-G already routes through Chatwoot REST. Closes the gap where Chatwoot-sourced leads couldn't be replied to from `/nlist` or `/leads` |
+| **FA-H** | `07fe2e0` | Morning brief now includes Chatwoot inbox backlog. Two new service helpers (`conversation_meta`, `list_open_conversations`) feed a `chatwoot` section in `daily_summary.build_summary` — open/pending counts and a preview list of the top open threads. Fails closed when the inbox is unreachable |
+| **FA-K** | `8c9fd60` | MCP tool `chatwoot_list_templates(inbox_id=0)`. Lets agents/recipes discover WABA-approved WhatsApp templates synced into Chatwoot, instead of hard-coding template names that may have been retired |
 
-Test suite at 703 green at FA-G.
+Test suite at 715 green at FA-K.
 
 **Open, not yet a commit:**
 
 - **FA-F** — push `feature/fa-edition` to remote, cut a release tag, roll
   `[Unreleased]` into a dated section in `CHANGELOG.md`.
-- **FA-H** (proposed) — Chatwoot read-side rollups for the existing
-  `services/daily_summary.py`: open-conversation count, response-time
-  stats via `GET /reports/conversations_filter`, top contacts by activity.
-  Adds ~3 thin wrappers (`list_conversations`, `get_messages`,
-  `conversation_meta`) and one section in the morning Telegram brief.
-- **MCP surface gap** — `chatwoot.list_templates` is a Python helper but
-  not exposed as an MCP tool yet. Nice-to-have for agent-driven
-  first-touch flows.
 - **No real-laptop install yet.** Script is bash-clean, e2e + smoke pass,
   but no adviser has run it against a live Meta WhatsApp Cloud number.
 
