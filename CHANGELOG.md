@@ -14,6 +14,22 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **All WhatsApp outbound routes through Chatwoot in FA edition.** Templates
+  and media joined text on the Chatwoot REST path, so FA installs have one
+  dispatch surface end-to-end. `send_template_message` now hits
+  `chatwoot.route_template_to_whatsapp` — find-or-create contact, reuse open
+  conv or open empty, then `POST /conversations/:cid/messages` with the
+  `template_params: {name, category, language, processed_params}` payload
+  Chatwoot's UI itself sends. Meta-style `components` get translated to
+  Chatwoot's flat `processed_params` for the common body-variable case;
+  header/button params fall back to plain refs. `send_document` / `send_image`
+  with `path=` multipart-upload via `attachments[]` on the same endpoint;
+  `link=` and `media_id=` still error cleanly since Chatwoot takes bytes,
+  not URLs. New helper `chatwoot.list_templates(inbox_id)` surfaces
+  approved templates from `GET /inboxes/:iid` (`message_templates` field)
+  so callers don't hard-code names. `mark_as_read` stays a no-op (Chatwoot
+  already owns inbound receipts on its inbox). Suite at 703 green. See
+  `docs/chatwoot.md` § Outbound routing. (FA-G)
 - **End-to-end Chatwoot round-trip test** (`tests/test_chatwoot_end_to_end.py`).
   Signs a financial-adviser-context `message_created`/`incoming` payload, POSTs
   it through the real FastAPI router with `CHATWOOT_ENABLED=true`, asserts the

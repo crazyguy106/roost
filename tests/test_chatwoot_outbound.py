@@ -11,7 +11,7 @@ Two layers:
 
 2. `whatsapp.send_text_message` / `send_template_message` / `send_document`
    / `mark_as_read` — confirm that flipping `CHATWOOT_ENABLED` redirects
-   text to Chatwoot, refuses templates/media with a clear error, and
+   text **and** templates **and** media (file path) through Chatwoot, and
    no-ops mark_as_read. The CHATWOOT_ENABLED=false path is already covered
    by existing tests; we only assert the FA-edition behaviour here.
 """
@@ -148,30 +148,86 @@ def test_whatsapp_text_routes_to_chatwoot_when_enabled(monkeypatch):
     assert captured == {"phone": "+6591234567", "body": "hello"}
 
 
-def test_whatsapp_template_errors_in_fa_edition(monkeypatch):
-    """Templates have no Chatwoot equivalent — surface a clear error."""
+def test_whatsapp_template_routes_to_chatwoot_when_enabled(monkeypatch):
+    """send_template_message should delegate to chatwoot.route_template_to_whatsapp
+    and translate Meta-style components into Chatwoot's processed_params."""
     monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", True)
+    captured: dict = {}
+
+    def fake_route(phone, template_name, **kw):
+        captured["phone"] = phone
+        captured["template_name"] = template_name
+        captured["kwargs"] = kw
+        return {"ok": True, "conversation_id": 42, "message_id": 101,
+                "created_conversation": True}
+
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.chatwoot.route_template_to_whatsapp",
+        fake_route,
+    )
+
     from roost.extras.messaging_external.services import whatsapp
-    result = whatsapp.send_template_message("+6591234567", "welcome")
-    assert "error" in result
-    assert "Chatwoot" in result["error"]
+    components = [
+        {"type": "body",
+         "parameters": [{"type": "text", "text": "Mei Ling"},
+                        {"type": "text", "text": "endowment"}]},
+    ]
+    result = whatsapp.send_template_message(
+        "+6591234567", "fa_welcome",
+        language_code="en", components=components,
+    )
+    assert result == {
+        "ok": True,
+        "message_id": 101,
+        "via": "chatwoot",
+        "conversation_id": 42,
+    }
+    assert captured["phone"] == "+6591234567"
+    assert captured["template_name"] == "fa_welcome"
+    assert captured["kwargs"]["language"] == "en"
+    assert captured["kwargs"]["processed_params"] == {"1": "Mei Ling", "2": "endowment"}
 
 
-def test_whatsapp_document_errors_in_fa_edition(monkeypatch):
-    """Media via Chatwoot is FA-B v2 — surface a clear error for now."""
+def test_whatsapp_document_routes_to_chatwoot_when_enabled(monkeypatch, tmp_path):
+    """send_document with a local path should multipart-upload via Chatwoot."""
     monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", True)
+    fake_pdf = tmp_path / "policy.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake")
+    captured: dict = {}
+
+    def fake_route(phone, file_path, **kw):
+        captured["phone"] = phone
+        captured["file_path"] = str(file_path)
+        captured["kwargs"] = kw
+        return {"ok": True, "conversation_id": 7, "message_id": 202,
+                "created_conversation": False}
+
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.chatwoot.route_media_to_whatsapp",
+        fake_route,
+    )
+
     from roost.extras.messaging_external.services import whatsapp
-    result = whatsapp.send_document("+6591234567", link="https://example.com/a.pdf")
-    assert "error" in result
-    assert "Chatwoot" in result["error"]
+    result = whatsapp.send_document("+6591234567", path=fake_pdf, caption="ts'kor your policy")
+    assert result == {
+        "ok": True,
+        "message_id": 202,
+        "via": "chatwoot",
+        "conversation_id": 7,
+    }
+    assert captured["phone"] == "+6591234567"
+    assert captured["file_path"] == str(fake_pdf)
+    assert captured["kwargs"]["caption"] == "ts'kor your policy"
 
 
-def test_whatsapp_image_errors_in_fa_edition(monkeypatch):
+def test_whatsapp_image_link_errors_in_fa_edition(monkeypatch):
+    """Meta-style link= and media_id= don't translate to Chatwoot — surface
+    a clear error instead of silently dropping the send."""
     monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", True)
     from roost.extras.messaging_external.services import whatsapp
     result = whatsapp.send_image("+6591234567", link="https://example.com/a.jpg")
     assert "error" in result
-    assert "Chatwoot" in result["error"]
+    assert "local file path" in result["error"]
 
 
 def test_whatsapp_mark_as_read_is_noop_in_fa_edition(monkeypatch):
@@ -180,3 +236,227 @@ def test_whatsapp_mark_as_read_is_noop_in_fa_edition(monkeypatch):
     from roost.extras.messaging_external.services import whatsapp
     result = whatsapp.mark_as_read("wamid.fake")
     assert result == {"ok": True, "via": "chatwoot", "no_op": True}
+
+
+# ──────────────────────── route_template_to_whatsapp ──────────────────────
+
+
+def test_route_template_reuses_open_conversation(cw_enabled, monkeypatch):
+    """If a conv is already open, send the template into it — no create call."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    monkeypatch.setattr(cw, "find_or_create_contact", lambda **kw: {
+        "ok": True, "contact_id": 7, "source_id": "+6591234567", "created": False,
+    })
+    monkeypatch.setattr(cw, "_find_open_conversation", lambda cid, inbox_id=None: 88)
+    sends: list[dict] = []
+
+    def fake_send(conv_id, template_name, **kw):
+        sends.append({"conv_id": conv_id, "template_name": template_name, **kw})
+        return {"ok": True, "message_id": 555}
+
+    monkeypatch.setattr(cw, "send_template", fake_send)
+    monkeypatch.setattr(cw, "create_conversation", lambda **kw: pytest.fail(
+        "should not create when an open conv exists"
+    ))
+
+    result = cw.route_template_to_whatsapp(
+        "+6591234567", "fa_welcome",
+        processed_params={"1": "Mei Ling"},
+    )
+    assert result == {
+        "ok": True,
+        "conversation_id": 88,
+        "message_id": 555,
+        "created_conversation": False,
+    }
+    assert len(sends) == 1
+    assert sends[0]["template_name"] == "fa_welcome"
+    assert sends[0]["processed_params"] == {"1": "Mei Ling"}
+
+
+def test_route_template_creates_empty_conversation_when_no_open(cw_enabled, monkeypatch):
+    """Cold start: no open conv → open empty conv, then fire template."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    monkeypatch.setattr(cw, "find_or_create_contact", lambda **kw: {
+        "ok": True, "contact_id": 7, "source_id": "+6591234567", "created": True,
+    })
+    monkeypatch.setattr(cw, "_find_open_conversation", lambda cid, inbox_id=None: None)
+    creates: list[dict] = []
+
+    def fake_create(**kw):
+        creates.append(kw)
+        return {"ok": True, "conversation_id": 99}
+
+    sends: list[dict] = []
+
+    def fake_send(conv_id, template_name, **kw):
+        sends.append({"conv_id": conv_id, "template_name": template_name, **kw})
+        return {"ok": True, "message_id": 777}
+
+    monkeypatch.setattr(cw, "create_conversation", fake_create)
+    monkeypatch.setattr(cw, "send_template", fake_send)
+
+    result = cw.route_template_to_whatsapp("+6591234567", "fa_welcome")
+    assert result["ok"] is True
+    assert result["conversation_id"] == 99
+    assert result["created_conversation"] is True
+    # Empty conversation create (no initial_message — template arrives next call)
+    assert creates == [{"source_id": "+6591234567", "contact_id": 7}]
+    assert sends[0]["conv_id"] == 99
+
+
+# ──────────────────────── route_media_to_whatsapp ────────────────────────
+
+
+def test_route_media_uploads_via_open_conversation(cw_enabled, monkeypatch, tmp_path):
+    """File path → find conv → send_attachment, no create."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    pdf = tmp_path / "policy.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+
+    monkeypatch.setattr(cw, "find_or_create_contact", lambda **kw: {
+        "ok": True, "contact_id": 7, "source_id": "+6591234567", "created": False,
+    })
+    monkeypatch.setattr(cw, "_find_open_conversation", lambda cid, inbox_id=None: 88)
+    sends: list[dict] = []
+
+    def fake_attach(conv_id, file_path, **kw):
+        sends.append({"conv_id": conv_id, "file_path": str(file_path), **kw})
+        return {"ok": True, "message_id": 333}
+
+    monkeypatch.setattr(cw, "send_attachment", fake_attach)
+    monkeypatch.setattr(cw, "create_conversation", lambda **kw: pytest.fail(
+        "should not create when an open conv exists"
+    ))
+
+    result = cw.route_media_to_whatsapp("+6591234567", pdf, caption="ts'kor")
+    assert result == {
+        "ok": True,
+        "conversation_id": 88,
+        "message_id": 333,
+        "created_conversation": False,
+    }
+    assert sends[0]["file_path"] == str(pdf)
+    assert sends[0]["caption"] == "ts'kor"
+
+
+# ──────────────────────── send_template payload shape ────────────────────
+
+
+def test_send_template_posts_chatwoot_payload(cw_enabled, monkeypatch):
+    """Verify the exact JSON shape Chatwoot's UI expects for templates."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    captured: dict = {}
+
+    class _FakeResp:
+        status_code = 200
+        content = b"{}"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id": 9001}
+
+    class _FakeClient:
+        def __init__(self, timeout=30):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, *, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return _FakeResp()
+
+    monkeypatch.setattr(cw, "httpx", type("X", (), {
+        "Client": _FakeClient,
+        "HTTPStatusError": RuntimeError,
+    }))
+    monkeypatch.setattr(cw, "CHATWOOT_URL", "https://chatwoot.test")
+    monkeypatch.setattr(cw, "CHATWOOT_API_KEY", "test-token")
+    monkeypatch.setattr(cw, "CHATWOOT_ACCOUNT_ID", "1")
+
+    result = cw.send_template(
+        42, "fa_welcome",
+        processed_params={"1": "Mei"},
+        language="en",
+        category="MARKETING",
+        body="Hi Mei, your endowment review is ready.",
+    )
+    assert result["ok"] is True
+    assert result["message_id"] == 9001
+    assert captured["url"] == \
+        "https://chatwoot.test/api/v1/accounts/1/conversations/42/messages"
+    assert captured["headers"]["api_access_token"] == "test-token"
+    assert captured["json"] == {
+        "content": "Hi Mei, your endowment review is ready.",
+        "message_type": "outgoing",
+        "template_params": {
+            "name": "fa_welcome",
+            "category": "MARKETING",
+            "language": "en",
+            "processed_params": {"1": "Mei"},
+        },
+    }
+
+
+# ──────────────────────── list_templates ─────────────────────────────────
+
+
+def test_list_templates_returns_payload(cw_enabled, monkeypatch):
+    """GET /inboxes/:iid surfaces message_templates synced from WABA."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    class _FakeResp:
+        status_code = 200
+        content = b"{}"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "id": 2,
+                "name": "WhatsApp Cloud",
+                "message_templates": [
+                    {"name": "fa_welcome", "language": "en", "category": "MARKETING"},
+                    {"name": "appointment_confirm", "language": "en", "category": "UTILITY"},
+                ],
+            }
+
+    class _FakeClient:
+        def __init__(self, timeout=30):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, *, headers):
+            assert url.endswith("/inboxes/2")
+            return _FakeResp()
+
+    monkeypatch.setattr(cw, "httpx", type("X", (), {
+        "Client": _FakeClient,
+        "HTTPStatusError": RuntimeError,
+    }))
+    monkeypatch.setattr(cw, "CHATWOOT_URL", "https://chatwoot.test")
+    monkeypatch.setattr(cw, "CHATWOOT_API_KEY", "test-token")
+    monkeypatch.setattr(cw, "CHATWOOT_ACCOUNT_ID", "1")
+
+    result = cw.list_templates(inbox_id=2)
+    assert result["ok"] is True
+    assert len(result["templates"]) == 2
+    assert result["templates"][0]["name"] == "fa_welcome"

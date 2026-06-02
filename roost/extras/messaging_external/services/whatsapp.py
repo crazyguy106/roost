@@ -28,6 +28,31 @@ logger = logging.getLogger("roost.whatsapp")
 BASE_URL = "https://graph.facebook.com/v21.0"
 
 
+def _components_to_processed_params(
+    components: list[dict] | None,
+) -> dict[str, str]:
+    """Translate Meta-style template components into Chatwoot's
+    `processed_params` shape.
+
+    Meta passes `components=[{"type": "body", "parameters": [{"type": "text",
+    "text": "John"}, ...]}]`; Chatwoot wants `{"1": "John", "2": "..."}`
+    keyed by 1-based position. Header/button parameters are dropped — only
+    body text params translate; callers using rich template features should
+    talk to Chatwoot's REST directly.
+    """
+    if not components:
+        return {}
+    for c in components:
+        if c.get("type") == "body":
+            params = c.get("parameters") or []
+            return {
+                str(i + 1): str(p.get("text", ""))
+                for i, p in enumerate(params)
+                if p.get("type") == "text"
+            }
+    return {}
+
+
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     """Verify X-Hub-Signature-256 from Meta webhook.
 
@@ -126,13 +151,29 @@ def send_template_message(
         language_code: Template language (default 'en').
         components: Optional template components (header, body, button params).
     """
-    # FA edition: Chatwoot doesn't model Meta templates 1:1 — operators use
-    # Chatwoot's WhatsApp template UI for first-touch outbound. Roost
-    # callers (lead-nurture cadences) should fall back to plain text.
+    # FA edition: route through Chatwoot REST (`template_params` payload on
+    # the same /messages endpoint). Meta `components` get translated to the
+    # `processed_params` dict Chatwoot expects.
     from roost.config import CHATWOOT_ENABLED
     if CHATWOOT_ENABLED:
-        return {"error": "templates use Chatwoot's WhatsApp template UI in "
-                "FA edition — send plain text via send_text_message instead"}
+        from roost.extras.messaging_external.services import chatwoot
+        processed = _components_to_processed_params(components)
+        result = chatwoot.route_template_to_whatsapp(
+            to,
+            template_name,
+            processed_params=processed,
+            language=language_code,
+        )
+        if "error" in result:
+            return result
+        logger.info(
+            "WhatsApp template '%s' via Chatwoot to %s: conv=%s msg=%s",
+            template_name, to, result.get("conversation_id"),
+            result.get("message_id"),
+        )
+        return {"ok": True, "message_id": result.get("message_id"),
+                "via": "chatwoot",
+                "conversation_id": result.get("conversation_id")}
 
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured"}
@@ -228,14 +269,27 @@ def _send_media_message(
     Pick exactly one of `path` (local file, will be uploaded), `media_id`
     (already-uploaded reference), or `link` (publicly fetchable URL).
     """
-    # FA edition: media outbound through Chatwoot requires a multipart
-    # upload to /messages with attachments[] — not implemented yet.
-    # Callers (RPA whatsapp_send step, recipe attachments) will error
-    # cleanly so the operator sees the limitation. Tracked as FA-B v2.
+    # FA edition: route through Chatwoot's multipart upload on the same
+    # /messages endpoint. Only the local-path branch maps cleanly —
+    # Chatwoot takes file bytes, not a Meta media_id or external link.
     from roost.config import CHATWOOT_ENABLED
     if CHATWOOT_ENABLED:
-        return {"error": "media outbound via Chatwoot not yet supported "
-                "(FA-B v2) — send a link in the message body for now"}
+        if not path:
+            return {"error": "Chatwoot media upload needs a local file path "
+                    "(`link` and `media_id` are Meta-only); download the file "
+                    "first and pass `path=`"}
+        from roost.extras.messaging_external.services import chatwoot
+        result = chatwoot.route_media_to_whatsapp(to, path, caption=caption or "")
+        if "error" in result:
+            return result
+        logger.info(
+            "WhatsApp %s via Chatwoot to %s: conv=%s msg=%s",
+            media_type, to, result.get("conversation_id"),
+            result.get("message_id"),
+        )
+        return {"ok": True, "message_id": result.get("message_id"),
+                "via": "chatwoot",
+                "conversation_id": result.get("conversation_id")}
 
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured"}

@@ -131,10 +131,16 @@ Roost's replies in the same Chatwoot conversation thread as their own.
 | `services/whatsapp.py` function | `CHATWOOT_ENABLED=false` | `CHATWOOT_ENABLED=true` |
 |---|---|---|
 | `send_text_message(to, body)` | direct to Meta Cloud API | `chatwoot.route_text_to_whatsapp` — find-or-create contact → reuse open conversation if one exists, else open a new one with `initial_message=body` |
-| `send_template_message(...)` | direct to Meta | **errors** — Chatwoot doesn't model Meta templates 1:1; operators use Chatwoot's WhatsApp template UI. Callers (e.g. lead-nurture cadences) should fall back to plain text |
-| `send_document(...)` / `send_image(...)` | direct to Meta | **errors** — media via Chatwoot needs multipart upload to `/messages` with `attachments[]` (FA-B v2). For now, send the URL in a text body |
+| `send_template_message(to, template_name, language_code, components)` | direct to Meta | `chatwoot.route_template_to_whatsapp` — find-or-create contact → reuse/open conv → `POST /messages` with `template_params` (Chatwoot fires the template against WABA). Meta-style `components` are translated to Chatwoot's `processed_params={"1": "...", "2": "..."}` shape. Header/button params drop; for those use Chatwoot REST directly |
+| `send_document(...)` / `send_image(...)` with `path=` | direct to Meta | `chatwoot.route_media_to_whatsapp` — multipart `POST /messages` with `attachments[]`. Chatwoot handles the upload-to-Meta dance internally |
+| `send_document(...)` / `send_image(...)` with `link=` or `media_id=` | direct to Meta | **errors** — Chatwoot accepts file bytes, not Meta media ids or external URLs. Download the file first and pass `path=` |
 | `mark_as_read(wamid)` | direct to Meta | **no-op** — the api_chatwoot inbound handler already bumps `update_last_seen` on the Chatwoot side |
-| `upload_media(...)` | unchanged | unchanged (Meta-only primitive; only reachable via `_send_media_message`, which errors first) |
+| `upload_media(...)` | unchanged | unchanged (Meta-only primitive; not reached when Chatwoot owns the upload) |
+
+**Template listing.** `chatwoot.list_templates(inbox_id)` returns the
+approved-template list synced from WABA via
+`GET /api/v1/accounts/:aid/inboxes/:iid` (the `message_templates` field).
+Use this to surface template names to operators rather than hard-coding.
 
 Callers don't need to branch on `CHATWOOT_ENABLED` — the redirect happens
 inside the service. The return shape from `send_text_message` stays
@@ -150,14 +156,18 @@ so no echo-loop risk.
 
 **Known limitations:**
 
-- **Media outbound** — RPA flows that use the `whatsapp_send` step op to
-  deliver a `last_download` artefact will error in FA edition. Workaround:
-  upload to Drive / S3 and send the link in a text body. Lifting
-  attachment delivery into Chatwoot is tracked as FA-B v2.
-- **Templates** — cadences that use Meta-approved templates for cold
-  first-touch outbound will error. In Chatwoot-fronted setups operators
-  fire templates from Chatwoot's WhatsApp template UI; Roost should send
-  free-text follow-ups only.
+- **Media via `link=` / `media_id=`** — Chatwoot's REST takes file bytes,
+  not external URLs or Meta media ids. Callers that already hold a URL
+  must download to a local path first and pass `path=`. RPA flows with
+  `last_download` already have a local path, so they Just Work.
+- **Template authoring** — Roost fires templates by name but does not
+  create them. Template creation, edits, and approval status live in
+  Chatwoot's WhatsApp template UI (which proxies WABA's submit-for-review
+  flow). Use `chatwoot.list_templates` to discover what's available.
+- **Rich template components** — Meta-style header media or button
+  parameters don't translate to Chatwoot's flat `processed_params` shape.
+  Body text variables work; for anything richer, talk to Chatwoot's REST
+  directly with a hand-built `template_params` dict.
 
 ## Outbound API surface
 
