@@ -121,6 +121,44 @@ The adapter pins this rule explicitly; the test suite asserts it.
 For the full list with worked examples, see
 [`docs/chatwoot-webhook-samples/README.md`](chatwoot-webhook-samples/README.md).
 
+## Outbound routing (FA edition)
+
+When `CHATWOOT_ENABLED=true`, Roost's WhatsApp service routes outbound
+calls **through Chatwoot** instead of going direct to Meta. This keeps the
+FA edition on one channel for both directions — the salesperson sees
+Roost's replies in the same Chatwoot conversation thread as their own.
+
+| `services/whatsapp.py` function | `CHATWOOT_ENABLED=false` | `CHATWOOT_ENABLED=true` |
+|---|---|---|
+| `send_text_message(to, body)` | direct to Meta Cloud API | `chatwoot.route_text_to_whatsapp` — find-or-create contact → reuse open conversation if one exists, else open a new one with `initial_message=body` |
+| `send_template_message(...)` | direct to Meta | **errors** — Chatwoot doesn't model Meta templates 1:1; operators use Chatwoot's WhatsApp template UI. Callers (e.g. lead-nurture cadences) should fall back to plain text |
+| `send_document(...)` / `send_image(...)` | direct to Meta | **errors** — media via Chatwoot needs multipart upload to `/messages` with `attachments[]` (FA-B v2). For now, send the URL in a text body |
+| `mark_as_read(wamid)` | direct to Meta | **no-op** — the api_chatwoot inbound handler already bumps `update_last_seen` on the Chatwoot side |
+| `upload_media(...)` | unchanged | unchanged (Meta-only primitive; only reachable via `_send_media_message`, which errors first) |
+
+Callers don't need to branch on `CHATWOOT_ENABLED` — the redirect happens
+inside the service. The return shape from `send_text_message` stays
+`{"ok": True, "message_id": <opaque>, "via": "chatwoot", "conversation_id": int}`;
+`message_id` is Chatwoot's numeric id (not a Meta wamid) when routed —
+callers should treat it as opaque, and they already do (it's only used
+for logging).
+
+**Loop safety:** A Roost-posted message fires a `message_created` webhook
+with `message_type="outgoing"`. The api_chatwoot router filters this out
+of the inbound pipeline (covered by `test_post_ignores_outgoing_message`),
+so no echo-loop risk.
+
+**Known limitations:**
+
+- **Media outbound** — RPA flows that use the `whatsapp_send` step op to
+  deliver a `last_download` artefact will error in FA edition. Workaround:
+  upload to Drive / S3 and send the link in a text body. Lifting
+  attachment delivery into Chatwoot is tracked as FA-B v2.
+- **Templates** — cadences that use Meta-approved templates for cold
+  first-touch outbound will error. In Chatwoot-fronted setups operators
+  fire templates from Chatwoot's WhatsApp template UI; Roost should send
+  free-text follow-ups only.
+
 ## Outbound API surface
 
 | Function | Endpoint | When to use |

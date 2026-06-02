@@ -55,7 +55,27 @@ def send_text_message(to: str, body: str) -> dict:
 
     Returns:
         API response dict with message_id on success, error on failure.
+
+    FA edition: when CHATWOOT_ENABLED is set, the message is routed through
+    Chatwoot (which fronts WhatsApp Cloud) instead of going direct to Meta.
+    Callers don't need to know — the return shape stays `{"ok": True,
+    "message_id": <opaque>}`, only the id type changes (Chatwoot numeric id
+    vs Meta wamid string). See docs/chatwoot.md.
     """
+    from roost.config import CHATWOOT_ENABLED
+    if CHATWOOT_ENABLED:
+        from roost.extras.messaging_external.services import chatwoot
+        result = chatwoot.route_text_to_whatsapp(to, body)
+        if "error" in result:
+            return result
+        logger.info(
+            "WhatsApp via Chatwoot to %s: conv=%s msg=%s",
+            to, result.get("conversation_id"), result.get("message_id"),
+        )
+        return {"ok": True, "message_id": result.get("message_id"),
+                "via": "chatwoot",
+                "conversation_id": result.get("conversation_id")}
+
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured (missing token or phone number ID)"}
 
@@ -106,6 +126,14 @@ def send_template_message(
         language_code: Template language (default 'en').
         components: Optional template components (header, body, button params).
     """
+    # FA edition: Chatwoot doesn't model Meta templates 1:1 — operators use
+    # Chatwoot's WhatsApp template UI for first-touch outbound. Roost
+    # callers (lead-nurture cadences) should fall back to plain text.
+    from roost.config import CHATWOOT_ENABLED
+    if CHATWOOT_ENABLED:
+        return {"error": "templates use Chatwoot's WhatsApp template UI in "
+                "FA edition — send plain text via send_text_message instead"}
+
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured"}
 
@@ -200,6 +228,15 @@ def _send_media_message(
     Pick exactly one of `path` (local file, will be uploaded), `media_id`
     (already-uploaded reference), or `link` (publicly fetchable URL).
     """
+    # FA edition: media outbound through Chatwoot requires a multipart
+    # upload to /messages with attachments[] — not implemented yet.
+    # Callers (RPA whatsapp_send step, recipe attachments) will error
+    # cleanly so the operator sees the limitation. Tracked as FA-B v2.
+    from roost.config import CHATWOOT_ENABLED
+    if CHATWOOT_ENABLED:
+        return {"error": "media outbound via Chatwoot not yet supported "
+                "(FA-B v2) — send a link in the message body for now"}
+
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured"}
 
@@ -297,7 +334,16 @@ def mark_as_read(message_id: str) -> dict:
 
     Args:
         message_id: The wamid of the message to mark as read.
+
+    FA edition: Chatwoot owns inbound receipts on its inbox — the
+    `update_last_seen` bump fires from the api_chatwoot router's inbound
+    handler instead. This becomes a no-op so existing call sites don't
+    need to branch.
     """
+    from roost.config import CHATWOOT_ENABLED
+    if CHATWOOT_ENABLED:
+        return {"ok": True, "via": "chatwoot", "no_op": True}
+
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         return {"error": "WhatsApp not configured"}
 

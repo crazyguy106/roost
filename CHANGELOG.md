@@ -24,6 +24,17 @@ heading so self-hosters know to read before `git pull`.
   pipeline; `conversation_updated` (chatty) and outgoing/lifecycle events
   are ignored. Reference 4.14.1 payloads captured under
   `docs/chatwoot-webhook-samples/`. See `docs/chatwoot.md`. (FA-A)
+- **WhatsApp outbound routes through Chatwoot in FA edition.** When
+  `CHATWOOT_ENABLED=true`, `services/whatsapp.py::send_text_message`
+  delegates to `chatwoot.route_text_to_whatsapp` (find-or-create contact,
+  reuse open conversation or open a new one with the initial message).
+  `send_template_message` and `send_document` / `send_image` return a
+  clear error in FA edition (templates have no 1:1 Chatwoot mapping;
+  media attachments are tracked as FA-B v2). `mark_as_read` becomes a
+  no-op — Chatwoot owns inbound receipts on its inbox. Callers
+  (lead-nurture cadences, MCP tools, RPA `whatsapp_send`) need no
+  changes; the redirect happens inside the service. See
+  `docs/chatwoot.md` § Outbound routing. (FA-B)
 
 ### Changed
 - **Morning briefing no longer ships a hardcoded personal quote.** The `/briefing`

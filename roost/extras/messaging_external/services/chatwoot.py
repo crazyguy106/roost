@@ -32,6 +32,7 @@ import httpx
 from roost.config import (
     CHATWOOT_ACCOUNT_ID,
     CHATWOOT_API_KEY,
+    CHATWOOT_ENABLED,
     CHATWOOT_INBOX_ID,
     CHATWOOT_URL,
     CHATWOOT_WEBHOOK_SECRET,
@@ -424,6 +425,108 @@ def mark_as_read(conversation_id: int) -> dict:
     except Exception as e:
         logger.debug("Chatwoot mark_as_read failed: %s", e)
         return {"error": str(e)}
+
+
+def _find_open_conversation(
+    contact_id: int,
+    inbox_id: int | str | None = None,
+) -> int | None:
+    """Return the id of an open conversation for `contact_id` in the target
+    inbox, or None if there isn't one.
+
+    Used by the outbound router to decide between posting into an existing
+    thread (the common case — operator and agent are mid-conversation) or
+    opening a fresh one. Best-effort: any API failure returns None and the
+    caller will fall back to creating a new conversation rather than
+    blocking the send.
+    """
+    base = _api_base()
+    if base is None:
+        return None
+
+    target_inbox = str(inbox_id or CHATWOOT_INBOX_ID or "")
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(
+                f"{base}/contacts/{contact_id}/conversations",
+                headers=_headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json() or {}
+            rows = data.get("payload") or data or []
+            for c in rows:
+                if not isinstance(c, dict):
+                    continue
+                if c.get("status") != "open":
+                    continue
+                if target_inbox and str(c.get("inbox_id") or "") != target_inbox:
+                    continue
+                return c.get("id")
+    except Exception:
+        logger.exception("Chatwoot _find_open_conversation failed (non-fatal)")
+    return None
+
+
+def route_text_to_whatsapp(
+    phone: str,
+    body: str,
+    *,
+    source_id: str = "",
+) -> dict:
+    """Outbound text → Chatwoot, FA-edition replacement for direct Meta calls.
+
+    Flow:
+    1. find_or_create_contact(phone) on the configured inbox
+    2. _find_open_conversation(contact_id) — reuse the active thread
+    3a. If found → send_message(conv_id, body)
+    3b. If not → create_conversation(...initial_message=body)
+
+    For Channel::Whatsapp the contact's `source_id` IS the E.164 phone,
+    so the caller can either pass it explicitly or let us derive it from
+    the contact lookup.
+
+    Returns `{"ok": True, "conversation_id": int, "message_id": int|None,
+    "created_conversation": bool}` on success.
+    """
+    if not CHATWOOT_ENABLED:
+        return {"error": "Chatwoot not enabled"}
+
+    contact = find_or_create_contact(phone=phone)
+    if "error" in contact:
+        return contact
+
+    contact_id = contact.get("contact_id")
+    if not contact_id:
+        return {"error": "Chatwoot contact lookup returned no id",
+                "details": contact}
+
+    src = source_id or contact.get("source_id") or phone
+    conv_id = _find_open_conversation(contact_id)
+
+    if conv_id is not None:
+        result = send_message(conv_id, body)
+        if "error" in result:
+            return result
+        return {
+            "ok": True,
+            "conversation_id": conv_id,
+            "message_id": result.get("message_id"),
+            "created_conversation": False,
+        }
+
+    created = create_conversation(
+        source_id=src,
+        contact_id=contact_id,
+        initial_message=body,
+    )
+    if "error" in created:
+        return created
+    return {
+        "ok": True,
+        "conversation_id": created.get("conversation_id"),
+        "message_id": None,
+        "created_conversation": True,
+    }
 
 
 def mark_as_resolved(conversation_id: int) -> dict:
