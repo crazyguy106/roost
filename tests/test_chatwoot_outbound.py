@@ -460,3 +460,150 @@ def test_list_templates_returns_payload(cw_enabled, monkeypatch):
     assert result["ok"] is True
     assert len(result["templates"]) == 2
     assert result["templates"][0]["name"] == "fa_welcome"
+
+
+# ──────────────── conversation_meta / list_open_conversations (FA-H) ─────
+
+
+def test_conversation_meta_returns_counts(cw_enabled, monkeypatch):
+    """GET /conversations/meta?assignee_type=me projects the four counts."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    class _FakeResp:
+        status_code = 200
+        content = b"{}"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "meta": {
+                    "open": 4,
+                    "resolved": 17,
+                    "pending": 1,
+                    "all_count": 22,
+                },
+            }
+
+    captured: dict = {}
+
+    class _FakeClient:
+        def __init__(self, timeout=30):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, *, headers, params=None):
+            captured["url"] = url
+            captured["params"] = params
+            return _FakeResp()
+
+    monkeypatch.setattr(cw, "httpx", type("X", (), {
+        "Client": _FakeClient,
+        "HTTPStatusError": RuntimeError,
+    }))
+    monkeypatch.setattr(cw, "CHATWOOT_URL", "https://chatwoot.test")
+    monkeypatch.setattr(cw, "CHATWOOT_API_KEY", "test-token")
+    monkeypatch.setattr(cw, "CHATWOOT_ACCOUNT_ID", "1")
+
+    result = cw.conversation_meta(assignee_type="me")
+    assert result == {
+        "ok": True,
+        "open": 4,
+        "resolved": 17,
+        "pending": 1,
+        "all_count": 22,
+    }
+    assert captured["url"].endswith("/conversations/meta")
+    assert captured["params"] == {"assignee_type": "me"}
+
+
+def test_list_open_conversations_returns_top(cw_enabled, monkeypatch):
+    """GET /conversations?status=open projects {id, contact, preview} rows
+    from the Chatwoot envelope shape (`data.payload[…].meta.sender`)."""
+    import roost.extras.messaging_external.services.chatwoot as cw
+
+    class _FakeResp:
+        status_code = 200
+        content = b"{}"
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "data": {
+                    "payload": [
+                        {
+                            "id": 101,
+                            "meta": {"sender": {
+                                "name": "Tan Mei",
+                                "phone_number": "+6591234567",
+                            }},
+                            "messages": [{"content": "Hi, can we meet Thursday?"}],
+                        },
+                        {
+                            "id": 102,
+                            "meta": {"sender": {
+                                "phone_number": "+6598887777",
+                            }},
+                            "messages": [{"content": "Following up on the\nquote."}],
+                        },
+                        {
+                            "id": 103,
+                            "meta": {"sender": {}},
+                            "messages": [],
+                        },
+                    ],
+                },
+            }
+
+    captured: dict = {}
+
+    class _FakeClient:
+        def __init__(self, timeout=30):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, *, headers, params=None):
+            captured["url"] = url
+            captured["params"] = params
+            return _FakeResp()
+
+    monkeypatch.setattr(cw, "httpx", type("X", (), {
+        "Client": _FakeClient,
+        "HTTPStatusError": RuntimeError,
+    }))
+    monkeypatch.setattr(cw, "CHATWOOT_URL", "https://chatwoot.test")
+    monkeypatch.setattr(cw, "CHATWOOT_API_KEY", "test-token")
+    monkeypatch.setattr(cw, "CHATWOOT_ACCOUNT_ID", "1")
+
+    result = cw.list_open_conversations(limit=5)
+    assert result["ok"] is True
+    conversations = result["conversations"]
+    assert len(conversations) == 3
+    assert conversations[0] == {
+        "id": 101,
+        "contact": "Tan Mei",
+        "preview": "Hi, can we meet Thursday?",
+    }
+    # Phone fallback when name missing.
+    assert conversations[1]["contact"] == "+6598887777"
+    # No sender → placeholder string; no messages → empty preview.
+    assert conversations[2] == {
+        "id": 103,
+        "contact": "(no contact)",
+        "preview": "",
+    }
+    assert captured["url"].endswith("/conversations")
+    assert captured["params"] == {"status": "open", "page": 1}

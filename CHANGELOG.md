@@ -28,6 +28,18 @@ heading so self-hosters know to read before `git pull`.
   send-receipt id. Suite at 707 green. (FA-I)
 
 ### Added
+- **Morning brief now includes Chatwoot inbox backlog (FA edition).** The 08:05
+  Telegram digest used to be silent about the conversations actually sitting in
+  the adviser's Chatwoot inbox — an awkward gap given Chatwoot is *the* customer
+  surface in FA. Added two helpers to the chatwoot service:
+  `conversation_meta(assignee_type="me")` (counts of open / resolved / pending /
+  all from `GET /conversations/meta`) and
+  `list_open_conversations(limit=5)` (top-of-inbox preview rows projected from
+  `data.payload[].meta.sender` + last message). `build_summary` calls them under
+  a `chatwoot` section that fails closed — flag off → empty section; REST
+  unreachable → one-line "inbox unreachable" warning instead of crashing the
+  digest. `format_summary` renders an inbox block with the open/pending counts
+  and a preview list of the top conversations. Suite at 712 green. (FA-H)
 - **FA edition defaults Telegram on as the operator surface.** Chatwoot is the
   customer-facing inbox; Telegram is where the *adviser* gets pinged — hot-lead
   alerts on inbound WhatsApp, `/nlist` Guardian draft approvals, and the morning

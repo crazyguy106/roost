@@ -682,6 +682,92 @@ def list_templates(inbox_id: int | str | None = None) -> dict:
         return {"error": str(e)}
 
 
+def conversation_meta(assignee_type: str = "me") -> dict:
+    """Counts of open / resolved / pending conversations on the inbox.
+
+    Chatwoot exposes a single endpoint for this:
+    `GET /api/v1/accounts/:aid/conversations/meta?assignee_type=<type>`.
+    Returns {"ok": True, "open": int, "resolved": int, "pending": int,
+    "all_count": int}. The morning brief uses this to surface backlog.
+    """
+    base = _api_base()
+    if base is None:
+        return {"error": "Chatwoot not configured"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                f"{base}/conversations/meta",
+                headers=_headers(),
+                params={"assignee_type": assignee_type},
+            )
+            resp.raise_for_status()
+            data = resp.json() or {}
+            meta = data.get("meta") or {}
+            return {
+                "ok": True,
+                "open": int(meta.get("open", 0) or 0),
+                "resolved": int(meta.get("resolved", 0) or 0),
+                "pending": int(meta.get("pending", 0) or 0),
+                "all_count": int(meta.get("all_count", 0) or 0),
+            }
+    except httpx.HTTPStatusError as e:
+        details = _error_body(e)
+        return {"error": f"Chatwoot API {e.response.status_code}", "details": details}
+    except Exception as e:
+        logger.exception("Chatwoot conversation_meta failed")
+        return {"error": str(e)}
+
+
+def list_open_conversations(limit: int = 5) -> dict:
+    """Top-of-inbox open conversations, ordered by most recent activity.
+
+    Chatwoot's `GET /api/v1/accounts/:aid/conversations?status=open` returns
+    a paginated list under `data.payload`. We project just what the morning
+    brief needs: id, contact name, and a short preview of the latest
+    message. Returns {"ok": True, "conversations": [{id, contact, preview}]}.
+    """
+    base = _api_base()
+    if base is None:
+        return {"error": "Chatwoot not configured"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                f"{base}/conversations",
+                headers=_headers(),
+                params={"status": "open", "page": 1},
+            )
+            resp.raise_for_status()
+            data = resp.json() or {}
+            payload = ((data.get("data") or {}).get("payload")) or []
+            conversations = []
+            for row in payload[:limit]:
+                meta_sender = (row.get("meta") or {}).get("sender") or {}
+                contact = (
+                    meta_sender.get("name")
+                    or meta_sender.get("phone_number")
+                    or meta_sender.get("email")
+                    or "(no contact)"
+                )
+                msgs = row.get("messages") or []
+                preview = ""
+                if msgs:
+                    preview = (msgs[-1].get("content") or "")[:120]
+                conversations.append({
+                    "id": row.get("id"),
+                    "contact": contact,
+                    "preview": preview,
+                })
+            return {"ok": True, "conversations": conversations}
+    except httpx.HTTPStatusError as e:
+        details = _error_body(e)
+        return {"error": f"Chatwoot API {e.response.status_code}", "details": details}
+    except Exception as e:
+        logger.exception("Chatwoot list_open_conversations failed")
+        return {"error": str(e)}
+
+
 def route_template_to_whatsapp(
     phone: str,
     template_name: str,

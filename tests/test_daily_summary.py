@@ -195,6 +195,77 @@ def test_format_summary_renders_sections(clean_summary_tables):
     assert "*RPA*" in text
 
 
+# ── Chatwoot section (FA-H) ───────────────────────────────────────────
+
+
+def test_build_summary_includes_chatwoot_section_when_enabled(
+    clean_summary_tables, monkeypatch,
+):
+    """When CHATWOOT_ENABLED is true, the morning brief picks up open/pending
+    counts and the top-of-inbox preview, and the formatter renders them."""
+    monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", True)
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.chatwoot.conversation_meta",
+        lambda assignee_type="me": {
+            "ok": True, "open": 3, "resolved": 5, "pending": 1, "all_count": 9,
+        },
+    )
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.chatwoot.list_open_conversations",
+        lambda limit=5: {
+            "ok": True,
+            "conversations": [
+                {"id": 101, "contact": "Tan Mei", "preview": "Thursday 2pm works"},
+                {"id": 102, "contact": "+6598887777", "preview": ""},
+            ],
+        },
+    )
+
+    s = build_summary(tz_name="Asia/Singapore")
+    cw = s["chatwoot"]
+    assert cw["enabled"] is True
+    assert cw["open"] == 3
+    assert cw["pending"] == 1
+    assert len(cw["top_open"]) == 2
+    assert cw["top_open"][0]["contact"] == "Tan Mei"
+
+    text = format_summary(s)
+    assert "*Chatwoot*" in text
+    assert "3 open" in text
+    assert "1 pending" in text
+    assert "#101 Tan Mei" in text
+    assert "Thursday 2pm works" in text
+    # No-preview row still renders with the contact.
+    assert "#102 +6598887777" in text
+
+
+def test_build_summary_chatwoot_disabled_omits_section(clean_summary_tables, monkeypatch):
+    """Flag off → the section reports enabled=False and the formatter skips it."""
+    monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", False)
+    s = build_summary(tz_name="UTC")
+    assert s["chatwoot"] == {"enabled": False}
+    text = format_summary(s)
+    assert "*Chatwoot*" not in text
+
+
+def test_build_summary_chatwoot_unreachable_renders_warning(
+    clean_summary_tables, monkeypatch,
+):
+    """When Chatwoot is configured but unreachable, the brief degrades to a
+    one-line warning instead of crashing the morning send."""
+    monkeypatch.setattr("roost.config.CHATWOOT_ENABLED", True)
+    monkeypatch.setattr(
+        "roost.extras.messaging_external.services.chatwoot.conversation_meta",
+        lambda assignee_type="me": {"error": "Chatwoot API 502"},
+    )
+    s = build_summary(tz_name="UTC")
+    assert s["chatwoot"] == {"enabled": True, "error": "Chatwoot API 502"}
+    text = format_summary(s)
+    assert "*Chatwoot*" in text
+    assert "inbox unreachable" in text
+    assert "502" in text
+
+
 # ── AI narrative ──────────────────────────────────────────────────────
 
 

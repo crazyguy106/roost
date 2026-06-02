@@ -79,6 +79,7 @@ def build_summary(
             "inbound_leads": _leads_section(conn, user_id, since_utc, until_utc),
             "recipes": _recipes_section(conn, since_utc, until_utc),
             "rpa": _rpa_section(conn, user_id, since_utc, until_utc),
+            "chatwoot": _chatwoot_section(),
         }
     finally:
         conn.close()
@@ -217,6 +218,41 @@ def _rpa_section(conn, user_id, since, until) -> dict:
     }
 
 
+def _chatwoot_section() -> dict:
+    """Read-side rollup from the Chatwoot inbox itself (REST, not sqlite).
+
+    Returns counts of open/pending conversations plus a preview of the
+    top open threads. Fails closed: if Chatwoot is unreachable or the
+    flag is off, returns an empty section and the morning brief omits it
+    rather than blocking. The two helpers
+    (`conversation_meta`, `list_open_conversations`) already swallow
+    exceptions internally and return `{error: ...}` shapes, so this
+    function just needs to recognise the error envelope.
+    """
+    from roost.config import CHATWOOT_ENABLED
+    if not CHATWOOT_ENABLED:
+        return {"enabled": False}
+
+    try:
+        from roost.extras.messaging_external.services import chatwoot
+    except Exception:
+        return {"enabled": True, "error": "chatwoot service unavailable"}
+
+    meta = chatwoot.conversation_meta(assignee_type="me")
+    if "error" in meta:
+        return {"enabled": True, "error": meta["error"]}
+
+    top = chatwoot.list_open_conversations(limit=5)
+    conversations = top.get("conversations") or [] if "error" not in top else []
+
+    return {
+        "enabled": True,
+        "open": meta.get("open", 0),
+        "pending": meta.get("pending", 0),
+        "top_open": conversations,
+    }
+
+
 # ── Markdown formatter ───────────────────────────────────────────────
 
 
@@ -320,6 +356,33 @@ def format_summary(s: dict) -> str:
         lines.append("  " + ", ".join(parts))
         for f in r["failures"]:
             lines.append(f"  ✗ #{f['id']} {f['recipe']} @ {f['at'][11:16]}")
+        lines.append("")
+
+    # Chatwoot inbox (FA edition)
+    cw = s.get("chatwoot") or {}
+    if cw.get("enabled") and "error" not in cw:
+        if cw.get("open") or cw.get("pending") or cw.get("top_open"):
+            lines.append("*Chatwoot*")
+            counts: list[str] = []
+            if cw.get("open"):
+                counts.append(f"📥 {cw['open']} open")
+            if cw.get("pending"):
+                counts.append(f"⏳ {cw['pending']} pending")
+            if counts:
+                lines.append("  " + "  •  ".join(counts))
+            top = cw.get("top_open") or []
+            if top:
+                lines.append("  Top open:")
+                for c in top:
+                    preview = (c.get("preview") or "").replace("\n", " ").strip()
+                    if preview:
+                        lines.append(f"    • #{c['id']} {c['contact']}: \"{preview}\"")
+                    else:
+                        lines.append(f"    • #{c['id']} {c['contact']}")
+            lines.append("")
+    elif cw.get("enabled") and cw.get("error"):
+        lines.append("*Chatwoot*")
+        lines.append(f"  ⚠ inbox unreachable: {cw['error']}")
         lines.append("")
 
     # RPA
