@@ -14,6 +14,18 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **End-to-end Chatwoot round-trip test** (`tests/test_chatwoot_end_to_end.py`).
+  Signs a financial-adviser-context `message_created`/`incoming` payload, POSTs
+  it through the real FastAPI router with `CHATWOOT_ENABLED=true`, asserts the
+  lead ingest call fires with `channel="chatwoot"` + FA message text, then
+  calls `whatsapp.send_text_message` with a fake `httpx.Client` mounted on the
+  service module — and asserts the captured HTTP traffic hits the right
+  Chatwoot URLs (`/contacts/search`, `/contacts/77/conversations`,
+  `/conversations/4242/messages`) with the `api_access_token` header and the
+  reply body. Pins the FA-edition contract from webhook receipt to REST
+  outbound in one test. Suite at 698 green. Operator smoke
+  (`scripts/smoke_chatwoot.py`) covers the same path against a running stack
+  using the real `CHATWOOT_WEBHOOK_SECRET` from `.env`. (FA-E)
 - **FA-edition laptop install** (`scripts/install-fa.sh` +
   `docs/fa-laptop-install.md`). One command brings up Roost +
   Chatwoot 4.14.1 + Sidekiq + Postgres (pgvector) + Redis + a Tailscale
