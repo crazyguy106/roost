@@ -28,6 +28,15 @@ heading so self-hosters know to read before `git pull`.
   send-receipt id. Suite at 707 green. (FA-I)
 
 ### Added
+- **MCP tool `chatwoot_list_templates(inbox_id=0)`.** Surfaces the WABA-approved
+  WhatsApp templates that Chatwoot has synced from Meta — so an agent or recipe
+  can pick a template name at runtime instead of hard-coding one that may have
+  been retired. Lives in `roost/extras/messaging_external/mcp/tools_chatwoot.py`,
+  gated by `CHATWOOT_ENABLED`, registered conditionally inside the bundle's
+  `_register()`. Wraps `chatwoot.list_templates`, mapping the MCP-friendly
+  `inbox_id=0` default to `None` so the service falls back to `CHATWOOT_INBOX_ID`.
+  Three new tests cover happy path, env fallback, and the disabled-gate
+  short-circuit. (FA-K)
 - **Morning brief now includes Chatwoot inbox backlog (FA edition).** The 08:05
   Telegram digest used to be silent about the conversations actually sitting in
   the adviser's Chatwoot inbox — an awkward gap given Chatwoot is *the* customer

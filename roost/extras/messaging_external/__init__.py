@@ -5,7 +5,8 @@ Mounts:
 - Up to 4 API routers: api_whatsapp (gated by WHATSAPP_ENABLED),
   api_wechat (gated by WECHAT_ENABLED), api_sms (gated by SMS_ENABLED),
   api_chatwoot (gated by CHATWOOT_ENABLED)
-- Up to 1 MCP tool module: tools_whatsapp (gated by WHATSAPP_ENABLED)
+- Up to 2 MCP tool modules: tools_whatsapp (gated by WHATSAPP_ENABLED),
+  tools_chatwoot (gated by CHATWOOT_ENABLED)
 - 0 page routes (channels are webhook-only)
 - 0 bundle-owned tables (channel strings are referenced by other bundles
   but persistence belongs to the consumer)
@@ -56,6 +57,7 @@ def _register(app: "FastAPI", mcp) -> None:  # noqa: ARG001
         app.include_router(sms_router)
 
     if CHATWOOT_ENABLED:
+        from roost.extras.messaging_external.mcp import tools_chatwoot  # noqa: F401
         from roost.extras.messaging_external.web.api_chatwoot import (
             router as chatwoot_router,
         )

@@ -607,3 +607,55 @@ def test_list_open_conversations_returns_top(cw_enabled, monkeypatch):
     }
     assert captured["url"].endswith("/conversations")
     assert captured["params"] == {"status": "open", "page": 1}
+
+
+# ──────────────── chatwoot_list_templates MCP tool (FA-K) ────────────────
+
+
+def test_chatwoot_list_templates_mcp_success(monkeypatch):
+    """Wrapper delegates to the service when CHATWOOT_ENABLED."""
+    from roost.extras.messaging_external.mcp import tools_chatwoot as tc
+
+    monkeypatch.setattr(tc, "CHATWOOT_ENABLED", True)
+    captured: dict = {}
+
+    def fake_list(inbox_id=None):
+        captured["inbox_id"] = inbox_id
+        return {"ok": True, "templates": [{"name": "fa_welcome"}]}
+
+    monkeypatch.setattr(tc.chatwoot, "list_templates", fake_list)
+    out = tc.chatwoot_list_templates.fn(inbox_id=7)
+    assert out == {"ok": True, "templates": [{"name": "fa_welcome"}]}
+    # `0 or None` → None passes through, but a real id is forwarded as-is.
+    assert captured["inbox_id"] == 7
+
+
+def test_chatwoot_list_templates_mcp_zero_falls_back_to_env(monkeypatch):
+    """`inbox_id=0` (the MCP default) maps to None so the service can pick
+    up `CHATWOOT_INBOX_ID` from the environment."""
+    from roost.extras.messaging_external.mcp import tools_chatwoot as tc
+
+    monkeypatch.setattr(tc, "CHATWOOT_ENABLED", True)
+    captured: dict = {}
+
+    def fake_list(inbox_id=None):
+        captured["inbox_id"] = inbox_id
+        return {"ok": True, "templates": []}
+
+    monkeypatch.setattr(tc.chatwoot, "list_templates", fake_list)
+    tc.chatwoot_list_templates.fn()
+    assert captured["inbox_id"] is None
+
+
+def test_chatwoot_list_templates_mcp_disabled_gate(monkeypatch):
+    """Flag off → error envelope, service is never called."""
+    from roost.extras.messaging_external.mcp import tools_chatwoot as tc
+
+    monkeypatch.setattr(tc, "CHATWOOT_ENABLED", False)
+    monkeypatch.setattr(
+        tc.chatwoot, "list_templates",
+        lambda inbox_id=None: pytest.fail("service must not be called when disabled"),
+    )
+    out = tc.chatwoot_list_templates.fn(inbox_id=7)
+    assert "error" in out
+    assert "CHATWOOT_ENABLED" in out["error"]
