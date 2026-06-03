@@ -14,6 +14,22 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1.6a — `chat_windows` data model.** New core SQLite
+  table (`SCHEMA_V31`) + service `roost.services.chat_windows` that maps
+  tmux windows inside the per-user `roost-<user_id>` session to leads /
+  tasks / Chatwoot conversations. Schema:
+  `(id, user_id, tmux_window_name UNIQUE per user, title,
+  linked_entity_type, linked_entity_id, last_topic, last_active_at,
+  last_inbound_at, created_at)`. Service surfaces `list_windows`,
+  `create_window`, `get_window`, `get_window_by_tmux_name`,
+  `count_windows`, `touch_active`, `mark_inbound`, `link_to_entity`,
+  `set_topic`, `delete_window`, and the cap-and-evict picker primitive
+  `recommend_evictee(user_id, cap=5)` (null `last_inbound_at` first,
+  then oldest inbound, tie-broken by oldest active). `DEFAULT_WINDOW_CAP
+  = 5`. Foundation only — no tmux side-effects, no web routes; those
+  land in Phase 1.6b (multi-window WS + tabs) and 1.6c (picker + cap
+  enforcement). 17 new tests in `tests/test_chat_windows.py`. Suite at
+  781 green (was 764, +17).
 - **FA-edition Phase 1.5 — web tty (single-window).** New `/tty` page +
   `/ws/tty` WebSocket that bridges xterm.js to a persistent per-user tmux
   session inside the container (`tmux -L roost-tty new-session -A -s

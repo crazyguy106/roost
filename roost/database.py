@@ -897,6 +897,32 @@ CREATE INDEX IF NOT EXISTS idx_guardian_drafts_created ON guardian_drafts(create
 # SCHEMA_V29 (xero_oauth_tokens) moved to roost.extras.sme_ops bundle.
 
 
+SCHEMA_V31 = """
+-- Web tty multi-window mapping: each row is one tmux window inside the
+-- per-user session `roost-<user_id>`. last_active_at tracks operator
+-- attention (touched on attach); last_inbound_at tracks external events
+-- (inbound message, agent response landing in this window) so the
+-- cap-and-evict picker can recommend the coldest window to close.
+CREATE TABLE IF NOT EXISTS chat_windows (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL,
+    tmux_window_name    TEXT NOT NULL,
+    title               TEXT NOT NULL,
+    linked_entity_type  TEXT NOT NULL DEFAULT '',
+    linked_entity_id    INTEGER,
+    last_topic          TEXT NOT NULL DEFAULT '',
+    last_active_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    last_inbound_at     TEXT,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, tmux_window_name)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_windows_user_active
+    ON chat_windows(user_id, last_active_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_windows_user_inbound
+    ON chat_windows(user_id, last_inbound_at);
+"""
+
+
 
 
 def get_connection() -> sqlite3.Connection:
@@ -1421,6 +1447,9 @@ def init_db() -> None:
 
     # Phase 27 (nurture_cadences/enrollments/preapprovals) — owned by roost.extras.lead_nurture.
     conn.executescript(SCHEMA_V30)
+
+    # Phase 31: chat_windows (web tty multi-window mapping)
+    conn.executescript(SCHEMA_V31)
 
     # Bundle-owned tables — each extras/<bundle> ships its own schema.
     # Idempotent CREATE TABLE IF NOT EXISTS; disabled bundles do nothing.
