@@ -65,7 +65,6 @@ class ChatWindow:
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "ChatWindow":
-        keys = row.keys()
         return cls(
             id=row["id"],
             user_id=row["user_id"],
@@ -77,8 +76,8 @@ class ChatWindow:
             last_active_at=row["last_active_at"],
             last_inbound_at=row["last_inbound_at"],
             created_at=row["created_at"],
-            tmux_window_alive=(row["tmux_window_alive"] if "tmux_window_alive" in keys else 1),
-            last_resume_cmd=(row["last_resume_cmd"] if "last_resume_cmd" in keys else None),
+            tmux_window_alive=row["tmux_window_alive"],
+            last_resume_cmd=row["last_resume_cmd"],
         )
 
 
@@ -212,6 +211,66 @@ def auto_create(
     ) from last_exc
 
 
+def create_window_if_under_cap(
+    user_id: int,
+    cap: int,
+    *,
+    title: str,
+    linked_entity_type: str = "",
+    linked_entity_id: Optional[int] = None,
+    last_topic: str = "",
+) -> Optional[ChatWindow]:
+    """Atomic check-and-insert: returns the new row, or ``None`` when the
+    user is already at ``cap``. Closes the race between two concurrent
+    ``POST /api/tty/windows`` requests both reading ``count == cap-1``.
+
+    Uses ``BEGIN IMMEDIATE`` so the second connection blocks until the
+    first commits; both then see the post-insert count.
+    """
+    last_exc: Optional[Exception] = None
+    for _ in range(_AUTO_NAME_RETRIES):
+        name = "w-" + secrets.token_hex(_AUTO_NAME_BYTES)
+        with db_connection() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT COUNT(*) AS n FROM chat_windows WHERE user_id = ?",
+                    (user_id,),
+                ).fetchone()
+                if int(row["n"]) >= cap:
+                    conn.execute("ROLLBACK")
+                    return None
+                try:
+                    cur = conn.execute(
+                        """
+                        INSERT INTO chat_windows (
+                            user_id, tmux_window_name, title,
+                            linked_entity_type, linked_entity_id, last_topic
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            user_id, name, title,
+                            linked_entity_type, linked_entity_id, last_topic,
+                        ),
+                    )
+                    new_id = cur.lastrowid
+                    conn.execute("COMMIT")
+                except sqlite3.IntegrityError as exc:
+                    conn.execute("ROLLBACK")
+                    last_exc = exc
+                    continue
+            except sqlite3.OperationalError as exc:
+                # busy / locked — retry from the top.
+                last_exc = exc
+                continue
+        window = get_window(int(new_id))
+        assert window is not None
+        return window
+    raise ChatWindowError(
+        "could not generate a unique window name after retries"
+    ) from last_exc
+
+
 def touch_active(window_id: int) -> None:
     """Bump ``last_active_at`` to now — call on attach / tab focus."""
     with db_connection() as conn:
@@ -319,18 +378,27 @@ def list_paused_windows(user_id: int, limit: int = 15) -> list[ChatWindow]:
     return [ChatWindow.from_row(r) for r in rows]
 
 
-def list_idle_for_sweep(idle_minutes: int) -> list[ChatWindow]:
+def list_idle_for_sweep(
+    idle_minutes: int, *, limit: Optional[int] = None
+) -> list[ChatWindow]:
     """All ALIVE windows whose `last_active_at` is older than the TTL,
-    across users — caller (sweeper) iterates and kills tmux."""
+    across users — caller (sweeper) iterates and kills tmux.
+
+    ``limit`` (when set) caps the per-tick batch so the scheduler doesn't
+    spend the whole tick driving tmux. Oldest first so the most-idle
+    rows get reaped first."""
     with db_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM chat_windows
-             WHERE tmux_window_alive = 1
-               AND last_active_at <= datetime('now', ?)
-            """,
-            (f"-{int(idle_minutes)} minutes",),
-        ).fetchall()
+        sql = (
+            "SELECT * FROM chat_windows "
+            "WHERE tmux_window_alive = 1 "
+            "  AND last_active_at <= datetime('now', ?) "
+            "ORDER BY last_active_at ASC, id ASC"
+        )
+        params: tuple = (f"-{int(idle_minutes)} minutes",)
+        if limit is not None and limit > 0:
+            sql += " LIMIT ?"
+            params = (*params, int(limit))
+        rows = conn.execute(sql, params).fetchall()
     return [ChatWindow.from_row(r) for r in rows]
 
 

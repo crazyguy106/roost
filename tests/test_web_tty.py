@@ -286,7 +286,11 @@ def test_paused_list_scope_isolation(client_user1, client_user2):
     assert res.json()["windows"] == []
 
 
-def test_resume_window_flips_alive(client_user1):
+def test_resume_endpoint_validates_scope_only(client_user1):
+    """POST /resume hands back the row without flipping alive — the WS
+    attach handler does the lazy resurrect when the browser actually
+    connects. Endpoint's job is to validate ownership + give the UI
+    something to navigate with."""
     w = client_user1.post("/api/tty/windows", json={"title": "x"}).json()
     cw.mark_window_killed(w["id"], resume_cmd="bash")
     assert cw.get_window(w["id"]).tmux_window_alive == 0
@@ -294,8 +298,9 @@ def test_resume_window_flips_alive(client_user1):
     res = client_user1.post(f"/api/tty/windows/{w['id']}/resume")
     assert res.status_code == 200
     body = res.json()
-    assert body["tmux_window_alive"] == 1
-    assert cw.get_window(w["id"]).tmux_window_alive == 1
+    # Row comes back paused — WS attach will flip it.
+    assert body["tmux_window_alive"] == 0
+    assert cw.get_window(w["id"]).tmux_window_alive == 0
 
 
 def test_resume_window_404_for_other_user(client_user1, client_user2):
@@ -322,6 +327,33 @@ def test_auto_create_generates_unique_name():
     assert a.tmux_window_name != b.tmux_window_name
     assert a.tmux_window_name.startswith("w-")
     assert b.tmux_window_name.startswith("w-")
+
+
+def test_create_window_if_under_cap_respects_limit():
+    """Atomic check-and-insert: at cap returns None, otherwise inserts
+    and returns the new row. Closes the race that the old non-atomic
+    count+create pattern had between two concurrent POSTs."""
+    cap = 3
+    rows = []
+    for i in range(cap):
+        row = cw.create_window_if_under_cap(1, cap, title=f"W{i}")
+        assert row is not None
+        rows.append(row)
+    # Cap reached → returns None instead of inserting an over-cap row.
+    assert cw.create_window_if_under_cap(1, cap, title="overflow") is None
+    assert cw.count_windows(1) == cap
+    # A different user's quota is independent.
+    other = cw.create_window_if_under_cap(2, cap, title="theirs")
+    assert other is not None
+    assert cw.count_windows(2) == 1
+
+
+def test_create_window_if_under_cap_unique_per_user():
+    """Even under the atomic helper, every row gets a unique tmux name."""
+    a = cw.create_window_if_under_cap(1, 5, title="A")
+    b = cw.create_window_if_under_cap(1, 5, title="B")
+    assert a is not None and b is not None
+    assert a.tmux_window_name != b.tmux_window_name
 
 
 # ── WebSocket: bad query param rejected ───────────────────────────────

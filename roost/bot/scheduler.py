@@ -117,8 +117,15 @@ def init_scheduler(app: Application) -> None:
     logger.info("Scheduled daily summary tick (every 60s, per-user time)")
 
     # 10d. Web tty sweeper — idle kill + memory-pressure eviction. 5 min.
-    jq.run_repeating(_tty_sweep_tick, interval=300, first=120, name="tty_sweep")
-    logger.info("Web tty sweeper (every 5 min)")
+    try:
+        from roost.config import TTY_ENABLED
+    except ImportError:
+        TTY_ENABLED = True
+    if TTY_ENABLED:
+        jq.run_repeating(_tty_sweep_tick, interval=300, first=120, name="tty_sweep")
+        logger.info("Web tty sweeper (every 5 min)")
+    else:
+        logger.info("Web tty sweeper disabled (TTY_ENABLED=false)")
 
     # 11. Proactive monitoring — risk alerts and calendar prep
     try:
@@ -482,13 +489,18 @@ async def _nurture_tick(context) -> None:
 async def _tty_sweep_tick(context) -> None:
     """Idle-kill + memory-pressure sweep for web tty windows."""
     try:
-        from roost.config import TTY_IDLE_TTL_MINUTES, TTY_MEMORY_PRESSURE_RATIO
+        from roost.config import (
+            TTY_IDLE_TTL_MINUTES,
+            TTY_MEMORY_PRESSURE_RATIO,
+            TTY_SWEEP_BATCH,
+        )
         from roost.services import tty_sweeper
         from roost.web.api_tty import _kill_window_for_sweeper
 
         result = tty_sweeper.tick(
             idle_minutes=TTY_IDLE_TTL_MINUTES,
             ratio_threshold=TTY_MEMORY_PRESSURE_RATIO,
+            batch=TTY_SWEEP_BATCH,
             kill_tmux=_kill_window_for_sweeper,
         )
         if result["idle_killed"] or result["pressure_killed"]:

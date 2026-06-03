@@ -53,16 +53,19 @@ def _default_resume_cmd(window: cw.ChatWindow) -> str:
 def sweep_idle(
     idle_minutes: int,
     *,
+    batch_limit: Optional[int] = None,
     kill_tmux: Optional[TmuxKiller] = None,
     resume_cmd_for: Callable[[cw.ChatWindow], str] = _default_resume_cmd,
 ) -> int:
     """Kill tmux windows that have been idle longer than `idle_minutes`.
 
-    Returns the number of rows marked paused.
+    Returns the number of rows marked paused. `batch_limit` (when set)
+    caps the number of rows considered per tick so a spike doesn't tie
+    up the scheduler behind tmux.
     """
     swept = 0
     try:
-        rows = cw.list_idle_for_sweep(idle_minutes)
+        rows = cw.list_idle_for_sweep(idle_minutes, limit=batch_limit)
     except Exception:  # noqa: BLE001
         logger.exception("tty_sweeper: list_idle_for_sweep failed")
         return 0
@@ -150,9 +153,10 @@ def tick(
     *,
     idle_minutes: int,
     ratio_threshold: float,
+    batch: Optional[int] = None,
     kill_tmux: Optional[TmuxKiller] = None,
 ) -> dict:
     """One scheduler tick: idle sweep + memory-pressure sweep."""
-    idle = sweep_idle(idle_minutes, kill_tmux=kill_tmux)
+    idle = sweep_idle(idle_minutes, batch_limit=batch, kill_tmux=kill_tmux)
     pressure = sweep_memory_pressure(ratio_threshold, kill_tmux=kill_tmux)
     return {"idle_killed": idle, "pressure_killed": pressure}

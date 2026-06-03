@@ -247,13 +247,20 @@ WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
 # Outbound: REST API with api_access_token header. CHATWOOT_WEBHOOK_SECRET is
 # the per-webhook secret from Chatwoot UI (rotates if the webhook row is
 # recreated); CHATWOOT_API_KEY is the user-level access token.
-# Web tty (FA-edition operator surface). The sweeper kills tmux windows
-# whose `chat_windows.last_active_at` is older than TTY_IDLE_TTL_MINUTES
-# (default 6 hours — full work-day stays live, overnight gets cleaned up).
-# TTY_MEMORY_PRESSURE_RATIO is the cgroup memory.current/.max threshold
-# above which the sweeper starts evicting coldest windows.
+# Web tty (FA-edition operator surface). TTY_ENABLED is the master flag
+# for the entire web tty subsystem — turn it off on instances that don't
+# expose the operator surface (and the scheduler tick is then a no-op).
+# The sweeper kills tmux windows whose `chat_windows.last_active_at` is
+# older than TTY_IDLE_TTL_MINUTES (default 6 hours — full work-day stays
+# live, overnight gets cleaned up). TTY_MEMORY_PRESSURE_RATIO is the
+# cgroup memory.current/.max threshold above which the sweeper starts
+# evicting coldest windows. TTY_SWEEP_BATCH bounds how many windows a
+# single sweep tick may kill — keeps a worst-case mass-kill bounded in
+# wall-clock so the scheduler doesn't stall behind tmux.
+TTY_ENABLED: bool = os.getenv("TTY_ENABLED", "true").lower() == "true"
 TTY_IDLE_TTL_MINUTES: int = int(os.getenv("TTY_IDLE_TTL_MINUTES", "360"))
 TTY_MEMORY_PRESSURE_RATIO: float = float(os.getenv("TTY_MEMORY_PRESSURE_RATIO", "0.85"))
+TTY_SWEEP_BATCH: int = int(os.getenv("TTY_SWEEP_BATCH", "50"))
 
 CHATWOOT_ENABLED: bool = os.getenv("CHATWOOT_ENABLED", "false").lower() == "true"
 CHATWOOT_URL: str = os.getenv("CHATWOOT_URL", "").rstrip("/")

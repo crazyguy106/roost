@@ -133,8 +133,9 @@
     </p>
   </div>
   <div class="text-sm opacity-70 flex items-center">
-    <span id="tty-status-badge" title="Live windows / cap">0/5</span>
-    <span id="tty-status">connecting…</span>
+    <span id="tty-status-badge" title="Live windows / cap"
+          aria-live="polite" aria-label="Live windows over cap">0/5</span>
+    <span id="tty-status" aria-live="polite">connecting…</span>
   </div>
 </div>
 
@@ -148,7 +149,9 @@
 
 <div id="tty-tabs">
   <!-- tabs injected by JS -->
-  <button id="tty-new" type="button" title="Open a new terminal window">+ New</button>
+  <button id="tty-new" type="button"
+          title="Open a new terminal window"
+          aria-label="Open a new terminal window">+ New</button>
 </div>
 
 <div id="tty-host"></div>
@@ -209,6 +212,9 @@
   let ws = null;             // current WebSocket
   let suppressReconnectBanner = false;
   let cap = 5;               // updated from list/picker payloads
+  let lastModalIntent = null; // picker item the operator was acting on
+                              // — used to re-open the picker when the
+                              //   at-cap evict modal is dismissed.
 
   term.onData((data) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -228,6 +234,12 @@
       tab.dataset.name = w.tmux_window_name;
       tab.dataset.id = w.id;
       tab.title = paused ? w.title + ' (paused — click to resume)' : w.title;
+      tab.setAttribute('role', 'button');
+      tab.setAttribute('tabindex', '0');
+      tab.setAttribute(
+        'aria-label',
+        (paused ? 'Resume window: ' : 'Switch to window: ') + w.title,
+      );
 
       const title = document.createElement('span');
       title.className = 'tty-title';
@@ -245,13 +257,29 @@
       close.className = 'tty-close';
       close.textContent = '×';
       close.title = 'Close conversation';
-      close.addEventListener('click', (ev) => {
+      close.setAttribute('role', 'button');
+      close.setAttribute('tabindex', '0');
+      close.setAttribute('aria-label', 'Close window: ' + w.title);
+      const closeHandler = (ev) => {
         ev.stopPropagation();
         onCloseWindow(w);
+      };
+      close.addEventListener('click', closeHandler);
+      close.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          closeHandler(ev);
+        }
       });
       tab.appendChild(close);
 
       tab.addEventListener('click', () => switchTo(w.tmux_window_name));
+      tab.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          switchTo(w.tmux_window_name);
+        }
+      });
       tabsEl.insertBefore(tab, newBtn);
     }
     refreshStatusBadge();
@@ -335,6 +363,9 @@
 
     ws.addEventListener('open', () => {
       status.textContent = 'connected — ' + (windowName || 'main');
+      // Only the first close-after-reconnect should be silenced. Resetting
+      // here means a *subsequent* unexpected close still shows the banner.
+      suppressReconnectBanner = false;
       sendResize();
     });
     ws.addEventListener('close', (ev) => {
@@ -392,13 +423,40 @@
     pickerBack.classList.remove('open');
     evictBack.classList.remove('open');
   }
-  pickerCancel.addEventListener('click', closeModals);
-  evictCancel.addEventListener('click', closeModals);
-  for (const back of [pickerBack, evictBack]) {
-    back.addEventListener('click', (ev) => { if (ev.target === back) closeModals(); });
+  function dismissEvict() {
+    // If the operator was mid-picker when we routed through evict view,
+    // bring the picker back instead of dropping them into nothing.
+    const intent = lastModalIntent;
+    lastModalIntent = null;
+    evictBack.classList.remove('open');
+    if (intent) {
+      openPicker();
+    } else {
+      pickerBack.classList.remove('open');
+    }
   }
+  pickerCancel.addEventListener('click', () => {
+    lastModalIntent = null;
+    closeModals();
+  });
+  evictCancel.addEventListener('click', dismissEvict);
+  pickerBack.addEventListener('click', (ev) => {
+    if (ev.target === pickerBack) {
+      lastModalIntent = null;
+      closeModals();
+    }
+  });
+  evictBack.addEventListener('click', (ev) => {
+    if (ev.target === evictBack) dismissEvict();
+  });
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') closeModals();
+    if (ev.key !== 'Escape') return;
+    if (evictBack.classList.contains('open')) {
+      dismissEvict();
+    } else {
+      lastModalIntent = null;
+      closeModals();
+    }
   });
 
   function pickerRow(item) {
@@ -493,30 +551,45 @@
     for (const w of sorted) {
       evictList.appendChild(evictRow(w, w.tmux_window_name === recName));
     }
-    evictSub.textContent = 'Limit is ' + (recommendation ? '5' : 'reached')
-      + '. Close one to free a slot — oldest highlighted.';
+    evictSub.textContent = 'Limit is ' + cap + '. Close one to free a slot — oldest highlighted.';
     pickerBack.classList.remove('open');
     evictBack.classList.add('open');
   }
 
   async function onPickerChoice(item) {
     closeModals();
+    // Dedup: if the operator already has a window for this exact entity,
+    // just switch to it instead of creating a duplicate. Blanks always
+    // create — they have no entity to dedup against.
+    if (item.kind !== 'blank' && item.linked_entity_type && item.linked_entity_id) {
+      const existing = windows.find(
+        (w) => w.linked_entity_type === item.linked_entity_type
+          && w.linked_entity_id === item.linked_entity_id,
+      );
+      if (existing) {
+        switchTo(existing.tmux_window_name);
+        return;
+      }
+    }
     const payload = {
       title: item.kind === 'blank' ? '' : item.title,
       linked_entity_type: item.linked_entity_type || '',
       linked_entity_id: item.linked_entity_id || null,
     };
+    lastModalIntent = item;
     try {
       const created = await apiCreateWindow(payload);
       windows.unshift(created);
       activeName = created.tmux_window_name;
       renderTabs();
       connect(activeName);
+      lastModalIntent = null;
     } catch (e) {
       if (e && e.code === 409) {
         openEvictView((e.body && e.body.evictee_recommendation) || null);
       } else {
         status.textContent = 'failed to create window';
+        lastModalIntent = null;
       }
     }
   }
@@ -526,18 +599,18 @@
   }
 
   // ── Paused drawer ──────────────────────────────────────────────────
-  let drawerVisible = false;
-
   function renderPausedDrawer(paused) {
     drawerList.innerHTML = '';
     drawerCount.textContent = paused.length ? '(' + paused.length + ')' : '';
     if (paused.length === 0) {
       drawer.classList.remove('open');
-      drawerVisible = false;
       return;
     }
     for (const w of paused) {
       const li = document.createElement('li');
+      li.setAttribute('role', 'button');
+      li.setAttribute('tabindex', '0');
+      li.setAttribute('aria-label', 'Resume paused window: ' + w.title);
       const t = document.createElement('span');
       t.className = 'paused-title';
       t.textContent = w.title;
@@ -546,7 +619,7 @@
       since.textContent = 'last active ' + (w.last_active_at || '—');
       li.appendChild(t);
       li.appendChild(since);
-      li.addEventListener('click', async () => {
+      const resume = async () => {
         try {
           const refreshed = await apiResumeWindow(w.id);
           // Promote into the live tab strip if not already there.
@@ -562,11 +635,17 @@
         } catch (_) {
           status.textContent = 'failed to resume window';
         }
+      };
+      li.addEventListener('click', resume);
+      li.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          resume();
+        }
       });
       drawerList.appendChild(li);
     }
     drawer.classList.add('open');
-    drawerVisible = true;
   }
 
   async function refreshPausedDrawer() {
@@ -580,8 +659,7 @@
 
   drawerToggle.addEventListener('click', () => {
     drawer.classList.toggle('open');
-    drawerVisible = drawer.classList.contains('open');
-    drawerToggle.textContent = drawerVisible ? 'hide' : 'show';
+    drawerToggle.textContent = drawer.classList.contains('open') ? 'hide' : 'show';
   });
 
   async function onCloseWindow(w) {
@@ -594,10 +672,19 @@
       await apiDeleteWindow(w.id);
       windows = windows.filter((x) => x.id !== w.id);
       if (w.tmux_window_name === activeName) {
-        activeName = windows[0] ? windows[0].tmux_window_name : null;
-        renderTabs();
-        if (activeName) connect(activeName);
-        else { term.clear(); status.textContent = 'no windows — click + New'; }
+        const fallback = windows[0] ? windows[0].tmux_window_name : null;
+        if (fallback) {
+          // Clear active first so switchTo doesn't short-circuit on equality;
+          // then route through switchTo so a paused fallback gets resumed.
+          activeName = null;
+          renderTabs();
+          await switchTo(fallback);
+        } else {
+          activeName = null;
+          renderTabs();
+          term.clear();
+          status.textContent = 'no windows — click + New';
+        }
       } else {
         renderTabs();
       }

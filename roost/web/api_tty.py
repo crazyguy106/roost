@@ -13,7 +13,8 @@ Architecture
   specific window via ``tmux attach … \\; select-window …``. Closing
   the WS detaches the tmux client — the window (and anything running
   in it) survives. The window is only destroyed by an explicit
-  ``DELETE /api/tty/windows/{id}`` or by the future 1.6d idle sweep.
+  ``DELETE /api/tty/windows/{id}`` or by the idle / memory-pressure
+  sweeper (see ``roost.services.tty_sweeper``).
 
 REST surface
 ------------
@@ -178,8 +179,8 @@ def _picker_tasks(user_id: int, limit: int) -> list[dict]:
             order_by="updated",
             limit=limit,
         )
-    except Exception:  # noqa: BLE001
-        _logger.debug("picker: tasks lookup failed", exc_info=True)
+    except (ImportError, AttributeError, RuntimeError):
+        _logger.warning("picker: tasks lookup failed", exc_info=True)
         return []
     items = []
     for t in rows:
@@ -205,8 +206,8 @@ def _picker_chatwoot(limit: int) -> list[dict]:
             return []
         from roost.extras.messaging_external.services import chatwoot
         result = chatwoot.list_open_conversations(limit=limit)
-    except Exception:  # noqa: BLE001
-        _logger.debug("picker: chatwoot lookup failed", exc_info=True)
+    except (ImportError, AttributeError, RuntimeError):
+        _logger.warning("picker: chatwoot lookup failed", exc_info=True)
         return []
     if not isinstance(result, dict) or "conversations" not in result:
         return []
@@ -284,10 +285,23 @@ async def create_window_api(request: Request):
     linked_type = (body.get("linked_entity_type") or "").strip() if isinstance(body, dict) else ""
     linked_id = body.get("linked_entity_id") if isinstance(body, dict) else None
 
-    # 1.6c — cap enforcement. At-cap returns 409 + an evictee recommendation
-    # so the UI can show the "close one to continue" view.
+    # 1.6c — cap enforcement. The check-and-insert lives behind a single
+    # BEGIN IMMEDIATE so two concurrent POSTs can't both squeak past the
+    # cap. At-cap returns 409 + an evictee recommendation so the UI can
+    # show the "close one to continue" view.
     cap = cw.DEFAULT_WINDOW_CAP
-    if cw.count_windows(user_id) >= cap:
+    try:
+        window = cw.create_window_if_under_cap(
+            user_id,
+            cap,
+            title=title,
+            linked_entity_type=linked_type,
+            linked_entity_id=linked_id,
+        )
+    except cw.ChatWindowError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if window is None:
         recommendation = cw.recommend_evictee(user_id, cap=cap)
         return JSONResponse(
             status_code=409,
@@ -297,16 +311,6 @@ async def create_window_api(request: Request):
                 "evictee_recommendation": _window_dict(recommendation) if recommendation else None,
             },
         )
-
-    try:
-        window = cw.auto_create(
-            user_id,
-            title=title,
-            linked_entity_type=linked_type,
-            linked_entity_id=linked_id,
-        )
-    except cw.ChatWindowError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
 
     return _window_dict(window)
 
@@ -324,8 +328,10 @@ async def list_paused_windows_api(request: Request):
 
 @router.post("/api/tty/windows/{window_id}/resume")
 async def resume_window_api(window_id: int, request: Request):
-    """Bring a paused window back: flip the alive bit and let the next WS
-    attach lazy-create the tmux window."""
+    """Mark intent to resume a paused window. The alive flip + tmux
+    window re-creation happen lazily when the browser opens
+    ``/ws/tty?window=<name>`` — see ``tty_ws`` below. We just validate
+    ownership and hand back the row so the UI can navigate."""
     user = _current_user(request)
     if not user or not user.get("user_id"):
         raise HTTPException(status_code=401, detail="unauthenticated")
@@ -333,8 +339,7 @@ async def resume_window_api(window_id: int, request: Request):
     window = cw.get_window(window_id)
     if not window or window.user_id != user_id:
         raise HTTPException(status_code=404, detail="window not found")
-    cw.mark_window_alive(window_id)
-    return _window_dict(cw.get_window(window_id))
+    return _window_dict(window)
 
 
 @router.delete("/api/tty/windows/{window_id}")
@@ -456,7 +461,7 @@ async def tty_ws(websocket: WebSocket) -> None:
         except OSError:
             pass
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     stop = asyncio.Event()
 
     async def pump_pty_to_ws() -> None:

@@ -13,6 +13,61 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Fixed
+- **FA Phase 1.6 — audit fixes (cap race, resume semantics, sweep
+  controls, picker dedup, UI polish, a11y).**
+  - **Cap race closed.** `POST /api/tty/windows` previously read
+    `count_windows()` then called `auto_create()` as two unrelated
+    statements — two concurrent POSTs could both observe `count == cap-1`
+    and squeak past the limit. New `chat_windows.create_window_if_under_cap`
+    wraps the count + insert in a single `BEGIN IMMEDIATE` transaction
+    so the cap is enforced atomically; at-cap path returns the existing
+    409 + evictee recommendation.
+  - **Resume endpoint is now intent-only.** `POST /api/tty/windows/{id}/
+    resume` no longer flips `tmux_window_alive`. The WS attach handler
+    already does that lazily when the browser actually connects, so
+    flipping it twice (once eagerly, once on attach) was redundant and
+    masked the "row is still paused until attach" semantics that the
+    sweeper-vs-resume race needs to observe. Endpoint now validates
+    ownership + returns the row. Test renamed to
+    `test_resume_endpoint_validates_scope_only`.
+  - **Sweeper batch limit.** `TTY_SWEEP_BATCH` (default 50) caps the
+    number of rows the idle sweep processes per tick so a transient
+    burst of stale rows can't tie up the scheduler behind tmux.
+    `list_idle_for_sweep` now orders oldest-first so the most-idle rows
+    get reaped under pressure.
+  - **TTY master flag.** New `TTY_ENABLED` (default `true`) gates the
+    scheduler tick — instances that don't expose the operator surface
+    skip the 5-minute work entirely.
+  - **Picker narrows exception nets.** `_picker_tasks` /
+    `_picker_chatwoot` previously caught bare `Exception` and logged at
+    `DEBUG`; now narrowed to `(ImportError, AttributeError, RuntimeError)`
+    and logged at `WARNING` so genuine failures don't hide.
+  - **Picker dedup.** Choosing a picker entry whose `linked_entity_*`
+    already maps to an existing window now switches to that window
+    instead of creating a duplicate (blanks always create).
+  - **Close-window fallback honours resume.** `onCloseWindow` now routes
+    the post-close fallback through `switchTo()` instead of `connect()`
+    so a paused fallback window gets resumed end-to-end.
+  - **Reconnect banner stays useful.** `suppressReconnectBanner` is now
+    cleared in the WS `open` handler — a subsequent unexpected close
+    still surfaces, only the immediate post-reconnect transient is
+    silenced.
+  - **Evict-modal dismiss restores picker.** Tracking `lastModalIntent`
+    means dismissing the at-cap evict view (cancel / Esc / backdrop)
+    brings the picker back instead of dropping the operator into nothing.
+  - **a11y.** Tab close `×`, tab body, drawer rows, and `+ New` button
+    are now keyboard-activatable (`role="button"`, `tabindex="0"`,
+    Enter/Space handlers, `aria-label`). Status badge + status line
+    get `aria-live="polite"`.
+  - **Nits.** `asyncio.get_event_loop()` → `get_running_loop()` in the
+    WS PTY pump; evict modal subtitle reads from runtime `cap` instead
+    of a hard-coded `5`; stale 1.6d docstring updated; dead
+    `drawerVisible` flag removed; `ChatWindow.from_row` no longer
+    guards against pre-migration columns (the additive migration runs
+    at boot). Suite at 811 green (was 808, +3 new atomic-cap + batch
+    tests).
+
 ### Added
 - **FA-edition Phase 1.6d — idle sweep, memory pressure, resume drawer.**
   Two new `chat_windows` columns via additive ALTER (idempotent):

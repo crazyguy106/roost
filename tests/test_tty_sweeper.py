@@ -70,6 +70,35 @@ def test_idle_sweep_skips_already_dead_rows():
     assert killed == []
 
 
+def test_idle_sweep_respects_batch_limit():
+    """When ``batch_limit`` is set, the sweeper only processes that many
+    rows per tick. Picks the oldest first so the most-idle conversations
+    get reaped before fresher ones."""
+    rows = []
+    for i in range(5):
+        w = cw.auto_create(1, title=f"W{i}")
+        rows.append(w)
+    # Stagger idle times so we can verify ordering.
+    _make_idle(rows[0].id, minutes_ago=600)  # oldest
+    _make_idle(rows[1].id, minutes_ago=550)
+    _make_idle(rows[2].id, minutes_ago=500)
+    _make_idle(rows[3].id, minutes_ago=450)
+    _make_idle(rows[4].id, minutes_ago=400)  # newest of the idle set
+
+    killed = []
+    swept = tty_sweeper.sweep_idle(
+        idle_minutes=360,
+        batch_limit=2,
+        kill_tmux=lambda u, n: killed.append(n),
+    )
+    assert swept == 2
+    # Oldest two rows go first.
+    assert killed == [rows[0].tmux_window_name, rows[1].tmux_window_name]
+    # The remaining three are still alive after the batched tick.
+    for r in rows[2:]:
+        assert cw.get_window(r.id).tmux_window_alive == 1
+
+
 def test_idle_sweep_continues_on_killer_error():
     """A single tmux failure must not skip the rest of the rows."""
     a = cw.auto_create(1, title="A")
