@@ -244,6 +244,42 @@ def list_runs(
         conn.close()
 
 
+def get_run(run_id: int) -> dict | None:
+    """Return one automation run by id, or None if missing."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM automation_runs WHERE id = ?", (run_id,),
+        ).fetchone()
+        return _run_to_dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def apply_run_draft_edit(run_id: int, new_draft: str) -> dict:
+    """Replace `draft_output` on an awaiting-approval run.
+
+    Used by the FA-edition Edit button — the operator force-replies with the
+    revised text, we stash it, and the subsequent Approve tap sends the
+    edited version (because `approve_run` reads `draft_output`).
+
+    Refuses if the run is missing or not awaiting approval.
+    """
+    run = get_run(run_id)
+    if not run:
+        return {"ok": False, "error": f"run {run_id} not found"}
+    if run.get("status") != "awaiting_approval":
+        return {
+            "ok": False,
+            "error": (
+                f"run {run_id} is not awaiting approval "
+                f"(status={run.get('status')})"
+            ),
+        }
+    update_run(run_id, draft_output=new_draft)
+    return {"ok": True, "run_id": run_id, "draft_len": len(new_draft)}
+
+
 # ── Recipe Execution ────────────────────────────────────────────────
 
 

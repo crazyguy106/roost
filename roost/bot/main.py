@@ -60,7 +60,7 @@ from roost.bot.handlers import (
     handle_link_message,
     # Recipes, Templates, Scheduling & Rollback
     cmd_recipe, cmd_schedule, cmd_rollback, cmd_template, cmd_sequence,
-    cmd_approve, cmd_skip_run,
+    cmd_approve, cmd_skip_run, handle_recipe_edit_reply,
     # Nurture approval
     cmd_napprove, cmd_nskip, cmd_nlist, cmd_preapprove,
     handle_nurture_callback, handle_nurture_edit_reply,
@@ -251,6 +251,15 @@ def main():
     # Email triage message handler (group -1: intercepts replies/AI prompts)
     from roost.bot.handlers.email_triage import handle_triage_message
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_triage_message), group=-1)
+
+    # Recipe edit-reply capture (group -1: intercepts force-reply text after
+    # the operator tapped ✏️ Edit on a recipe hold notification, before the
+    # agent catch-all reads it). Returns False if no edit is in progress so
+    # other group -1 handlers still run.
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_recipe_edit_reply),
+        group=-1,
+    )
 
     # RPA input handler (group -1: intercepts plain messages for awaiting_input runs)
     from roost.config import RPA_ENABLED

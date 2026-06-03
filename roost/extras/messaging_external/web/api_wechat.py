@@ -236,8 +236,13 @@ async def _notify_telegram(msg: dict, result: dict) -> None:
         if draft:
             lines.append(f"\nDraft reply:\n{draft[:500]}")
 
+        reply_markup: dict | None = None
         if status == "awaiting_approval" and run_id:
-            lines.append(f"\n/approve {run_id} to send | /skiprun {run_id} to discard")
+            reply_markup = {"inline_keyboard": [[
+                {"text": "✅ Approve", "callback_data": f"recipe:approve:{run_id}"},
+                {"text": "✏️ Edit", "callback_data": f"recipe:edit:{run_id}"},
+                {"text": "⏭ Skip", "callback_data": f"recipe:skip:{run_id}"},
+            ]]}
 
         message = "\n".join(lines)
 
@@ -245,10 +250,10 @@ async def _notify_telegram(msg: dict, result: dict) -> None:
         async with httpx.AsyncClient(timeout=10) as client:
             for user_id in TELEGRAM_ALLOWED_USERS:
                 try:
-                    await client.post(url, json={
-                        "chat_id": user_id,
-                        "text": message,
-                    })
+                    payload: dict = {"chat_id": user_id, "text": message}
+                    if reply_markup is not None:
+                        payload["reply_markup"] = reply_markup
+                    await client.post(url, json=payload)
                 except Exception:
                     _logger.debug("Failed to notify Telegram user %s", user_id)
 

@@ -14,6 +14,23 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1B — Edit button on recipe drafts (WhatsApp /
+  Chatwoot / WeChat).** Inbound messages that land in `awaiting_approval`
+  now post a Telegram notification with inline ✅ Approve / ✏️ Edit /
+  ⏭ Skip buttons (previously a text hint only: `/approve_<id>` /
+  `/skip_<id>`). Tapping ✏️ Edit sends a `ForceReply` prompt seeded with
+  the current `draft_output`; the operator's reply is captured by a new
+  `handle_recipe_edit_reply` MessageHandler (registered at `group=-1`),
+  persisted via new `recipes.apply_run_draft_edit(run_id, new_draft)`
+  (writes `draft_output`), and the Approve/Edit/Skip keyboard is
+  re-shown for one-tap send. `approve_run` is unchanged — it already
+  reads `draft_output`, so the edited text flows through naturally.
+  New helper `recipes.get_run(run_id)` returns one run by id.
+  Approve / Edit-prompt / Edit-apply / Skip taps all write to the audit
+  log via `roost.services.activity.log_action`. Inline-button surface
+  added to all three `_notify_telegram` functions in
+  `roost/extras/messaging_external/web/api_{whatsapp,chatwoot,wechat}.py`.
+  Suite at 749 green (was 737, +12).
 - **FA-edition Phase 1A — Edit button on cadence drafts.** Held nurture
   steps now ship with a third inline keyboard button (✏️ Edit) alongside
   ✅ Approve / ⏭ Skip. Tapping Edit sends a force-reply prompt seeded with

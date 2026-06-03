@@ -111,6 +111,7 @@ from roost.bot.handlers.skill_builder import cmd_skill
 from roost.bot.handlers.recipes import (
     cmd_recipe, cmd_schedule, cmd_rollback, cmd_template, cmd_sequence,
     cmd_approve, cmd_skip_run,
+    handle_recipe_edit_reply,
 )
 
 # Nurture approval
@@ -180,6 +181,7 @@ __all__ = [
     # Recipes & Templates
     "cmd_recipe", "cmd_schedule", "cmd_rollback", "cmd_template", "cmd_sequence",
     "cmd_approve", "cmd_skip_run",
+    "handle_recipe_edit_reply",
     # Nurture approval
     "cmd_napprove", "cmd_nskip", "cmd_nlist", "cmd_preapprove",
     "handle_nurture_callback", "handle_nurture_edit_reply",

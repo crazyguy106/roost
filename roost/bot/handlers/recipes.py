@@ -12,13 +12,17 @@ Commands:
 
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import ForceReply, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from roost.bot.security import authorized
 from roost.bot.handlers.common import escape_md
+from roost.services import activity
 
 logger = logging.getLogger(__name__)
+
+
+_RECIPE_EDIT_KEY = "redit_run_id"
 
 
 @authorized
@@ -418,23 +422,94 @@ async def handle_recipe_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     if action == "approve" and recipe_id:
+        # recipe_id is actually run_id here.
         from roost.services.recipes import approve_run
-        result = approve_run(recipe_id)  # recipe_id is actually run_id here
+        run_id = recipe_id
+        result = approve_run(run_id)
+        _from_user = getattr(query, "from_user", None)
+        actor_ref = f"tg:{_from_user.id}" if _from_user else ""
+        activity.log_action(
+            "telegram",
+            "recipe.approve",
+            entity_type="automation_run",
+            entity_id=run_id,
+            ok="error" not in result,
+            result=result,
+            snippet=f"Approved recipe run #{run_id} via Telegram",
+            actor_ref=actor_ref,
+        )
         if "error" in result:
             await query.answer(result["error"])
         else:
             await query.answer("Approved!")
-            await query.edit_message_text(f"Run #{recipe_id} approved and completed.")
+            await query.edit_message_text(f"Run #{run_id} approved and completed.")
+        return
+
+    if action == "edit" and recipe_id:
+        from roost.services.recipes import get_run
+        run_id = recipe_id
+        run = get_run(run_id)
+        if not run:
+            await query.answer("Run not found", show_alert=True)
+            return
+        if run.get("status") != "awaiting_approval":
+            await query.answer(
+                f"Not awaiting approval (status={run.get('status')})",
+                show_alert=True,
+            )
+            return
+        chat_data = getattr(context, "chat_data", None)
+        if chat_data is None:
+            chat_data = {}
+        chat_data[_RECIPE_EDIT_KEY] = run_id
+
+        current_draft = run.get("draft_output") or ""
+        prompt = (
+            f"✏️ Edit recipe run #{run_id}\n\n"
+            "Reply to this message with the revised draft."
+        )
+        if current_draft:
+            prompt += f"\n\nCurrent draft:\n{current_draft[:1000]}"
+        await query.answer("Reply with the edited draft")
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=prompt,
+            reply_markup=ForceReply(selective=True),
+        )
+        _from_user = getattr(query, "from_user", None)
+        actor_ref = f"tg:{_from_user.id}" if _from_user else ""
+        activity.log_action(
+            "telegram",
+            "recipe.edit_prompt",
+            entity_type="automation_run",
+            entity_id=run_id,
+            ok=True,
+            snippet=f"Edit prompt sent for run #{run_id}",
+            actor_ref=actor_ref,
+        )
         return
 
     if action == "skip" and recipe_id:
         from roost.services.recipes import skip_run
-        result = skip_run(recipe_id)  # recipe_id is actually run_id here
+        run_id = recipe_id
+        result = skip_run(run_id)
+        _from_user = getattr(query, "from_user", None)
+        actor_ref = f"tg:{_from_user.id}" if _from_user else ""
+        activity.log_action(
+            "telegram",
+            "recipe.skip",
+            entity_type="automation_run",
+            entity_id=run_id,
+            ok="error" not in result,
+            result=result,
+            snippet=f"Skipped recipe run #{run_id} via Telegram",
+            actor_ref=actor_ref,
+        )
         if "error" in result:
             await query.answer(result["error"])
         else:
             await query.answer("Skipped.")
-            await query.edit_message_text(f"Run #{recipe_id} skipped.")
+            await query.edit_message_text(f"Run #{run_id} skipped.")
         return
 
     if action == "delete" and recipe_id:
@@ -448,3 +523,67 @@ async def handle_recipe_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     await query.answer("Unknown recipe action.")
+
+
+# ── Force-reply capture for the recipe edit flow ──────────────────────
+
+
+async def handle_recipe_edit_reply(
+    update: Update, context: ContextTypes.DEFAULT_TYPE,
+) -> bool:
+    """Capture the operator's reply to a recipe edit prompt.
+
+    Fires only when `chat_data[_RECIPE_EDIT_KEY]` is set (operator tapped
+    ✏️ Edit on a recipe hold notification). Returns True if it consumed
+    the message so the agent catch-all doesn't also handle it.
+    """
+    chat_data = getattr(context, "chat_data", None) or {}
+    run_id = chat_data.get(_RECIPE_EDIT_KEY)
+    if not run_id:
+        return False
+    msg = getattr(update, "message", None)
+    if msg is None or not getattr(msg, "text", None):
+        return False
+
+    new_draft = msg.text.strip()
+    if not new_draft:
+        await msg.reply_text("Empty edit — keeping previous draft.")
+        chat_data.pop(_RECIPE_EDIT_KEY, None)
+        return True
+
+    from roost.services.recipes import apply_run_draft_edit
+    result = apply_run_draft_edit(int(run_id), new_draft)
+    _from_user = getattr(msg, "from_user", None)
+    actor_ref = f"tg:{_from_user.id}" if _from_user else ""
+    activity.log_action(
+        "telegram",
+        "recipe.edit_apply",
+        entity_type="automation_run",
+        entity_id=int(run_id),
+        ok=bool(result.get("ok")),
+        result={"draft_len": len(new_draft)},
+        snippet=f"Edited draft for run #{run_id} ({len(new_draft)} chars)",
+        actor_ref=actor_ref,
+    )
+    chat_data.pop(_RECIPE_EDIT_KEY, None)
+
+    if not result.get("ok"):
+        await msg.reply_text(
+            f"Edit run #{run_id} failed: {result.get('error', 'unknown')}"
+        )
+        return True
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Approve", callback_data=f"recipe:approve:{run_id}"),
+        InlineKeyboardButton("✏️ Edit", callback_data=f"recipe:edit:{run_id}"),
+        InlineKeyboardButton("⏭ Skip", callback_data=f"recipe:skip:{run_id}"),
+    ]])
+    await context.bot.send_message(
+        chat_id=msg.chat_id,
+        text=(
+            f"✏️ Draft updated for run #{run_id} "
+            f"({len(new_draft)} chars). Approve to send."
+        ),
+        reply_markup=keyboard,
+    )
+    return True
