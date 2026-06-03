@@ -1,5 +1,8 @@
 # Roost
 
+[![tests](https://github.com/crazyguy106/roost/actions/workflows/test.yml/badge.svg)](https://github.com/crazyguy106/roost/actions/workflows/test.yml)
+[![mcp-inventory](https://github.com/crazyguy106/roost/actions/workflows/mcp-inventory.yml/badge.svg)](https://github.com/crazyguy106/roost/actions/workflows/mcp-inventory.yml)
+
 **Build your AI nest.** A self-hosted productivity platform that gives your AI agent persistent memory, tools, and integrations — all running safely inside Docker.
 
 ## What Roost Does
@@ -203,6 +206,7 @@ See `docs/` for detailed guides:
 - [Neurodivergent Features](docs/neurodivergent-features.md)
 - [RPA / Browser Automation](docs/rpa.md) — data-driven flows, OTP pause/resume, Singpass-assisted via `await_user_session`
 - [WhatsApp Adapter](docs/whatsapp-adapter.md) — Meta Cloud API integration; STOP/HELP + `mark_inbound` parity for lead-nurture
+- [Messaging Adapters](docs/messaging-adapters.md) — Discord / Slack / Signal / Matrix standalone-process bots over the shared agent base
 - [Chatwoot Adapter](docs/chatwoot.md) — self-hosted helpdesk front-end (FA edition); HMAC-signed inbound webhooks + REST outbound, only `message_created`/`incoming` drives the pipeline
 - [Telegram Customer Channel](docs/telegram-customer-channel.md) — same bot serves operators (allowlisted) and customer DMs (STOP/HELP, qualification, lead-capture, nurture)
 - [Property-Agent Toolkit](docs/property-agent-toolkit.md) — Singapore IRAS / PDPC / CEA compliance tools

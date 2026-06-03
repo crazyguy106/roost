@@ -397,9 +397,8 @@ CLOUDFLARE_API_TOKEN_SECONDARY: str = os.getenv("CLOUDFLARE_API_TOKEN_SECONDARY"
 CLOUDFLARE_ENABLED: bool = bool(CLOUDFLARE_API_TOKEN)
 
 # SME Ops vertical bundle — ERP/integration toolkit for small/medium businesses.
-# The bundle ships with a universal Zapier ingress so users can wire in any of
-# Zapier's 6,000+ apps before native adapters land. Per-app adapter flags
-# (XERO_ENABLED, SHOPIFY_ENABLED, etc.) will be added in Phase 1+.
+# Ships a universal Zapier ingress (6,000+ apps via webhooks) plus native
+# adapters for Stripe, Shopify, and Xero. Native adapter flags are below.
 SME_OPS_ENABLED: bool = os.getenv("SME_OPS_ENABLED", "false").lower() == "true"
 ZAPIER_ENABLED: bool = os.getenv("ZAPIER_ENABLED", "false").lower() == "true"
 ZAPIER_INGRESS_TOKEN: str = os.getenv("ZAPIER_INGRESS_TOKEN", "")

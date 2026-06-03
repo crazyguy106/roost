@@ -178,7 +178,7 @@ class LocalProvider(CrmProvider):
 
     def log_communication(self, *, person_id: str, channel: str, direction: str,
                           content: str, occurred_at=None, subject=None):
-        c = comms_svc.create_communication(CommunicationCreate(
+        c = comms_svc.log_communication(CommunicationCreate(
             contact_id=int(person_id),
             comm_type=f"{channel}_{direction}",
             subject=subject or "",

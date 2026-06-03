@@ -13,6 +13,60 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-06-03
+
+### Added
+- **CI** — `.github/workflows/test.yml` runs `pytest -q` on push/PR to
+  `main` (Python 3.12, ubuntu-latest). `.github/workflows/mcp-inventory.yml`
+  regenerates `docs/mcp-inventory.md` from the source `@mcp.tool()`
+  decorators and fails on drift. Status badges in `README.md`.
+- **CRM tests.** `tests/test_crm_local.py` (23 tests) exercises the
+  `LocalProvider` end-to-end against the real SQLite — Person CRUD,
+  org lookup, deal stubs, notes, comms logging, custom fields.
+  `tests/test_crm_contract.py` (12 tests) asserts every provider
+  (local / attio / hubspot / zoho / salesforce / pipedrive) subclasses
+  `CrmProvider`, instantiates (catches missing `@abstractmethod`s),
+  sets `name`, and returns `{ok: bool, detail: str}` from
+  `test_connection()` instead of leaking vendor exceptions. Suite is
+  now 846 tests.
+- **Messaging-adapters doc.** `docs/messaging-adapters.md` documents
+  the four standalone-process adapters (Discord / Slack / Signal /
+  Matrix) — env vars, pip deps, start commands, auth model,
+  deployment notes, and the shared base in `roost/adapters/__init__.py`.
+  Linked from `CLAUDE.md` and `README.md`.
+- **Architecture-audit ledger.** `docs/architecture-audit.md` — a
+  living findings log with ID / status / severity / evidence / next
+  step. Initial pass: 11 findings, 9 resolved this release.
+
+### Fixed
+- **`LocalProvider.log_communication` AttributeError.** Called the
+  non-existent `comms_svc.create_communication`; the real name is
+  `log_communication`. Surfaced by the new CRM contract test, fixed
+  in `roost/extras/crm/services/local.py`.
+- **`docs/mcp-inventory.md` drift.** Doc was at 330 tools, source had
+  333. Regenerated; the new CI workflow prevents future drift.
+- **CRM bundle missing from `CLAUDE.md` "Doc" column.** Pointed at
+  `docs/crm-adapters.md`.
+- **Stale "Phase 1+" comment in `roost/config.py`** — the SME Ops
+  section header still promised future adapters that already shipped.
+  Rewritten to reflect current state.
+- **`env-templates/demo.env` doesn't pin SME sub-flags.** Added an
+  explicit SME Ops block (`SME_OPS_ENABLED` / `ZAPIER_ENABLED` /
+  `STRIPE_ENABLED` / `SHOPIFY_ENABLED` / `XERO_ENABLED` + matching
+  `CHANGE_ME` credentials) so the demo state is reproducible.
+- **`docker-compose.override.yml` convention break self-documented.**
+  Added a 7-line header comment pointing at `docs/container-ssh-access.md`
+  and the CLAUDE.md "SSH-into-Claude shortcut" section so contributors
+  don't trip on the in-tree override file.
+
+### Removed
+- **Dead `roost/bot/adapters/` stub package.** `dingtalk.py` and
+  `feishu.py` had been `Status: STUB — not yet implemented` since
+  2026-04-12 (no config, no env, no tests, no docs, no imports).
+  Deleted. Re-implement as `roost/adapters/<name>_bot.py` following
+  the Discord/Slack pattern when demand exists. See
+  `docs/messaging-adapters.md`.
+
 ## [0.3.0] — 2026-06-03
 
 ### Fixed

@@ -1,3 +1,11 @@
+# ─────────────────────────────────────────────────────────────────────
+# This file is tracked on purpose — it's the SSH-into-Claude shortcut.
+# Compose convention is that overrides are per-machine and gitignored;
+# Roost checks this one in because the AUDIT_WRITE cap + bind-mounts
+# below are needed for the sshd-in-container workflow to survive a
+# recreate. See docs/container-ssh-access.md and CLAUDE.md §
+# "SSH-into-Claude shortcut" for the why.
+# ─────────────────────────────────────────────────────────────────────
 services:
   roost:
     ports: !override
