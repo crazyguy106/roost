@@ -145,9 +145,12 @@ def get_productivity_summary(days: int = 7) -> dict:
         "SELECT COUNT(*) as cnt FROM tasks WHERE status = 'blocked'"
     ).fetchone()["cnt"]
 
-    # Activity log count
+    # Activity log count — task-coupled rows only.
+    # Fast-path / system writes (task_id IS NULL) are excluded so they don't
+    # inflate productivity stats.
     activity_count = conn.execute(
-        "SELECT COUNT(*) as cnt FROM activity_log WHERE created_at >= ?",
+        "SELECT COUNT(*) as cnt FROM activity_log "
+        "WHERE created_at >= ? AND task_id IS NOT NULL",
         (cutoff,),
     ).fetchone()["cnt"]
 

@@ -13,6 +13,31 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Added
+- **`audit_log` foundation — system-of-record for fast-path actions.** New
+  service module `roost.services.activity` exposes a fire-and-forget
+  `log_action(actor, action, entity_type=, entity_id=, ok=, result=,
+  snippet=, actor_ref=)` writer plus `recent(limit, system_only=)` and
+  `for_entity(entity_type, entity_id)` readers. Sits on top of the existing
+  `activity_log` table — three new columns (`actor`, `ok`, `result_json`)
+  added via idempotent migration. Task-coupled writers in
+  `roost.services.tasks` keep their existing semantics; system writes leave
+  `task_id` NULL. Two new MCP tools `audit_recent` / `audit_for_entity`
+  (in a separate module from `tools_activity.py` so agents don't confuse
+  the task-trail vs the system-trail). Productivity-stats counter in
+  `stats_service.get_productivity_summary` updated to filter
+  `task_id IS NOT NULL` so fast-path writes don't inflate the metric.
+  First writers will be the FA-edition Telegram inline approval buttons
+  (cadence drafts, guardian drafts, recipe drafts). Suite at 726 green
+  (was 715, +11).
+- **Schema-migration bug fix as a side effect.** The pre-existing Phase 12
+  columns on `activity_log` (`tool_name`, `artifact_type`, `artifact_ref`)
+  were declared in `_migrate_db`, which runs BEFORE `SCHEMA_V10` creates
+  the table — on fresh databases the ALTERs silently no-op'd. Moved both
+  the old and new column migrations into a dedicated
+  `_migrate_activity_log_columns()` called after `SCHEMA_V10`. Idempotent
+  on existing DBs; fresh DBs now get the full schema.
+
 ## [0.2.0] — 2026-06-02
 
 The **FA (Financial Adviser) edition** release. Roost now ships as a turnkey

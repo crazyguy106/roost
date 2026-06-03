@@ -967,10 +967,10 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
         ("tasks", "focus_date", "TEXT"),
         ("tasks", "effort_estimate", "TEXT DEFAULT 'moderate'"),
         ("tasks", "someday", "INTEGER DEFAULT 0"),
-        # Phase 12: Task-linked activity tracking
-        ("activity_log", "tool_name", "TEXT DEFAULT ''"),
-        ("activity_log", "artifact_type", "TEXT DEFAULT ''"),
-        ("activity_log", "artifact_ref", "TEXT DEFAULT ''"),
+        # NOTE: activity_log column ALTERs live in
+        # _migrate_activity_log_columns() because activity_log is created
+        # in SCHEMA_V10, which runs AFTER _migrate_db. Adding them here
+        # would silently no-op on fresh DBs (table doesn't exist yet).
     ]
     for table, column, col_def in migrations:
         try:
@@ -993,6 +993,37 @@ def _migrate_v2_tables(conn: sqlite3.Connection) -> None:
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
             logger.info("Migration (V2 tables): added %s.%s", table, column)
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+
+def _migrate_activity_log_columns(conn: sqlite3.Connection) -> None:
+    """Migrations for the activity_log table.
+
+    Must run AFTER SCHEMA_V10 has created activity_log. Includes both the
+    original Phase 12 task-linked columns (tool_name, artifact_type,
+    artifact_ref) and the FA-edition system-of-record columns (actor,
+    ok, result_json). Both sets used to live in _migrate_db, but that
+    function runs BEFORE SCHEMA_V10, so ALTERs would silently fail on
+    fresh databases (table not yet created).
+    """
+    migrations = [
+        # Phase 12: Task-linked activity tracking
+        ("activity_log", "tool_name", "TEXT DEFAULT ''"),
+        ("activity_log", "artifact_type", "TEXT DEFAULT ''"),
+        ("activity_log", "artifact_ref", "TEXT DEFAULT ''"),
+        # FA-edition: system-of-record fast-path columns
+        # actor: telegram | web | cli | scheduler | system (back-fills '')
+        # ok: 1 success / 0 failure (back-fills 1)
+        # result_json: optional structured result body
+        ("activity_log", "actor", "TEXT DEFAULT ''"),
+        ("activity_log", "ok", "INTEGER DEFAULT 1"),
+        ("activity_log", "result_json", "TEXT DEFAULT ''"),
+    ]
+    for table, column, col_def in migrations:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+            logger.info("Migration (activity_log): added %s.%s", table, column)
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -1313,6 +1344,7 @@ def init_db() -> None:
     _migrate_v8_data(conn)
     conn.executescript(SCHEMA_V9)
     conn.executescript(SCHEMA_V10)
+    _migrate_activity_log_columns(conn)
     conn.executescript(SCHEMA_V11)
     conn.executescript(SCHEMA_V12)
     conn.executescript(SCHEMA_V13)

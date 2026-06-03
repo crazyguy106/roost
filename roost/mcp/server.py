@@ -34,6 +34,7 @@ mcp = FastMCP(
 from roost.mcp import tools_tasks              # noqa: E402, F401
 from roost.mcp import tools_tasks_extended     # noqa: E402, F401
 from roost.mcp import tools_activity           # noqa: E402, F401
+from roost.mcp import tools_audit              # noqa: E402, F401
 from roost.mcp import tools_wellbeing          # noqa: E402, F401
 from roost.mcp import tools_contacts           # noqa: E402, F401
 from roost.mcp import tools_comms              # noqa: E402, F401
