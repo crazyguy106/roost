@@ -27,6 +27,7 @@ needs a recommendation when forced to evict.
 from __future__ import annotations
 
 import logging
+import secrets
 import sqlite3
 from dataclasses import dataclass
 from typing import Optional
@@ -36,6 +37,12 @@ from roost.database import db_connection
 logger = logging.getLogger(__name__)
 
 DEFAULT_WINDOW_CAP = 5
+
+# Random suffix length for auto-generated tmux window names. 6 hex chars
+# = 16M combinations, collision-free in practice for the small per-user
+# row counts we expect.
+_AUTO_NAME_RETRIES = 5
+_AUTO_NAME_BYTES = 3
 
 
 # ── Data classes ─────────────────────────────────────────────────────
@@ -164,6 +171,40 @@ def create_window(
     window = get_window(int(new_id))
     assert window is not None
     return window
+
+
+def auto_create(
+    user_id: int,
+    *,
+    title: str,
+    linked_entity_type: str = "",
+    linked_entity_id: Optional[int] = None,
+    last_topic: str = "",
+) -> ChatWindow:
+    """Create a window with a random unique ``tmux_window_name``.
+
+    Used by the web API so callers don't have to invent names. Retries
+    a few times if a random collision happens (overwhelmingly unlikely
+    for the row counts we expect).
+    """
+    last_exc: Optional[Exception] = None
+    for _ in range(_AUTO_NAME_RETRIES):
+        name = "w-" + secrets.token_hex(_AUTO_NAME_BYTES)
+        try:
+            return create_window(
+                user_id,
+                tmux_window_name=name,
+                title=title,
+                linked_entity_type=linked_entity_type,
+                linked_entity_id=linked_entity_id,
+                last_topic=last_topic,
+            )
+        except ChatWindowError as exc:
+            last_exc = exc
+            continue
+    raise ChatWindowError(
+        "could not generate a unique window name after retries"
+    ) from last_exc
 
 
 def touch_active(window_id: int) -> None:

@@ -14,6 +14,30 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1.6b — multi-window web tty (tabs).** `/tty` now
+  renders a tab strip backed by `chat_windows`. New REST surface
+  (`roost/web/api_tty.py`):
+  `GET /api/tty/windows` (newest-active-first, includes `cap`),
+  `POST /api/tty/windows` (empty title → backend-assigned `Untitled N`,
+  optional `linked_entity_type`/`linked_entity_id`),
+  `DELETE /api/tty/windows/{id}` (scoped to the caller; 404 for other
+  users' rows). The WS handler accepts `?window=<tmux_window_name>`,
+  validates against `^[A-Za-z0-9_\-]{1,64}$` and the caller's
+  `chat_windows` rows, lazy-creates the tmux window inside the per-user
+  session, and bridges the PTY with
+  `tmux attach-session -t <s> \; select-window -t <s>:<name>`
+  (the `;` is its own argv element — tmux command separator, not shell).
+  No-`?window`: pick the most-recently-active row or auto-create
+  `"main"`. Service helper `chat_windows.auto_create(user_id, title=…)`
+  picks a unique `w-<6hex>` name with retries. UI: tabs with
+  hover-reveal `×` (one-click confirm — "anything running inside is
+  lost"), `+ New` button (creates blank window + switches to it),
+  browser-tab close still detaches without killing. Cap is reported but
+  not yet enforced — Phase 1.6c adds the picker + 409 with evictee
+  recommendation. 14 tests in `tests/test_web_tty.py` (was 3) covering
+  REST CRUD, user-scope isolation on list+delete, default title,
+  `auto_create` uniqueness, and WS rejection of unsafe window names.
+  Suite at 792 green (was 781, +11 net).
 - **FA-edition Phase 1.6a — `chat_windows` data model.** New core SQLite
   table (`SCHEMA_V31`) + service `roost.services.chat_windows` that maps
   tmux windows inside the per-user `roost-<user_id>` session to leads /
