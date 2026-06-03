@@ -30,6 +30,60 @@
     cursor: pointer; font-size: 13px; color: inherit;
   }
   #tty-new:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.4); }
+
+  /* Picker / at-cap modal */
+  .tty-modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .tty-modal-back.open { display: flex; }
+  .tty-modal {
+    background: var(--fallback-b1, #15191e); color: inherit;
+    border: 1px solid var(--fallback-b3, #2a313a);
+    border-radius: 8px; width: min(560px, 92vw);
+    max-height: 80vh; overflow: auto;
+    padding: 18px 18px 12px;
+    font-size: 14px;
+  }
+  .tty-modal h3 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .tty-modal .tty-modal-sub { opacity: 0.6; font-size: 13px; margin-bottom: 12px; }
+  .tty-picker-row, .tty-evict-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .tty-picker-row:hover, .tty-evict-row:hover {
+    background: var(--fallback-b2, #1f242b);
+    border-color: var(--fallback-b3, #2a313a);
+  }
+  .tty-picker-row.blank { border-top: 1px dashed rgba(255,255,255,0.12); margin-top: 6px; padding-top: 12px; }
+  .tty-row-kind {
+    font-size: 11px; padding: 2px 6px; border-radius: 4px;
+    background: rgba(255,255,255,0.08); text-transform: uppercase;
+    letter-spacing: 0.04em; opacity: 0.75; min-width: 64px; text-align: center;
+  }
+  .tty-row-body { flex: 1; min-width: 0; }
+  .tty-row-title { font-weight: 500; }
+  .tty-row-hint { opacity: 0.55; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tty-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .tty-modal-actions button {
+    padding: 4px 10px; border-radius: 6px; cursor: pointer;
+    background: transparent; color: inherit;
+    border: 1px solid var(--fallback-b3, #2a313a);
+    font-size: 13px;
+  }
+  .tty-modal-actions button:hover { background: var(--fallback-b2, #1f242b); }
+  .tty-evict-row.recommended {
+    border-color: rgba(255, 180, 80, 0.45);
+    background: rgba(255, 180, 80, 0.06);
+  }
+  .tty-evict-row .tty-evict-close {
+    padding: 3px 9px; border-radius: 4px;
+    background: rgba(255,80,80,0.12); color: #ff8080;
+    font-size: 12px; border: 1px solid rgba(255,80,80,0.25);
+  }
+  .tty-evict-row .tty-evict-close:hover { background: rgba(255,80,80,0.2); }
 </style>
 
 <div class="flex items-center justify-between mb-3">
@@ -48,6 +102,30 @@
 </div>
 
 <div id="tty-host"></div>
+
+<!-- Picker modal: shown when "+ New" is clicked -->
+<div id="tty-picker-back" class="tty-modal-back" role="dialog" aria-modal="true">
+  <div class="tty-modal">
+    <h3>Open a window</h3>
+    <div class="tty-modal-sub">Pick something to pre-attach, or start blank.</div>
+    <div id="tty-picker-list"><!-- rows injected --></div>
+    <div class="tty-modal-actions">
+      <button type="button" id="tty-picker-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- At-cap modal: shown when POST /windows returns 409 -->
+<div id="tty-evict-back" class="tty-modal-back" role="dialog" aria-modal="true">
+  <div class="tty-modal">
+    <h3>You're at the window limit</h3>
+    <div class="tty-modal-sub" id="tty-evict-sub">Close one to open a new window.</div>
+    <div id="tty-evict-list"><!-- rows injected --></div>
+    <div class="tty-modal-actions">
+      <button type="button" id="tty-evict-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
@@ -122,13 +200,20 @@
     return body.windows || [];
   }
 
-  async function apiCreateWindow(title) {
+  async function apiCreateWindow(payload) {
+    // payload: {title, linked_entity_type?, linked_entity_id?}
     const res = await fetch('/api/tty/windows', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title || '' }),
+      body: JSON.stringify(payload || { title: '' }),
     });
+    if (res.status === 409) {
+      const err = new Error('at_cap');
+      err.code = 409;
+      err.body = await res.json().catch(() => ({}));
+      throw err;
+    }
     if (!res.ok) throw new Error('create failed: ' + res.status);
     return await res.json();
   }
@@ -139,6 +224,12 @@
       credentials: 'same-origin',
     });
     if (!res.ok) throw new Error('delete failed: ' + res.status);
+  }
+
+  async function apiPicker() {
+    const res = await fetch('/api/tty/picker', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('picker failed: ' + res.status);
+    return await res.json();
   }
 
   // ── WebSocket connection ───────────────────────────────────────────
@@ -193,16 +284,150 @@
     connect(windowName);
   }
 
-  async function onNewWindow() {
+  // ── Picker modal ───────────────────────────────────────────────────
+  const pickerBack = document.getElementById('tty-picker-back');
+  const pickerList = document.getElementById('tty-picker-list');
+  const pickerCancel = document.getElementById('tty-picker-cancel');
+  const evictBack = document.getElementById('tty-evict-back');
+  const evictList = document.getElementById('tty-evict-list');
+  const evictSub = document.getElementById('tty-evict-sub');
+  const evictCancel = document.getElementById('tty-evict-cancel');
+
+  function closeModals() {
+    pickerBack.classList.remove('open');
+    evictBack.classList.remove('open');
+  }
+  pickerCancel.addEventListener('click', closeModals);
+  evictCancel.addEventListener('click', closeModals);
+  for (const back of [pickerBack, evictBack]) {
+    back.addEventListener('click', (ev) => { if (ev.target === back) closeModals(); });
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') closeModals();
+  });
+
+  function pickerRow(item) {
+    const row = document.createElement('div');
+    row.className = 'tty-picker-row' + (item.kind === 'blank' ? ' blank' : '');
+    const kind = document.createElement('div');
+    kind.className = 'tty-row-kind';
+    kind.textContent = item.kind;
+    const body = document.createElement('div');
+    body.className = 'tty-row-body';
+    const title = document.createElement('div');
+    title.className = 'tty-row-title';
+    title.textContent = item.title;
+    const hint = document.createElement('div');
+    hint.className = 'tty-row-hint';
+    hint.textContent = item.hint || '';
+    body.appendChild(title);
+    if (item.hint) body.appendChild(hint);
+    row.appendChild(kind);
+    row.appendChild(body);
+    row.addEventListener('click', () => onPickerChoice(item));
+    return row;
+  }
+
+  function evictRow(w, isRecommended) {
+    const row = document.createElement('div');
+    row.className = 'tty-evict-row' + (isRecommended ? ' recommended' : '');
+    const kind = document.createElement('div');
+    kind.className = 'tty-row-kind';
+    kind.textContent = isRecommended ? 'oldest' : '';
+    const body = document.createElement('div');
+    body.className = 'tty-row-body';
+    const title = document.createElement('div');
+    title.className = 'tty-row-title';
+    title.textContent = w.title;
+    const hint = document.createElement('div');
+    hint.className = 'tty-row-hint';
+    hint.textContent = 'last active ' + (w.last_active_at || '—');
+    body.appendChild(title);
+    body.appendChild(hint);
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'tty-evict-close';
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      try {
+        await apiDeleteWindow(w.id);
+        windows = windows.filter((x) => x.id !== w.id);
+        if (w.tmux_window_name === activeName) {
+          activeName = windows[0] ? windows[0].tmux_window_name : null;
+        }
+        closeModals();
+        renderTabs();
+        // Re-open the picker so the operator can continue what they started.
+        openPicker();
+      } catch (_) {
+        status.textContent = 'failed to close window';
+      }
+    });
+    row.appendChild(kind);
+    row.appendChild(body);
+    row.appendChild(closeBtn);
+    return row;
+  }
+
+  async function openPicker() {
+    pickerList.innerHTML = '';
+    pickerBack.classList.add('open');
     try {
-      const created = await apiCreateWindow('');
+      const body = await apiPicker();
+      const items = body.items || [];
+      for (const it of items) pickerList.appendChild(pickerRow(it));
+    } catch (_) {
+      // Empty picker is still navigable — operator can cancel + retry.
+      const note = document.createElement('div');
+      note.className = 'tty-row-hint';
+      note.textContent = 'Could not load picker entries.';
+      pickerList.appendChild(note);
+    }
+  }
+
+  function openEvictView(recommendation) {
+    evictList.innerHTML = '';
+    // Sort by staleness — null last_inbound_at first, then oldest active.
+    const sorted = [...windows].sort((a, b) => {
+      const aNull = !a.last_inbound_at, bNull = !b.last_inbound_at;
+      if (aNull !== bNull) return aNull ? -1 : 1;
+      return (a.last_active_at || '').localeCompare(b.last_active_at || '');
+    });
+    const recName = recommendation && recommendation.tmux_window_name;
+    for (const w of sorted) {
+      evictList.appendChild(evictRow(w, w.tmux_window_name === recName));
+    }
+    evictSub.textContent = 'Limit is ' + (recommendation ? '5' : 'reached')
+      + '. Close one to free a slot — oldest highlighted.';
+    pickerBack.classList.remove('open');
+    evictBack.classList.add('open');
+  }
+
+  async function onPickerChoice(item) {
+    closeModals();
+    const payload = {
+      title: item.kind === 'blank' ? '' : item.title,
+      linked_entity_type: item.linked_entity_type || '',
+      linked_entity_id: item.linked_entity_id || null,
+    };
+    try {
+      const created = await apiCreateWindow(payload);
       windows.unshift(created);
       activeName = created.tmux_window_name;
       renderTabs();
       connect(activeName);
     } catch (e) {
-      status.textContent = 'failed to create window';
+      if (e && e.code === 409) {
+        openEvictView((e.body && e.body.evictee_recommendation) || null);
+      } else {
+        status.textContent = 'failed to create window';
+      }
     }
+  }
+
+  async function onNewWindow() {
+    openPicker();
   }
 
   async function onCloseWindow(w) {
@@ -247,7 +472,7 @@
     }
     if (windows.length === 0) {
       try {
-        const created = await apiCreateWindow('main');
+        const created = await apiCreateWindow({ title: 'main' });
         windows = [created];
       } catch (e) {
         status.textContent = 'failed to open initial window';

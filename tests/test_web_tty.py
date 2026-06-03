@@ -205,6 +205,62 @@ def test_list_scope_isolation(client_user1, client_user2):
     assert {w["title"] for w in theirs} == {"Theirs"}
 
 
+# ── REST: cap + picker (1.6c) ────────────────────────────────────────
+
+
+def test_create_returns_409_at_cap(client_user1):
+    """Hitting DEFAULT_WINDOW_CAP returns 409 + evictee recommendation."""
+    for i in range(cw.DEFAULT_WINDOW_CAP):
+        r = client_user1.post("/api/tty/windows", json={"title": f"W{i}"})
+        assert r.status_code == 200, r.text
+
+    r = client_user1.post("/api/tty/windows", json={"title": "overflow"})
+    assert r.status_code == 409
+    body = r.json()
+    assert body["error"] == "at_cap"
+    assert body["cap"] == cw.DEFAULT_WINDOW_CAP
+    rec = body["evictee_recommendation"]
+    assert rec is not None
+    # All cap rows have NULL last_inbound_at → recommendation picks the
+    # oldest active row, which is the first one created ("W0").
+    assert rec["title"] == "W0"
+
+
+def test_evictee_recommendation_prefers_null_inbound(client_user1):
+    """Filling the cap then bumping inbound on the oldest row makes the
+    *second*-oldest the recommendation (NULL inbound > any inbound)."""
+    ids = []
+    for i in range(cw.DEFAULT_WINDOW_CAP):
+        r = client_user1.post("/api/tty/windows", json={"title": f"W{i}"})
+        ids.append(r.json()["id"])
+    # Bump inbound on the oldest — now it's no longer the coldest.
+    cw.mark_inbound(ids[0])
+    r = client_user1.post("/api/tty/windows", json={"title": "x"})
+    assert r.status_code == 409
+    body = r.json()
+    rec = body["evictee_recommendation"]
+    # The remaining four still have NULL last_inbound_at, so the oldest
+    # of those (W1) should be recommended.
+    assert rec["title"] == "W1"
+
+
+def test_picker_returns_blank_entry(client_user1):
+    """With bundles off / no tasks, the picker still returns the blank entry."""
+    res = client_user1.get("/api/tty/picker")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["cap"] == cw.DEFAULT_WINDOW_CAP
+    kinds = [it["kind"] for it in body["items"]]
+    assert "blank" in kinds
+    # The blank entry is always last.
+    assert body["items"][-1]["kind"] == "blank"
+
+
+def test_picker_requires_auth(client_no_auth):
+    res = client_no_auth.get("/api/tty/picker")
+    assert res.status_code == 401
+
+
 # ── Service: auto_create ─────────────────────────────────────────────
 
 

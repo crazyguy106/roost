@@ -14,6 +14,28 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1.6c — picker + cap-and-evict.** `POST /api/tty/
+  windows` now enforces `DEFAULT_WINDOW_CAP` (5): at-cap requests get
+  `409` with body
+  `{"error": "at_cap", "cap": 5, "evictee_recommendation": {…}}` —
+  the recommendation is the same `chat_windows.recommend_evictee` row
+  the picker primitive returns (NULL `last_inbound_at` first, then
+  oldest inbound, tied by oldest active). New `GET /api/tty/picker`
+  returns up to ~4 recent in-progress tasks + ~4 open Chatwoot
+  conversations (each soft-failing to `[]` when the bundle is off or
+  the upstream call errors) plus a sentinel `{kind: "blank"}` entry.
+  No search bar — the design holds at ≤8 candidates; the drawer for
+  the long-tail "resume an older window" path lands in 1.6d. UI: the
+  `+ New` button now opens a picker modal (rows show `kind` badge,
+  title, hint preview); selecting a non-blank entry seeds the window's
+  `title` + `linked_entity_type`/`linked_entity_id`. On 409 the modal
+  switches to a "you're at the limit" view that lists windows sorted
+  oldest-active-first with the recommended evictee highlighted; one
+  click closes it (DELETE flow), and the picker re-opens so the
+  operator can continue what they started. 4 new tests in
+  `tests/test_web_tty.py` (cap-409, recommendation prefers
+  NULL-inbound, picker returns blank with bundles off, picker requires
+  auth). Suite at 796 green (was 792, +4).
 - **FA-edition Phase 1.6b — multi-window web tty (tabs).** `/tty` now
   renders a tab strip backed by `chat_windows`. New REST surface
   (`roost/web/api_tty.py`):

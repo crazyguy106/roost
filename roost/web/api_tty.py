@@ -44,6 +44,7 @@ import subprocess
 import termios
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 
 from roost.services import chat_windows as cw
 
@@ -148,21 +149,111 @@ async def list_windows_api(request: Request):
     user_id = int(user["user_id"])
     windows = cw.list_windows(user_id)
     return {
-        "windows": [
-            {
-                "id": w.id,
-                "tmux_window_name": w.tmux_window_name,
-                "title": w.title,
-                "linked_entity_type": w.linked_entity_type,
-                "linked_entity_id": w.linked_entity_id,
-                "last_topic": w.last_topic,
-                "last_active_at": w.last_active_at,
-                "last_inbound_at": w.last_inbound_at,
-                "created_at": w.created_at,
-            }
-            for w in windows
-        ],
+        "windows": [_window_dict(w) for w in windows],
         "cap": cw.DEFAULT_WINDOW_CAP,
+    }
+
+
+# ── Picker: candidate entities to open a new window for ───────────────
+
+
+def _picker_tasks(user_id: int, limit: int) -> list[dict]:
+    """Recent in-progress tasks → picker entries.
+
+    Soft-fails to [] on import / runtime errors so the picker is robust
+    when this user has no tasks or the tasks subsystem misbehaves.
+    """
+    try:
+        from roost.services import tasks as tasks_svc
+        rows = tasks_svc.list_tasks(
+            status="in_progress",
+            user_id=user_id,
+            order_by="updated",
+            limit=limit,
+        )
+    except Exception:  # noqa: BLE001
+        _logger.debug("picker: tasks lookup failed", exc_info=True)
+        return []
+    items = []
+    for t in rows:
+        items.append({
+            "kind": "task",
+            "title": t.title,
+            "linked_entity_type": "task",
+            "linked_entity_id": t.id,
+            "hint": "in-progress task",
+        })
+    return items
+
+
+def _picker_chatwoot(limit: int) -> list[dict]:
+    """Open Chatwoot conversations → picker entries.
+
+    Returns [] when the bundle is off or the upstream call fails — the
+    picker should never throw because one source is unavailable.
+    """
+    try:
+        from roost.config import CHATWOOT_ENABLED
+        if not CHATWOOT_ENABLED:
+            return []
+        from roost.extras.messaging_external.services import chatwoot
+        result = chatwoot.list_open_conversations(limit=limit)
+    except Exception:  # noqa: BLE001
+        _logger.debug("picker: chatwoot lookup failed", exc_info=True)
+        return []
+    if not isinstance(result, dict) or "conversations" not in result:
+        return []
+    items = []
+    for c in result.get("conversations", []):
+        items.append({
+            "kind": "chatwoot",
+            "title": c.get("contact") or f"Conversation {c.get('id')}",
+            "linked_entity_type": "chatwoot_conversation",
+            "linked_entity_id": c.get("id"),
+            "hint": (c.get("preview") or "")[:80],
+        })
+    return items
+
+
+@router.get("/api/tty/picker")
+async def picker_api(request: Request):
+    """Picker entries: top-N tasks + open Chatwoot conversations + blank.
+
+    No search — the FA-edition design holds 5-8 visible candidates plus
+    a "Blank window" escape hatch. The drawer (Phase 1.6d) handles the
+    long-tail "resume an older window" path.
+    """
+    user = _current_user(request)
+    if not user or not user.get("user_id"):
+        raise HTTPException(status_code=401, detail="unauthenticated")
+    user_id = int(user["user_id"])
+
+    per_source = 4
+    items: list[dict] = []
+    items.extend(_picker_tasks(user_id, per_source))
+    items.extend(_picker_chatwoot(per_source))
+    # Always offer the escape hatch.
+    items.append({
+        "kind": "blank",
+        "title": "Blank window",
+        "linked_entity_type": "",
+        "linked_entity_id": None,
+        "hint": "Start with nothing pre-attached",
+    })
+    return {"items": items, "cap": cw.DEFAULT_WINDOW_CAP}
+
+
+def _window_dict(w: cw.ChatWindow) -> dict:
+    return {
+        "id": w.id,
+        "tmux_window_name": w.tmux_window_name,
+        "title": w.title,
+        "linked_entity_type": w.linked_entity_type,
+        "linked_entity_id": w.linked_entity_id,
+        "last_topic": w.last_topic,
+        "last_active_at": w.last_active_at,
+        "last_inbound_at": w.last_inbound_at,
+        "created_at": w.created_at,
     }
 
 
@@ -177,12 +268,26 @@ async def create_window_api(request: Request):
     title = (body.get("title") or "").strip() if isinstance(body, dict) else ""
     if not title:
         # Cheap default — pick "Untitled N" so the operator always has
-        # something. Picker (1.6c) will rarely hit this path.
+        # something. The picker normally supplies a real title.
         n = cw.count_windows(user_id) + 1
         title = f"Untitled {n}"
 
     linked_type = (body.get("linked_entity_type") or "").strip() if isinstance(body, dict) else ""
     linked_id = body.get("linked_entity_id") if isinstance(body, dict) else None
+
+    # 1.6c — cap enforcement. At-cap returns 409 + an evictee recommendation
+    # so the UI can show the "close one to continue" view.
+    cap = cw.DEFAULT_WINDOW_CAP
+    if cw.count_windows(user_id) >= cap:
+        recommendation = cw.recommend_evictee(user_id, cap=cap)
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "at_cap",
+                "cap": cap,
+                "evictee_recommendation": _window_dict(recommendation) if recommendation else None,
+            },
+        )
 
     try:
         window = cw.auto_create(
@@ -194,15 +299,7 @@ async def create_window_api(request: Request):
     except cw.ChatWindowError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    return {
-        "id": window.id,
-        "tmux_window_name": window.tmux_window_name,
-        "title": window.title,
-        "linked_entity_type": window.linked_entity_type,
-        "linked_entity_id": window.linked_entity_id,
-        "last_active_at": window.last_active_at,
-        "created_at": window.created_at,
-    }
+    return _window_dict(window)
 
 
 @router.delete("/api/tty/windows/{window_id}")
