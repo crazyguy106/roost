@@ -66,6 +66,8 @@ from roost.bot.handlers import (
     handle_nurture_callback, handle_nurture_edit_reply,
     # Daily summary
     cmd_summary, cmd_summarytime, cmd_summaryoff, cmd_summarystatus,
+    # Guardian draft queue
+    cmd_gdrafts, handle_guardian_draft_callback,
 )
 
 logging.basicConfig(
@@ -237,6 +239,9 @@ def main():
     app.add_handler(CommandHandler("summaryoff", cmd_summaryoff))
     app.add_handler(CommandHandler("summarystatus", cmd_summarystatus))
 
+    # Guardian draft queue
+    app.add_handler(CommandHandler("gdrafts", cmd_gdrafts))
+
     # Agent + Skill Builder
     app.add_handler(CommandHandler("agent", cmd_agent))
     app.add_handler(CommandHandler("skill", cmd_skill))
@@ -310,7 +315,12 @@ def main():
     # Nurture approval buttons routed first (pattern-filtered) so the generic
     # callback handler doesn't have to know about them.
     app.add_handler(CallbackQueryHandler(
-        handle_nurture_callback, pattern=r"^(napprove|nskip):\d+$",
+        handle_nurture_callback, pattern=r"^(napprove|nedit|nskip):\d+$",
+    ))
+    # Guardian draft buttons (pattern-filtered before generic dispatcher)
+    app.add_handler(CallbackQueryHandler(
+        handle_guardian_draft_callback,
+        pattern=r"^gdraft:(approve|reject):\d+$",
     ))
     if RPA_ENABLED:
         app.add_handler(CallbackQueryHandler(

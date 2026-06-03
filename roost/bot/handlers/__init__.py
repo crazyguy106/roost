@@ -128,6 +128,11 @@ from roost.bot.handlers.daily_summary import (
     cmd_summary, cmd_summarytime, cmd_summaryoff, cmd_summarystatus,
 )
 
+# Guardian draft queue
+from roost.bot.handlers.guardian_drafts import (
+    cmd_gdrafts, handle_guardian_draft_callback,
+)
+
 __all__ = [
     # Help
     "cmd_start", "cmd_help",
@@ -189,4 +194,6 @@ __all__ = [
     "handle_link_message",
     # Daily summary
     "cmd_summary", "cmd_summarytime", "cmd_summaryoff", "cmd_summarystatus",
+    # Guardian draft queue
+    "cmd_gdrafts", "handle_guardian_draft_callback",
 ]

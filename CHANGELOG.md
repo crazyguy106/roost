@@ -14,6 +14,27 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1C — Telegram queue for Guardian drafts.** Money-moving
+  tool calls (Stripe refunds, Shopify cancels, non-DRAFT Xero invoices) that
+  route through `guardian_gate` and land as a pending draft now push a
+  Telegram notification to allowed users with ✅ Approve / ❌ Reject inline
+  buttons (previously: drafts only surfaced via the `/sme/sync-status` web
+  card). Tapping Approve calls `guardian.approve_draft` (dispatches the
+  underlying executor); tapping Reject calls `guardian.reject_draft` with
+  the operator id as the reason. Both audit-log via
+  `roost.services.activity.log_action` (`guardian.approve` /
+  `guardian.reject`). New `/gdrafts` command lists pending drafts. New
+  handler module `roost/bot/handlers/guardian_drafts.py`; pattern-filtered
+  `CallbackQueryHandler(handle_guardian_draft_callback, pattern=r"^gdraft:(approve|reject):\d+$")`
+  registered before the generic dispatcher in `roost/bot/main.py`. The
+  notification helper `guardian._notify_telegram_about_draft` uses sync
+  `httpx.Client(timeout=5)` so it works from both sync MCP tool wrappers
+  and async FastAPI endpoints, and is wrapped in a try/except so failures
+  never block the gate. Also folds in a one-character fix missed from
+  Phase 1A: the nurture callback regex in `main.py` now correctly
+  dispatches `nedit:<id>` to `handle_nurture_callback` (was
+  `^(napprove|nskip):\d+$`, now `^(napprove|nedit|nskip):\d+$`). Suite at
+  761 green (was 749, +12).
 - **FA-edition Phase 1B — Edit button on recipe drafts (WhatsApp /
   Chatwoot / WeChat).** Inbound messages that land in `awaiting_approval`
   now post a Telegram notification with inline ✅ Approve / ✏️ Edit /

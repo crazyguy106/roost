@@ -491,6 +491,59 @@ def reject_draft(draft_id: int, reason: str = "") -> dict:
     return {"ok": True, "status": "rejected", "draft_id": draft_id}
 
 
+def _notify_telegram_about_draft(
+    draft_id: int, tool_name: str, tool_args: dict, reason: str,
+) -> None:
+    """Push a Telegram notification with ✅ Approve / ❌ Reject buttons
+    for a newly-created Guardian draft. Fire-and-forget — never raises.
+
+    Sync httpx (short timeout) so callers from any context — sync MCP
+    tool wrappers, async FastAPI endpoints — get the same behaviour
+    without awaiting.
+    """
+    try:
+        from roost.config import (
+            TELEGRAM_ALLOWED_USERS, TELEGRAM_BOT_TOKEN,
+        )
+        if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ALLOWED_USERS:
+            return
+
+        import httpx
+
+        args_preview = json.dumps(tool_args, default=str)[:400]
+        lines = [
+            f"⚠️ Guardian draft #{draft_id}",
+            f"Tool: {tool_name}",
+            f"Reason: {reason}",
+            f"Args: {args_preview}",
+        ]
+        message = "\n".join(lines)
+
+        reply_markup = {"inline_keyboard": [[
+            {"text": "✅ Approve", "callback_data": f"gdraft:approve:{draft_id}"},
+            {"text": "❌ Reject", "callback_data": f"gdraft:reject:{draft_id}"},
+        ]]}
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        with httpx.Client(timeout=5) as client:
+            for user_id in TELEGRAM_ALLOWED_USERS:
+                try:
+                    client.post(url, json={
+                        "chat_id": user_id,
+                        "text": message,
+                        "reply_markup": reply_markup,
+                    })
+                except Exception:
+                    logger.debug(
+                        "Failed to notify Telegram user %s about draft %s",
+                        user_id, draft_id,
+                    )
+    except Exception:
+        logger.exception(
+            "Telegram notification failed for Guardian draft %s", draft_id,
+        )
+
+
 def guardian_gate(tool_name: str, tool_args: dict,
                   user_id: str = "") -> dict | None:
     """Pre-flight gate for MCP tool wrappers.
@@ -503,6 +556,11 @@ def guardian_gate(tool_name: str, tool_args: dict,
     if decision == NEEDS_APPROVAL:
         draft_id = create_draft(tool_name, tool_args, user_id,
                                 rule_name=check["rule"])
+        # Fire-and-forget Telegram notification so the operator can
+        # approve/reject from anywhere. Failures must not block the gate.
+        _notify_telegram_about_draft(
+            draft_id, tool_name, tool_args, check["reason"],
+        )
         return {
             "ok": False,
             "status": "pending_approval",
