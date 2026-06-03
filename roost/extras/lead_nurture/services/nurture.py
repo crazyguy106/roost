@@ -319,16 +319,21 @@ def _complete_enrollment(enrollment_id: int) -> dict:
 def _hold_for_approval(enrollment_id: int, *, step_index: int, message: dict) -> dict:
     """Pause the enrollment and notify Telegram for human approval."""
     reason = f"awaiting_approval:{step_index}"
+    # Clear any stale overrides from a previous held step — a fresh hold
+    # starts from the template body so operator edits don't carry across.
     cadences_svc.update_enrollment(
         enrollment_id,
         status="paused",
         pause_reason=reason,
         last_step_at=_utc_str(_utc_now()),
+        body_override=None,
+        subject_override=None,
     )
     enrollment = cadences_svc.get_enrollment(enrollment_id)
     keyboard = {
         "inline_keyboard": [[
             {"text": "✅ Approve", "callback_data": f"napprove:{enrollment_id}"},
+            {"text": "✏️ Edit", "callback_data": f"nedit:{enrollment_id}"},
             {"text": "⏭ Skip", "callback_data": f"nskip:{enrollment_id}"},
         ]]
     }
@@ -343,6 +348,36 @@ def _hold_for_approval(enrollment_id: int, *, step_index: int, message: dict) ->
         reply_markup=keyboard,
     )
     return enrollment
+
+
+def apply_draft_edit(
+    enrollment_id: int,
+    body: str,
+    subject: str | None = None,
+) -> dict:
+    """Stash an operator-edited body (and optional subject) on a held step.
+
+    When the enrollment is later approved, `approve_pending` will use these
+    overrides instead of re-rendering the template. Only allowed while the
+    enrollment is paused with `awaiting_approval:*`.
+    """
+    enrollment = cadences_svc.get_enrollment(enrollment_id)
+    if not enrollment:
+        return {"ok": False, "error": f"enrollment {enrollment_id} not found"}
+    if not (enrollment.get("pause_reason") or "").startswith("awaiting_approval"):
+        return {
+            "ok": False,
+            "error": (
+                "enrollment is not awaiting approval "
+                f"(status={enrollment['status']}, "
+                f"pause_reason={enrollment['pause_reason']})"
+            ),
+        }
+    updates: dict = {"body_override": body}
+    if subject is not None:
+        updates["subject_override"] = subject
+    cadences_svc.update_enrollment(enrollment_id, **updates)
+    return {"ok": True, "enrollment_id": enrollment_id, "body": body, "subject": subject}
 
 
 def _schedule_next_step(enrollment: dict, cadence: dict, *, just_ran_index: int) -> dict:
@@ -547,6 +582,15 @@ def approve_pending(enrollment_id: int) -> dict:
         step["template"], enrollment.get("fields") or {}, channel,
         user_id=str(enrollment.get("user_id") or ""),
     )
+    # Apply operator-edited overrides (FA-edition Phase 1A). If the operator
+    # tapped Edit on the hold notification and force-replied with revised
+    # text, that text wins over the template-rendered body/subject.
+    body_override = enrollment.get("body_override")
+    if body_override:
+        message["body"] = body_override
+    subject_override = enrollment.get("subject_override")
+    if subject_override:
+        message["subject"] = subject_override
     dispatch = _dispatch_send(enrollment=enrollment, message=message, when_utc=_utc_now())
 
     if not dispatch["ok"]:

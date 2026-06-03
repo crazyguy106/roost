@@ -14,6 +14,23 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1A — Edit button on cadence drafts.** Held nurture
+  steps now ship with a third inline keyboard button (✏️ Edit) alongside
+  ✅ Approve / ⏭ Skip. Tapping Edit sends a force-reply prompt seeded with
+  the current draft body; the operator's reply is captured by a new
+  `handle_nurture_edit_reply` MessageHandler (gated by
+  `LEAD_NURTURE_ENABLED`, registered at `group=-1` so the agent catch-all
+  doesn't also process it), persisted via new
+  `nurture.apply_draft_edit(enrollment_id, body, subject=None)` as
+  `body_override` / `subject_override` columns on `nurture_enrollments`,
+  and the Approve/Edit/Skip keyboard is re-shown for one-tap send.
+  `approve_pending` checks the overrides after `_build_message` and uses
+  them in place of the template-rendered text when set. `_hold_for_approval`
+  clears the override on each new hold so edits don't leak across steps.
+  Every Approve / Edit-prompt / Edit-apply / Skip tap now writes to the
+  audit log via `roost.services.activity.log_action`. Callback pattern in
+  `roost/bot/main.py` extended to `^(napprove|nedit|nskip):\d+$`. Suite
+  at 737 green (was 726, +11).
 - **`audit_log` foundation — system-of-record for fast-path actions.** New
   service module `roost.services.activity` exposes a fire-and-forget
   `log_action(actor, action, entity_type=, entity_id=, ok=, result=,

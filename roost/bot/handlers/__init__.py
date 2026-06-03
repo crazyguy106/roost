@@ -116,7 +116,7 @@ from roost.bot.handlers.recipes import (
 # Nurture approval
 from roost.extras.lead_nurture.bot.nurture_approval import (
     cmd_napprove, cmd_nskip, cmd_nlist, cmd_preapprove,
-    handle_nurture_callback,
+    handle_nurture_callback, handle_nurture_edit_reply,
 )
 
 # Account Linking
@@ -182,7 +182,7 @@ __all__ = [
     "cmd_approve", "cmd_skip_run",
     # Nurture approval
     "cmd_napprove", "cmd_nskip", "cmd_nlist", "cmd_preapprove",
-    "handle_nurture_callback",
+    "handle_nurture_callback", "handle_nurture_edit_reply",
     # Account Linking
     "handle_link_message",
     # Daily summary

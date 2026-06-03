@@ -63,7 +63,7 @@ from roost.bot.handlers import (
     cmd_approve, cmd_skip_run,
     # Nurture approval
     cmd_napprove, cmd_nskip, cmd_nlist, cmd_preapprove,
-    handle_nurture_callback,
+    handle_nurture_callback, handle_nurture_edit_reply,
     # Daily summary
     cmd_summary, cmd_summarytime, cmd_summaryoff, cmd_summarystatus,
 )
@@ -281,6 +281,13 @@ def main():
         from roost.extras.lead_nurture.bot.lead_qualify import handle_qualify_message
         app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_qualify_message),
+            group=-1,
+        )
+        # Nurture edit-reply capture (group -1: intercepts force-reply text
+        # after the operator tapped ✏️ Edit on a held nurture step, before
+        # the agent catch-all reads it).
+        app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_nurture_edit_reply),
             group=-1,
         )
         from roost.extras.lead_nurture.bot.lead_capture import cmd_lead

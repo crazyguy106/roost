@@ -123,6 +123,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for stmt in (
         "ALTER TABLE nurture_enrollments ADD COLUMN last_inbound_at TEXT DEFAULT NULL",
         "ALTER TABLE nurture_enrollments ADD COLUMN contact_telegram_chat_id TEXT NOT NULL DEFAULT ''",
+        # FA-edition Phase 1A: operator-edited body/subject for the held step.
+        # When set, `approve_pending` uses these instead of re-rendering the template.
+        "ALTER TABLE nurture_enrollments ADD COLUMN body_override TEXT DEFAULT NULL",
+        "ALTER TABLE nurture_enrollments ADD COLUMN subject_override TEXT DEFAULT NULL",
     ):
         try:
             conn.execute(stmt)
