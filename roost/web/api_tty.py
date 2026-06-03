@@ -138,6 +138,13 @@ def _kill_window(user_id: int, window_name: str) -> None:
     _tmux(["kill-window", "-t", f"{session}:{window_name}"], check=False)
 
 
+def _kill_window_for_sweeper(user_id: int, window_name: str) -> None:
+    """Sweeper-facing tmux killer; same as `_kill_window`. Kept as a
+    distinct symbol so the scheduler import doesn't reach into the
+    leading-underscore private set."""
+    _kill_window(user_id, window_name)
+
+
 # ── REST: list / create / delete ─────────────────────────────────────
 
 
@@ -254,6 +261,8 @@ def _window_dict(w: cw.ChatWindow) -> dict:
         "last_active_at": w.last_active_at,
         "last_inbound_at": w.last_inbound_at,
         "created_at": w.created_at,
+        "tmux_window_alive": w.tmux_window_alive,
+        "last_resume_cmd": w.last_resume_cmd,
     }
 
 
@@ -300,6 +309,32 @@ async def create_window_api(request: Request):
         raise HTTPException(status_code=500, detail=str(exc))
 
     return _window_dict(window)
+
+
+@router.get("/api/tty/windows/paused")
+async def list_paused_windows_api(request: Request):
+    """Paused windows (tmux killed, row kept) — feeds the resume drawer."""
+    user = _current_user(request)
+    if not user or not user.get("user_id"):
+        raise HTTPException(status_code=401, detail="unauthenticated")
+    user_id = int(user["user_id"])
+    rows = cw.list_paused_windows(user_id, limit=15)
+    return {"windows": [_window_dict(w) for w in rows]}
+
+
+@router.post("/api/tty/windows/{window_id}/resume")
+async def resume_window_api(window_id: int, request: Request):
+    """Bring a paused window back: flip the alive bit and let the next WS
+    attach lazy-create the tmux window."""
+    user = _current_user(request)
+    if not user or not user.get("user_id"):
+        raise HTTPException(status_code=401, detail="unauthenticated")
+    user_id = int(user["user_id"])
+    window = cw.get_window(window_id)
+    if not window or window.user_id != user_id:
+        raise HTTPException(status_code=404, detail="window not found")
+    cw.mark_window_alive(window_id)
+    return _window_dict(cw.get_window(window_id))
 
 
 @router.delete("/api/tty/windows/{window_id}")
@@ -374,6 +409,8 @@ async def tty_ws(websocket: WebSocket) -> None:
         await websocket.close(code=1011)
         return
 
+    # 1.6d: a successful attach implies the tmux window exists again.
+    cw.mark_window_alive(window_row.id)
     cw.touch_active(window_row.id)
 
     master_fd, slave_fd = pty.openpty()

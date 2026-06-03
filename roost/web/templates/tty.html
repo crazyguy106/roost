@@ -84,6 +84,45 @@
     font-size: 12px; border: 1px solid rgba(255,80,80,0.25);
   }
   .tty-evict-row .tty-evict-close:hover { background: rgba(255,80,80,0.2); }
+
+  /* 1.6d: status badge + paused drawer */
+  #tty-status-badge {
+    font-family: monospace; font-size: 12px;
+    padding: 2px 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.06); opacity: 0.75;
+    margin-right: 6px;
+  }
+  .tty-tab .tty-resume-pill {
+    font-size: 11px; padding: 1px 6px; border-radius: 3px;
+    background: rgba(120, 200, 120, 0.15); color: #88c98a;
+    border: 1px solid rgba(120, 200, 120, 0.3);
+    letter-spacing: 0.03em;
+  }
+  #tty-paused-drawer {
+    margin-bottom: 8px; padding: 8px 10px;
+    border: 1px solid var(--fallback-b3, #2a313a); border-radius: 6px;
+    background: rgba(255,255,255,0.02); font-size: 13px;
+    display: none;
+  }
+  #tty-paused-drawer.open { display: block; }
+  #tty-paused-drawer .tty-drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px; opacity: 0.8;
+  }
+  #tty-paused-drawer ul { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow: auto; }
+  #tty-paused-drawer li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px; border-radius: 4px; cursor: pointer;
+  }
+  #tty-paused-drawer li:hover { background: rgba(255,255,255,0.04); }
+  #tty-paused-drawer .paused-title { flex: 1; }
+  #tty-paused-drawer .paused-since { opacity: 0.55; font-size: 12px; }
+  #tty-paused-drawer .paused-empty { opacity: 0.55; padding: 4px 6px; }
+  #tty-paused-toggle {
+    background: transparent; border: 0; color: inherit; cursor: pointer;
+    font-size: 12px; opacity: 0.6; text-decoration: underline;
+  }
+  #tty-paused-toggle:hover { opacity: 1; }
 </style>
 
 <div class="flex items-center justify-between mb-3">
@@ -93,7 +132,18 @@
       Persistent tmux windows. Close the tab to detach; reopen to resume.
     </p>
   </div>
-  <div id="tty-status" class="text-sm opacity-70">connecting…</div>
+  <div class="text-sm opacity-70 flex items-center">
+    <span id="tty-status-badge" title="Live windows / cap">0/5</span>
+    <span id="tty-status">connecting…</span>
+  </div>
+</div>
+
+<div id="tty-paused-drawer">
+  <div class="tty-drawer-head">
+    <span>Paused conversations <span style="opacity:0.55" id="tty-paused-count"></span></span>
+    <button type="button" id="tty-paused-toggle">hide</button>
+  </div>
+  <ul id="tty-paused-list"></ul>
 </div>
 
 <div id="tty-tabs">
@@ -133,8 +183,13 @@
 (function () {
   const host = document.getElementById('tty-host');
   const status = document.getElementById('tty-status');
+  const statusBadge = document.getElementById('tty-status-badge');
   const tabsEl = document.getElementById('tty-tabs');
   const newBtn = document.getElementById('tty-new');
+  const drawer = document.getElementById('tty-paused-drawer');
+  const drawerList = document.getElementById('tty-paused-list');
+  const drawerCount = document.getElementById('tty-paused-count');
+  const drawerToggle = document.getElementById('tty-paused-toggle');
 
   const term = new window.Terminal({
     cursorBlink: true,
@@ -153,6 +208,7 @@
   let activeName = null;     // currently-attached tmux_window_name
   let ws = null;             // current WebSocket
   let suppressReconnectBanner = false;
+  let cap = 5;               // updated from list/picker payloads
 
   term.onData((data) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -167,14 +223,23 @@
 
     for (const w of windows) {
       const tab = document.createElement('div');
+      const paused = w.tmux_window_alive === 0;
       tab.className = 'tty-tab' + (w.tmux_window_name === activeName ? ' active' : '');
       tab.dataset.name = w.tmux_window_name;
       tab.dataset.id = w.id;
-      tab.title = w.title;
+      tab.title = paused ? w.title + ' (paused — click to resume)' : w.title;
 
       const title = document.createElement('span');
       title.className = 'tty-title';
       title.textContent = w.title;
+      tab.appendChild(title);
+
+      if (paused) {
+        const pill = document.createElement('span');
+        pill.className = 'tty-resume-pill';
+        pill.textContent = 'Resume';
+        tab.appendChild(pill);
+      }
 
       const close = document.createElement('span');
       close.className = 'tty-close';
@@ -184,12 +249,17 @@
         ev.stopPropagation();
         onCloseWindow(w);
       });
-
-      tab.appendChild(title);
       tab.appendChild(close);
+
       tab.addEventListener('click', () => switchTo(w.tmux_window_name));
       tabsEl.insertBefore(tab, newBtn);
     }
+    refreshStatusBadge();
+  }
+
+  function refreshStatusBadge() {
+    const live = windows.filter((w) => w.tmux_window_alive !== 0).length;
+    statusBadge.textContent = live + '/' + cap;
   }
 
   // ── API helpers ────────────────────────────────────────────────────
@@ -197,6 +267,7 @@
     const res = await fetch('/api/tty/windows', { credentials: 'same-origin' });
     if (!res.ok) throw new Error('list failed: ' + res.status);
     const body = await res.json();
+    if (typeof body.cap === 'number') cap = body.cap;
     return body.windows || [];
   }
 
@@ -229,6 +300,20 @@
   async function apiPicker() {
     const res = await fetch('/api/tty/picker', { credentials: 'same-origin' });
     if (!res.ok) throw new Error('picker failed: ' + res.status);
+    return await res.json();
+  }
+
+  async function apiListPaused() {
+    const res = await fetch('/api/tty/windows/paused', { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('paused list failed: ' + res.status);
+    return (await res.json()).windows || [];
+  }
+
+  async function apiResumeWindow(id) {
+    const res = await fetch('/api/tty/windows/' + id + '/resume', {
+      method: 'POST', credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error('resume failed: ' + res.status);
     return await res.json();
   }
 
@@ -279,6 +364,16 @@
   // ── Actions ────────────────────────────────────────────────────────
   async function switchTo(windowName) {
     if (windowName === activeName) return;
+    const target = windows.find((w) => w.tmux_window_name === windowName);
+    if (target && target.tmux_window_alive === 0) {
+      try {
+        const refreshed = await apiResumeWindow(target.id);
+        Object.assign(target, refreshed);
+      } catch (_) {
+        status.textContent = 'failed to resume window';
+        return;
+      }
+    }
     activeName = windowName;
     renderTabs();
     connect(windowName);
@@ -430,6 +525,65 @@
     openPicker();
   }
 
+  // ── Paused drawer ──────────────────────────────────────────────────
+  let drawerVisible = false;
+
+  function renderPausedDrawer(paused) {
+    drawerList.innerHTML = '';
+    drawerCount.textContent = paused.length ? '(' + paused.length + ')' : '';
+    if (paused.length === 0) {
+      drawer.classList.remove('open');
+      drawerVisible = false;
+      return;
+    }
+    for (const w of paused) {
+      const li = document.createElement('li');
+      const t = document.createElement('span');
+      t.className = 'paused-title';
+      t.textContent = w.title;
+      const since = document.createElement('span');
+      since.className = 'paused-since';
+      since.textContent = 'last active ' + (w.last_active_at || '—');
+      li.appendChild(t);
+      li.appendChild(since);
+      li.addEventListener('click', async () => {
+        try {
+          const refreshed = await apiResumeWindow(w.id);
+          // Promote into the live tab strip if not already there.
+          if (!windows.find((x) => x.id === w.id)) {
+            windows.unshift(refreshed);
+          } else {
+            windows = windows.map((x) => x.id === w.id ? refreshed : x);
+          }
+          activeName = refreshed.tmux_window_name;
+          renderTabs();
+          connect(activeName);
+          refreshPausedDrawer();
+        } catch (_) {
+          status.textContent = 'failed to resume window';
+        }
+      });
+      drawerList.appendChild(li);
+    }
+    drawer.classList.add('open');
+    drawerVisible = true;
+  }
+
+  async function refreshPausedDrawer() {
+    try {
+      const paused = await apiListPaused();
+      renderPausedDrawer(paused);
+    } catch (_) {
+      // Drawer is non-critical; leave it as-is on transient errors.
+    }
+  }
+
+  drawerToggle.addEventListener('click', () => {
+    drawer.classList.toggle('open');
+    drawerVisible = drawer.classList.contains('open');
+    drawerToggle.textContent = drawerVisible ? 'hide' : 'show';
+  });
+
   async function onCloseWindow(w) {
     const ok = window.confirm(
       'Close "' + w.title + '"?\n\nThe terminal session for this conversation will be killed. '
@@ -447,6 +601,7 @@
       } else {
         renderTabs();
       }
+      refreshPausedDrawer();
     } catch (e) {
       status.textContent = 'failed to close window';
     }
@@ -482,6 +637,7 @@
     activeName = windows[0].tmux_window_name;
     renderTabs();
     connect(activeName);
+    refreshPausedDrawer();
   })();
 })();
 </script>

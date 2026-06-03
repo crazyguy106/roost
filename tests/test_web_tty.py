@@ -261,6 +261,58 @@ def test_picker_requires_auth(client_no_auth):
     assert res.status_code == 401
 
 
+# ── Paused drawer + resume (1.6d) ────────────────────────────────────
+
+
+def test_list_paused_excludes_alive_windows(client_user1):
+    """Only rows with tmux_window_alive=0 surface in the paused list."""
+    alive = client_user1.post("/api/tty/windows", json={"title": "alive"}).json()
+    paused_row = client_user1.post("/api/tty/windows", json={"title": "paused"}).json()
+    cw.mark_window_killed(paused_row["id"], resume_cmd="bash")
+
+    res = client_user1.get("/api/tty/windows/paused")
+    assert res.status_code == 200
+    titles = [w["title"] for w in res.json()["windows"]]
+    assert titles == ["paused"]
+    assert alive["title"] not in titles
+
+
+def test_paused_list_scope_isolation(client_user1, client_user2):
+    """A paused window for user 1 must not show up in user 2's drawer."""
+    mine = client_user1.post("/api/tty/windows", json={"title": "mine"}).json()
+    cw.mark_window_killed(mine["id"], resume_cmd="bash")
+    res = client_user2.get("/api/tty/windows/paused")
+    assert res.status_code == 200
+    assert res.json()["windows"] == []
+
+
+def test_resume_window_flips_alive(client_user1):
+    w = client_user1.post("/api/tty/windows", json={"title": "x"}).json()
+    cw.mark_window_killed(w["id"], resume_cmd="bash")
+    assert cw.get_window(w["id"]).tmux_window_alive == 0
+
+    res = client_user1.post(f"/api/tty/windows/{w['id']}/resume")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["tmux_window_alive"] == 1
+    assert cw.get_window(w["id"]).tmux_window_alive == 1
+
+
+def test_resume_window_404_for_other_user(client_user1, client_user2):
+    w = client_user1.post("/api/tty/windows", json={"title": "x"}).json()
+    cw.mark_window_killed(w["id"], resume_cmd="bash")
+    res = client_user2.post(f"/api/tty/windows/{w['id']}/resume")
+    assert res.status_code == 404
+
+
+def test_list_includes_alive_field(client_user1):
+    """Phase 1.6d adds tmux_window_alive + last_resume_cmd to the list payload."""
+    w = client_user1.post("/api/tty/windows", json={"title": "T"}).json()
+    listing = client_user1.get("/api/tty/windows").json()
+    assert listing["windows"][0]["tmux_window_alive"] == 1
+    assert listing["windows"][0]["last_resume_cmd"] is None
+
+
 # ── Service: auto_create ─────────────────────────────────────────────
 
 

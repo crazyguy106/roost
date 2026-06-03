@@ -116,6 +116,10 @@ def init_scheduler(app: Application) -> None:
     jq.run_repeating(_daily_summary_tick, interval=60, first=70, name="daily_summary")
     logger.info("Scheduled daily summary tick (every 60s, per-user time)")
 
+    # 10d. Web tty sweeper — idle kill + memory-pressure eviction. 5 min.
+    jq.run_repeating(_tty_sweep_tick, interval=300, first=120, name="tty_sweep")
+    logger.info("Web tty sweeper (every 5 min)")
+
     # 11. Proactive monitoring — risk alerts and calendar prep
     try:
         from roost.config import PROACTIVE_ENABLED, PROACTIVE_RISK_INTERVAL
@@ -473,6 +477,24 @@ async def _nurture_tick(context) -> None:
             )
     except Exception:
         logger.exception("Nurture tick failed")
+
+
+async def _tty_sweep_tick(context) -> None:
+    """Idle-kill + memory-pressure sweep for web tty windows."""
+    try:
+        from roost.config import TTY_IDLE_TTL_MINUTES, TTY_MEMORY_PRESSURE_RATIO
+        from roost.services import tty_sweeper
+        from roost.web.api_tty import _kill_window_for_sweeper
+
+        result = tty_sweeper.tick(
+            idle_minutes=TTY_IDLE_TTL_MINUTES,
+            ratio_threshold=TTY_MEMORY_PRESSURE_RATIO,
+            kill_tmux=_kill_window_for_sweeper,
+        )
+        if result["idle_killed"] or result["pressure_killed"]:
+            logger.info("tty_sweeper: %s", result)
+    except Exception:
+        logger.exception("tty_sweep_tick failed")
 
 
 async def _daily_summary_tick(context) -> None:

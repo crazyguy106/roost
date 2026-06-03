@@ -247,6 +247,14 @@ WHATSAPP_APP_SECRET: str = os.getenv("WHATSAPP_APP_SECRET", "")
 # Outbound: REST API with api_access_token header. CHATWOOT_WEBHOOK_SECRET is
 # the per-webhook secret from Chatwoot UI (rotates if the webhook row is
 # recreated); CHATWOOT_API_KEY is the user-level access token.
+# Web tty (FA-edition operator surface). The sweeper kills tmux windows
+# whose `chat_windows.last_active_at` is older than TTY_IDLE_TTL_MINUTES
+# (default 6 hours — full work-day stays live, overnight gets cleaned up).
+# TTY_MEMORY_PRESSURE_RATIO is the cgroup memory.current/.max threshold
+# above which the sweeper starts evicting coldest windows.
+TTY_IDLE_TTL_MINUTES: int = int(os.getenv("TTY_IDLE_TTL_MINUTES", "360"))
+TTY_MEMORY_PRESSURE_RATIO: float = float(os.getenv("TTY_MEMORY_PRESSURE_RATIO", "0.85"))
+
 CHATWOOT_ENABLED: bool = os.getenv("CHATWOOT_ENABLED", "false").lower() == "true"
 CHATWOOT_URL: str = os.getenv("CHATWOOT_URL", "").rstrip("/")
 CHATWOOT_API_KEY: str = os.getenv("CHATWOOT_API_KEY", "")

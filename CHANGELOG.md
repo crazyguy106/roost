@@ -14,6 +14,33 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1.6d — idle sweep, memory pressure, resume drawer.**
+  Two new `chat_windows` columns via additive ALTER (idempotent):
+  `tmux_window_alive` (INTEGER, default 1) and `last_resume_cmd` (TEXT).
+  New service `roost.services.tty_sweeper` runs on a 5-min scheduler
+  tick:
+  - **Idle sweep** — windows whose `last_active_at` is older than
+    `TTY_IDLE_TTL_MINUTES` (default 360 = 6h) get their tmux window
+    killed, the row marked `tmux_window_alive=0`, and a resume hint
+    stored. Row stays so the operator can resume.
+  - **Memory-pressure sweep** — when cgroup v2 reports
+    `memory.current/memory.max >= TTY_MEMORY_PRESSURE_RATIO`
+    (default 0.85), evicts up to 5 coldest live windows globally,
+    re-checking pressure between kills. No-ops in non-cgroup
+    environments (CI, fresh dev boxes).
+  New REST: `GET /api/tty/windows/paused` (top 15 paused windows for
+  the caller, scope-isolated) and `POST /api/tty/windows/{id}/resume`
+  (flips `tmux_window_alive=1` so the next WS attach lazy-recreates
+  the tmux window). The WS attach handler now calls
+  `mark_window_alive` in addition to `touch_active` so resuming
+  through any path keeps the alive bit in sync. UI: status badge
+  `live/cap` next to the connect line; collapsible "Paused
+  conversations" drawer above the tab strip (clicking an entry calls
+  resume + reconnects + promotes it into the tab strip); paused tabs
+  show a green "Resume" pill instead of the kill `×` style. New env
+  knobs in `env-templates/fa.env`. 13 new tests
+  (`tests/test_tty_sweeper.py` × 8 + paused/resume in
+  `tests/test_web_tty.py` × 5). Suite at 808 green (was 796, +12).
 - **FA-edition Phase 1.6c — picker + cap-and-evict.** `POST /api/tty/
   windows` now enforces `DEFAULT_WINDOW_CAP` (5): at-cap requests get
   `409` with body

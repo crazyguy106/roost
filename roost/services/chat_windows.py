@@ -60,9 +60,12 @@ class ChatWindow:
     last_active_at: str
     last_inbound_at: Optional[str]
     created_at: str
+    tmux_window_alive: int = 1
+    last_resume_cmd: Optional[str] = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "ChatWindow":
+        keys = row.keys()
         return cls(
             id=row["id"],
             user_id=row["user_id"],
@@ -74,6 +77,8 @@ class ChatWindow:
             last_active_at=row["last_active_at"],
             last_inbound_at=row["last_inbound_at"],
             created_at=row["created_at"],
+            tmux_window_alive=(row["tmux_window_alive"] if "tmux_window_alive" in keys else 1),
+            last_resume_cmd=(row["last_resume_cmd"] if "last_resume_cmd" in keys else None),
         )
 
 
@@ -266,6 +271,89 @@ def delete_window(window_id: int) -> None:
     with db_connection() as conn:
         conn.execute("DELETE FROM chat_windows WHERE id = ?", (window_id,))
         conn.commit()
+
+
+def mark_window_killed(window_id: int, resume_cmd: Optional[str] = None) -> None:
+    """Idle-sweep killed the tmux window — keep the row so the operator
+    can resume from the paused drawer."""
+    with db_connection() as conn:
+        conn.execute(
+            """
+            UPDATE chat_windows
+               SET tmux_window_alive = 0,
+                   last_resume_cmd   = ?
+             WHERE id = ?
+            """,
+            (resume_cmd, window_id),
+        )
+        conn.commit()
+
+
+def mark_window_alive(window_id: int) -> None:
+    """The tmux window exists again (just created / resumed)."""
+    with db_connection() as conn:
+        conn.execute(
+            """
+            UPDATE chat_windows
+               SET tmux_window_alive = 1,
+                   last_active_at    = datetime('now')
+             WHERE id = ?
+            """,
+            (window_id,),
+        )
+        conn.commit()
+
+
+def list_paused_windows(user_id: int, limit: int = 15) -> list[ChatWindow]:
+    """Paused windows (tmux dead, row still there), newest first."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM chat_windows
+             WHERE user_id = ? AND tmux_window_alive = 0
+             ORDER BY last_active_at DESC, id DESC
+             LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return [ChatWindow.from_row(r) for r in rows]
+
+
+def list_idle_for_sweep(idle_minutes: int) -> list[ChatWindow]:
+    """All ALIVE windows whose `last_active_at` is older than the TTL,
+    across users — caller (sweeper) iterates and kills tmux."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM chat_windows
+             WHERE tmux_window_alive = 1
+               AND last_active_at <= datetime('now', ?)
+            """,
+            (f"-{int(idle_minutes)} minutes",),
+        ).fetchall()
+    return [ChatWindow.from_row(r) for r in rows]
+
+
+def list_coldest_alive(limit: int) -> list[ChatWindow]:
+    """Coldest live windows globally — memory-pressure sweep target.
+
+    Same ordering as recommend_evictee but cross-user and capped to
+    `limit` rows."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM chat_windows
+             WHERE tmux_window_alive = 1
+             ORDER BY
+                CASE WHEN last_inbound_at IS NULL THEN 0 ELSE 1 END ASC,
+                last_inbound_at ASC,
+                last_active_at ASC,
+                id ASC
+             LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+    return [ChatWindow.from_row(r) for r in rows]
 
 
 # ── Cap-and-evict recommendation ─────────────────────────────────────

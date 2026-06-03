@@ -914,6 +914,10 @@ CREATE TABLE IF NOT EXISTS chat_windows (
     last_active_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_inbound_at     TEXT,
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    -- 1.6d: idle sweep marks the tmux window dead but keeps the row so
+    -- the operator can resume from the "paused" drawer.
+    tmux_window_alive   INTEGER NOT NULL DEFAULT 1,
+    last_resume_cmd     TEXT,
     UNIQUE(user_id, tmux_window_name)
 );
 CREATE INDEX IF NOT EXISTS idx_chat_windows_user_active
@@ -1004,6 +1008,23 @@ def _migrate_db(conn: sqlite3.Connection) -> None:
             logger.info("Migration: added %s.%s", table, column)
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+
+def _migrate_chat_windows_columns(conn: sqlite3.Connection) -> None:
+    """Idempotent column adds for chat_windows (1.6d additions).
+
+    SCHEMA_V31's CREATE TABLE IF NOT EXISTS won't add new columns to an
+    existing 1.6a/b table — these ALTERs cover the upgrade path.
+    """
+    migrations = [
+        ("chat_windows", "tmux_window_alive", "INTEGER NOT NULL DEFAULT 1"),
+        ("chat_windows", "last_resume_cmd", "TEXT"),
+    ]
+    for table, column, col_def in migrations:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+        except sqlite3.OperationalError:
+            pass
 
 
 def _migrate_v2_tables(conn: sqlite3.Connection) -> None:
@@ -1450,6 +1471,8 @@ def init_db() -> None:
 
     # Phase 31: chat_windows (web tty multi-window mapping)
     conn.executescript(SCHEMA_V31)
+    # Phase 31.d (1.6d): additive columns for idle sweep + resume.
+    _migrate_chat_windows_columns(conn)
 
     # Bundle-owned tables — each extras/<bundle> ships its own schema.
     # Idempotent CREATE TABLE IF NOT EXISTS; disabled bundles do nothing.
