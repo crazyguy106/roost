@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Terminal — Roost{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<style>
+  #tty-host { height: calc(100vh - 140px); min-height: 360px; padding: 8px; background:#000; border-radius: 6px; }
+  #tty-host .xterm { height: 100%; }
+  #tty-status { font-family: monospace; }
+</style>
+<div class="flex items-center justify-between mb-3">
+  <div>
+    <h1 class="text-xl font-bold">Terminal</h1>
+    <p class="text-sm opacity-60">
+      Attached to a persistent tmux session. Close the tab to detach; reopen to resume.
+    </p>
+  </div>
+  <div id="tty-status" class="text-sm opacity-70">connecting…</div>
+</div>
+
+<div id="tty-host"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+(function () {
+  const host = document.getElementById('tty-host');
+  const status = document.getElementById('tty-status');
+
+  const term = new window.Terminal({
+    cursorBlink: true,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 14,
+    theme: { background: '#000000' },
+    scrollback: 5000,
+  });
+  const fit = new window.FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  try { fit.fit(); } catch (e) {}
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/ws/tty');
+  ws.binaryType = 'arraybuffer';
+
+  function sendResize() {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({
+        type: 'resize',
+        rows: term.rows,
+        cols: term.cols,
+      }));
+    } catch (e) {}
+  }
+
+  ws.addEventListener('open', () => {
+    status.textContent = 'connected';
+    sendResize();
+  });
+  ws.addEventListener('close', (ev) => {
+    if (ev.code === 1008) {
+      status.textContent = 'unauthorized — please log in again';
+    } else {
+      status.textContent = 'disconnected';
+    }
+    term.writeln('\r\n\x1b[33m[connection closed]\x1b[0m');
+  });
+  ws.addEventListener('error', () => {
+    status.textContent = 'error';
+  });
+  ws.addEventListener('message', (ev) => {
+    if (ev.data instanceof ArrayBuffer) {
+      term.write(new Uint8Array(ev.data));
+    } else if (typeof ev.data === 'string') {
+      // Reserved for future control frames; ignore for now.
+    }
+  });
+
+  term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(new TextEncoder().encode(data));
+    }
+  });
+
+  const resizeObserver = new ResizeObserver(() => {
+    try { fit.fit(); } catch (e) {}
+    sendResize();
+  });
+  resizeObserver.observe(host);
+  window.addEventListener('beforeunload', () => {
+    try { ws.close(); } catch (e) {}
+  });
+})();
+</script>
+{% endblock %}

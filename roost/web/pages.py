@@ -108,6 +108,14 @@ def _forbidden_response(request: Request):
     )
 
 
+# ── Web tty ──────────────────────────────────────────────────────────
+
+@router.get("/tty")
+def page_tty(request: Request):
+    """xterm.js page that attaches to a per-user tmux session over WebSocket."""
+    return templates.TemplateResponse("tty.html", _base_context(request))
+
+
 # ── Dashboard ────────────────────────────────────────────────────────
 
 @router.get("/")

@@ -14,6 +14,21 @@ heading so self-hosters know to read before `git pull`.
 ## [Unreleased]
 
 ### Added
+- **FA-edition Phase 1.5 — web tty (single-window).** New `/tty` page +
+  `/ws/tty` WebSocket that bridges xterm.js to a persistent per-user tmux
+  session inside the container (`tmux -L roost-tty new-session -A -s
+  roost-<user_id>`). Closing the tab detaches; reopening reattaches with
+  full scrollback, so an interactive `claude` (or any long-running shell
+  command) survives between visits. Built so FA-edition operators — who
+  aren't expected to SSH in — can drive the agent loop from a browser.
+  Auth re-checks the session cookie inside the WS handler because
+  `BaseHTTPMiddleware`-based `UnifiedAuthMiddleware` doesn't run on WS
+  upgrades; anonymous clients get `close(1008)`. New files:
+  `roost/web/api_tty.py`, `roost/web/templates/tty.html`,
+  `docs/web-tty.md`, `tests/test_web_tty.py` (page-renders + WS-auth
+  smoke tests). Sidebar "Terminal" link added in `base.html`. Phase 1.6
+  (multi-window tabs + `chat_windows` mapping + cap-and-evict picker)
+  is the planned follow-up.
 - **FA-edition Phase 1C — Telegram queue for Guardian drafts.** Money-moving
   tool calls (Stripe refunds, Shopify cancels, non-DRAFT Xero invoices) that
   route through `guardian_gate` and land as a pending draft now push a
