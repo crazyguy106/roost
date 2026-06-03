@@ -13,6 +13,8 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-03
+
 ### Fixed
 - **FA Phase 1.6 — audit fixes (cap race, resume semantics, sweep
   controls, picker dedup, UI polish, a11y).**
