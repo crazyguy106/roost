@@ -13,6 +13,33 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-06-04
+
+### Fixed
+- **`mcp-inventory` CI never went green after day one.** `scripts/gen_mcp_inventory.py`
+  stamped `**Generated:** <today>` into `docs/mcp-inventory.md`, so the
+  drift-check workflow's `git diff --exit-code` failed on every push the
+  day after a commit even with zero tool changes. Dropped the date line
+  (and the now-unused `datetime` import) — the tool count is sufficient
+  provenance and is the value the check actually guards.
+- **CRM test isolation leak.** The `tests/test_crm_local.py` autouse
+  cleanup deleted from a non-existent `communications` table; the real
+  table is `contact_communications`, so logged-comm rows survived between
+  tests and could cross-pollute assertions under reordering.
+- **CRM note tags silently dropped.** `LocalProvider.append_note` passed
+  `NoteCreate(tags=…)`, but the pydantic field is `tag` (singular) —
+  every CRM note was written with an empty tag. Pydantic v2 ignored the
+  unknown kwarg without error.
+- **`LocalProvider.update_person` dropped plural identifiers.** It only
+  read scalar `name/email/phone/notes`, silently discarding
+  `emails=[…]` / `phones=[…]` that `create_person` accepts. Now mirrors
+  create: head fills the scalar slot, the tail is written to
+  `contact_identifiers`.
+- **CI pip cache was a no-op.** `actions/setup-python`'s `cache: pip` had
+  no `cache-dependency-path`, so it looked for a root `requirements.txt`
+  (absent) and silently disabled caching. Pinned the key to
+  `requirements/base.txt` + `requirements/test.txt`.
+
 ## [0.3.1] — 2026-06-03
 
 ### Added

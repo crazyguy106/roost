@@ -10,7 +10,6 @@ Re-run any time tools are added/removed. The file is overwritten in place.
 from __future__ import annotations
 
 import ast
-import datetime as dt
 import sys
 from pathlib import Path
 
@@ -78,12 +77,10 @@ def main() -> int:
         bundle_count += len(tools)
 
     total = core_count + bundle_count
-    today = dt.date.today().isoformat()
 
     parts: list[str] = []
     parts.append("# MCP Tool Inventory")
     parts.append("")
-    parts.append(f"**Generated:** {today}  ")
     parts.append(
         f"**Total:** {total} tools across "
         f"{len(core_results) + len(bundle_results)} modules "

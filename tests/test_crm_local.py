@@ -26,7 +26,7 @@ from roost.extras.crm.services.local import LocalProvider
 def clean_crm_tables():
     """Wipe the contacts / entities / communications / notes between tests."""
     with db_connection() as conn:
-        for table in ("communications", "notes", "contact_identifiers",
+        for table in ("contact_communications", "notes", "contact_identifiers",
                       "contact_entities", "contacts", "entities"):
             try:
                 conn.execute(f"DELETE FROM {table}")
@@ -35,7 +35,7 @@ def clean_crm_tables():
         conn.commit()
     yield
     with db_connection() as conn:
-        for table in ("communications", "notes", "contact_identifiers",
+        for table in ("contact_communications", "notes", "contact_identifiers",
                       "contact_entities", "contacts", "entities"):
             try:
                 conn.execute(f"DELETE FROM {table}")

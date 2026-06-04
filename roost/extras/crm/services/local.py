@@ -118,16 +118,31 @@ class LocalProvider(CrmProvider):
         return _to_person(contacts_svc.get_contact(c.id))
 
     def update_person(self, person_id: str, **fields):
+        # Plural identifiers degrade to (head → scalar slot, tail → identifiers)
+        # so callers can use either shape interchangeably with create_person.
+        emails = fields.get("emails")
+        phones = fields.get("phones")
+        email_scalar = fields.get("email")
+        phone_scalar = fields.get("phone")
+        if emails and email_scalar is None:
+            email_scalar = emails[0] if emails else None
+        if phones and phone_scalar is None:
+            phone_scalar = phones[0] if phones else None
         upd = ContactUpdate(
             name=fields.get("name"),
-            email=fields.get("email"),
-            phone=fields.get("phone"),
+            email=email_scalar,
+            phone=phone_scalar,
             notes=fields.get("notes"),
         )
-        c = contacts_svc.update_contact(int(person_id), upd)
+        cid = int(person_id)
+        c = contacts_svc.update_contact(cid, upd)
         if not c:
             raise CrmNotFoundError(f"contact {person_id} not found")
-        return _to_person(c)
+        for e in (emails or [])[1:]:
+            contacts_svc.set_contact_identifier(cid, "email", e)
+        for p in (phones or [])[1:]:
+            contacts_svc.set_contact_identifier(cid, "phone", p)
+        return _to_person(contacts_svc.get_contact(cid))
 
     # ── Organization ───────────────────────────────────────────────────
 
@@ -173,7 +188,7 @@ class LocalProvider(CrmProvider):
             tag = f"deal:{deal_id}"
         else:
             tag = "crm"
-        n = notes_svc.create_note(NoteCreate(title=title or "CRM note", content=body, tags=tag))
+        n = notes_svc.create_note(NoteCreate(title=title or "CRM note", content=body, tag=tag))
         return str(n.id)
 
     def log_communication(self, *, person_id: str, channel: str, direction: str,
