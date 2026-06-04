@@ -13,6 +13,27 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-06-04
+
+### Fixed
+- **Inbound webhooks bounced to the login page.** `UnifiedAuthMiddleware`
+  allow-lists third-party webhook paths (they can't carry a session
+  cookie; each handler verifies its own signature), but
+  `/api/chatwoot/webhook` and `/api/sms/webhook` were never added — so
+  every Chatwoot and Twilio SMS delivery got a 307 redirect to
+  `/auth/login-page` and silently failed. Added both to the allowlist in
+  `roost/web/app.py`. New `tests/test_webhook_auth_allowlist.py` drives
+  the full `create_app()` stack and asserts every webhook path bypasses
+  auth (the prior adapter tests stubbed the middleware, so the gap was
+  invisible).
+
+### Docs
+- **`docs/chatwoot.md`** — call out that the Chatwoot→Roost webhook URL
+  must be a publicly-resolvable host: Chatwoot's SSRF guard rejects
+  internal hostnames like `http://roost:8080` (`Hostname '…' has no
+  public ip addresses`). Use the public `https://` host (proxied back to
+  Roost); only `CHATWOOT_URL` (Roost→Chatwoot) uses the internal name.
+
 ## [0.3.2] — 2026-06-04
 
 ### Fixed

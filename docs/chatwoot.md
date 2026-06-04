@@ -57,6 +57,16 @@ In Chatwoot UI: **Settings → Integrations → Webhooks → Add new webhook**.
 | URL | `https://<your-roost-host>/api/chatwoot/webhook` |
 | Subscriptions | At minimum: `message_created`. Optional: `conversation_created`, `conversation_updated`, `conversation_status_changed`, `contact_created`, `contact_updated` — the adapter ignores them safely but enabling them keeps your Chatwoot Audit Log complete. |
 
+> **Use a publicly-resolvable host — not an internal one.** Chatwoot runs
+> every webhook URL through an SSRF guard and refuses any hostname that
+> resolves to a private/non-public IP, failing the delivery with
+> `Invalid webhook URL … : Hostname '…' has no public ip addresses`. So
+> even when Roost and Chatwoot share a Docker network, you cannot point
+> this at `http://roost:8080` — use the public `https://` host and let
+> your reverse proxy (Caddy/nginx) forward it back to Roost. (Roost →
+> Chatwoot, i.e. `CHATWOOT_URL`, has no such restriction and *should* use
+> the internal `http://chatwoot:3000`.)
+
 When you save the webhook Chatwoot generates a **secret** (visible once at
 create-time, then again in the webhook's edit view). Copy it verbatim into
 `CHATWOOT_WEBHOOK_SECRET` and restart Roost.

@@ -240,6 +240,8 @@ class UnifiedAuthMiddleware(BaseHTTPMiddleware):
         # Each handler verifies its own per-vendor signature.
         if (path.startswith("/api/whatsapp/webhook")
                 or path.startswith("/api/wechat/webhook")
+                or path.startswith("/api/sms/webhook")
+                or path.startswith("/api/chatwoot/webhook")
                 or path == "/api/attio/webhook"
                 or path.startswith("/api/crm/") and path.endswith("/webhook")):
             return await call_next(request)
