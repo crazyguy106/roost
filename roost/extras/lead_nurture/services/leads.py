@@ -43,7 +43,25 @@ def _norm_email(s: str) -> str:
 
 
 def _norm_phone(s: str) -> str:
-    return (s or "").strip().replace(" ", "")
+    """Canonicalise a phone number to E.164-ish form for stable dedup.
+
+    WhatsApp/Chatwoot deliver the bare wa_id ("6597531358") on some events
+    and the E.164 contact phone ("+6597531358") on others — without
+    canonicalisation those split one contact into two enrolments. Strips
+    separators, then prepends '+' to an international number (>= 10 digits,
+    i.e. one carrying its country code) when it's missing. Short/local
+    numbers are left untouched.
+    """
+    s = (s or "").strip()
+    if not s:
+        return ""
+    plus = s.startswith("+")
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if not digits:
+        return ""
+    if plus or len(digits) >= 10:
+        return "+" + digits
+    return digits
 
 
 def _summary_note(

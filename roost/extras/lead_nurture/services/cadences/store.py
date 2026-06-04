@@ -177,6 +177,31 @@ def enroll_lead(
 
     conn = get_connection()
     try:
+        # Dedup: reuse an existing *live* enrolment (active/paused) for this
+        # contact + cadence rather than spawning a duplicate. A returning
+        # lead should continue their enrolment, not start a fresh one every
+        # time they message. Match on the strongest available identifier.
+        match_clauses, match_params = [], []
+        if crm_person_id:
+            match_clauses.append("crm_person_id = ?"); match_params.append(crm_person_id)
+        if contact_phone:
+            match_clauses.append("contact_phone = ?"); match_params.append(contact_phone)
+        if contact_telegram_chat_id:
+            match_clauses.append("contact_telegram_chat_id = ?")
+            match_params.append(contact_telegram_chat_id)
+        if contact_email:
+            match_clauses.append("contact_email = ?"); match_params.append(contact_email)
+        if match_clauses:
+            existing = conn.execute(
+                "SELECT id FROM nurture_enrollments "
+                "WHERE cadence_slug = ? AND status IN ('active', 'paused') "
+                f"AND ({' OR '.join(match_clauses)}) "
+                "ORDER BY id DESC LIMIT 1",
+                [cadence_slug, *match_params],
+            ).fetchone()
+            if existing:
+                return get_enrollment(existing[0])
+
         cur = conn.execute(
             """INSERT INTO nurture_enrollments
                (cadence_id, cadence_slug, crm_person_id, crm_deal_id,

@@ -300,6 +300,18 @@ def start_qualification_if_needed(
     if not identifier or channel not in ("whatsapp", "wechat", "telegram", "chatwoot"):
         return {"started": False, "reason": "no_addressable_channel"}
 
+    # Don't re-interrogate a contact who's already in or past qualification.
+    # When enrolment dedup reuses a returning lead's enrolment, ingest calls
+    # this again — but the enrolment already carries a `_qualify_status`, so
+    # skip rather than re-sending question 1.
+    _enr = _load_enrollment(enrollment_id)
+    if _enr and (_enr.get("fields") or {}).get("_qualify_status"):
+        return {
+            "started": False,
+            "reason": "already_qualified",
+            "qualify_status": (_enr.get("fields") or {}).get("_qualify_status"),
+        }
+
     # First-message human escape: the opening message already asks for a
     # person. Skip the questionnaire, reassure + alert the operator.
     if _wants_human(trigger_text):

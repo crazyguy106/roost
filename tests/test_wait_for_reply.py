@@ -278,15 +278,19 @@ def test_mark_inbound_for_contact_stamps_active_enrollments(clean_cadence_tables
     _seed_cadence_with_wait()
     e1 = enroll_lead(cadence_slug="wfr_test", contact_phone="+6591234567")
     e2 = enroll_lead(cadence_slug="wfr_test", contact_email="x@example.com")
-    # A completed enrollment must NOT be touched.
-    e3 = enroll_lead(cadence_slug="wfr_test", contact_phone="+6591234567")
+    # A completed enrollment (distinct contact) must NOT be touched. It uses a
+    # different phone because enroll_lead now dedupes by contact — a second
+    # enroll on +6591234567 would reuse e1 rather than create a separate row.
+    e3 = enroll_lead(cadence_slug="wfr_test", contact_phone="+6599999999")
     update_enrollment(e3["id"], status="completed")
 
     n_phone = mark_inbound_for_contact(phone="+6591234567")
     n_email = mark_inbound_for_contact(email="x@example.com")
+    n_done = mark_inbound_for_contact(phone="+6599999999")
 
-    assert n_phone == 1  # only e1 (e3 is completed)
+    assert n_phone == 1  # e1
     assert n_email == 1  # e2
+    assert n_done == 0   # e3 is completed → not stamped
     assert get_enrollment(e1["id"])["last_inbound_at"] is not None
     assert get_enrollment(e2["id"])["last_inbound_at"] is not None
     assert get_enrollment(e3["id"])["last_inbound_at"] is None

@@ -13,6 +13,26 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-06-04
+
+### Fixed
+- **Returning leads were split into duplicate enrolments and re-asked the
+  qualification questions.** Two root causes: (1) `_norm_phone` only
+  stripped spaces, so the bare WhatsApp/Chatwoot wa_id (`6597531358`) and
+  the E.164 contact phone (`+6597531358`) keyed as two different people;
+  it now canonicalises to E.164. (2) `enroll_lead` always `INSERT`ed — it
+  now **reuses an existing live (active/paused) enrolment** for the same
+  contact + cadence instead of spawning a duplicate. And
+  `start_qualification_if_needed` now **skips a contact who already has a
+  `_qualify_status`**, so a returning lead isn't re-interrogated. Net
+  effect: a contact with history continues their conversation (or routes
+  to the approval-gated AI draft) rather than starting over each message.
+  Affects every channel, not just Chatwoot.
+
+  **Behaviour change for integrators:** `enroll_lead` is now idempotent
+  per live contact+cadence — a second call returns the existing enrolment
+  rather than a new row.
+
 ## [0.4.0] — 2026-06-04
 
 ### Added
