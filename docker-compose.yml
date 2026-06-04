@@ -6,7 +6,7 @@ services:
         ENABLE_GOOGLE: "false"
         ENABLE_MICROSOFT: "false"
         ENABLE_AI: "true"
-        ENABLE_TELEGRAM: "false"
+        ENABLE_TELEGRAM: "${ENABLE_TELEGRAM:-false}"
         ENABLE_NOTION: "false"
         ENABLE_INFRA: "false"
         ENABLE_DISCORD: "false"

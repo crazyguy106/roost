@@ -13,6 +13,31 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-04
+
+### Added
+- **Auto-qualify inbound Chatwoot leads.** A new WhatsApp lead fronted by
+  Chatwoot now automatically receives the first qualifying question (from
+  the cadence's question pack, e.g. `property_buyer_intro`) and the
+  questionnaire captures their answers — no operator action. Previously
+  `chatwoot` wasn't an addressable channel for qualification, so these
+  leads got logged but never replied to. Added `chatwoot` to the channel
+  guards in `leads.py` + `qualification.py`; the Chatwoot webhook now
+  short-circuits the recipe/classify branch when a question was just sent
+  (so a lead doesn't get a question *and* an AI draft for one message).
+- **Send-on-approve for recipe drafts.** Approving an `awaiting_approval`
+  recipe run now delivers the draft back to the channel it came from
+  (Chatwoot conversation / WhatsApp), keyed on the run's `trigger_data`.
+  Before, `approve_run` only filed the run — the approved reply never
+  reached the customer. The send stays behind the human approval gate
+  (draft-first); delivery failures are reported in the result, never
+  unwind the approval. Wired in `services/recipes.py::approve_run`, so it
+  works from the Telegram `/approve`, the inline Approve button, and any
+  future approval surface.
+- **`ENABLE_TELEGRAM` build arg is now env-driven** in `docker-compose.yml`
+  (`${ENABLE_TELEGRAM:-false}`), so the operator-approval Telegram bot can
+  be enabled from `.env` without editing compose. Default stays off.
+
 ## [0.3.3] — 2026-06-04
 
 ### Fixed

@@ -438,8 +438,44 @@ async def _execute_rpa_recipe(
         return {"run_id": auto_run_id, "rpa_run_id": rpa_run_id, "status": "failed", "error": str(e)}
 
 
+def _dispatch_approved_reply(trigger_data: dict, text: str) -> dict:
+    """Deliver an approved recipe draft back to the channel it came from.
+
+    Recipe runs are draft-first: ``execute_recipe`` only drafts and parks
+    the run as ``awaiting_approval``. The customer-facing send happens here,
+    once a human approves — keeping every external write behind the approval
+    gate. Routes by the ``source`` recorded in the run's ``trigger_data``
+    (set by the inbound webhook handlers). Unknown/empty sources are a no-op;
+    the draft is still saved on the run for audit. Never raises.
+    """
+    if not text or not text.strip():
+        return {"sent": False, "reason": "empty_draft"}
+    source = (trigger_data or {}).get("source", "")
+    try:
+        if source == "chatwoot":
+            conv_id = trigger_data.get("conversation_id")
+            if not conv_id:
+                return {"sent": False, "reason": "no_conversation_id"}
+            from roost.extras.messaging_external.services import chatwoot as cw
+            cw.send_message(int(conv_id), text)
+            return {"sent": True, "channel": "chatwoot", "conversation_id": conv_id}
+        if source == "whatsapp":
+            to = trigger_data.get("sender", "")
+            if not to:
+                return {"sent": False, "reason": "no_recipient"}
+            from roost.extras.messaging_external.services.whatsapp import (
+                send_text_message,
+            )
+            send_text_message(to, text)
+            return {"sent": True, "channel": "whatsapp", "to": to}
+        return {"sent": False, "reason": f"unsupported_source:{source or 'none'}"}
+    except Exception as e:  # delivery failure must not unwind the approval
+        logger.exception("approved-reply dispatch failed for source=%s", source)
+        return {"sent": False, "error": str(e)}
+
+
 def approve_run(run_id: int, final_output: str = "") -> dict:
-    """Approve an awaiting_approval run and mark as completed."""
+    """Approve an awaiting_approval run, deliver the draft, mark completed."""
     conn = get_connection()
     try:
         row = conn.execute(
@@ -449,20 +485,26 @@ def approve_run(run_id: int, final_output: str = "") -> dict:
         if not row:
             return {"error": f"Run {run_id} not found or not awaiting approval"}
 
-        complete_run(
-            run_id,
-            status="completed",
-            final_output=final_output or row["draft_output"],
-        )
+        text = final_output or row["draft_output"] or ""
+        complete_run(run_id, status="completed", final_output=text)
 
         # Increment template usage
         template_id = row["template_selected_id"]
         if template_id:
             tmpl_svc.increment_usage(template_id)
 
-        return {"ok": True, "run_id": run_id, "status": "completed"}
+        try:
+            trigger_data = (
+                json.loads(row["trigger_data"]) if row["trigger_data"] else {}
+            )
+        except (TypeError, json.JSONDecodeError):
+            trigger_data = {}
     finally:
         conn.close()
+
+    # Send outside the DB connection scope (network I/O).
+    dispatch = _dispatch_approved_reply(trigger_data, text)
+    return {"ok": True, "run_id": run_id, "status": "completed", "dispatch": dispatch}
 
 
 def skip_run(run_id: int) -> dict:

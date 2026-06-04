@@ -98,6 +98,21 @@ runs lead-ingest / recipes / Telegram notify. Everything else (outgoing
 agent replies, lifecycle events, contact updates) is acked with 200 and
 otherwise ignored.
 
+**Auto-qualify.** Lead ingest enrols a new lead in its vertical's cadence
+and, if that cadence has a question pack, auto-sends the first qualifying
+question over Chatwoot (→ the customer's WhatsApp). When that happens the
+handler returns early — the lead gets the question, not also an AI draft.
+Subsequent answers are routed by `qualification.process_answer`.
+
+**Send-on-approve.** If instead an event recipe with
+`trigger_config="chatwoot_inbound"` matches, it drafts a reply and parks
+the run as `awaiting_approval` — roost does **not** auto-send free-form
+replies. The draft is pushed to the operator's Telegram with
+Approve/Edit/Skip; **approving delivers it back into the Chatwoot
+conversation** (`recipes.approve_run` → `chatwoot.send_message`). The
+Telegram bot must be running for the approve buttons (build with
+`ENABLE_TELEGRAM=true`).
+
 The critical case is `conversation_updated` — Chatwoot fires it on
 **every** conversation mutation: status flips, agent assignment, labels,
 even who's currently typing. Routing it through the recipe pipeline would

@@ -448,7 +448,7 @@ def ingest_lead(
             ident = phone
         else:
             ident = ""
-        if channel in ("whatsapp", "wechat", "telegram") and ident:
+        if channel in ("whatsapp", "wechat", "telegram", "chatwoot") and ident:
             try:
                 from roost.extras.lead_nurture.services import qualification
                 q_result = qualification.start_qualification_if_needed(

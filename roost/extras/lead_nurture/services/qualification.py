@@ -297,7 +297,7 @@ def start_qualification_if_needed(
     questions = _get_pack(cadence_slug)
     if not questions:
         return {"started": False, "reason": "no_questions"}
-    if not identifier or channel not in ("whatsapp", "wechat", "telegram"):
+    if not identifier or channel not in ("whatsapp", "wechat", "telegram", "chatwoot"):
         return {"started": False, "reason": "no_addressable_channel"}
 
     # First-message human escape: the opening message already asks for a

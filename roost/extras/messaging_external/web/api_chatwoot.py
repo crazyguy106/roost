@@ -248,11 +248,14 @@ async def _process_inbound(parsed: dict) -> None:
             "mark_inbound_for_contact (chatwoot) failed (non-fatal)"
         )
 
-    # Best-effort lead ingest.
+    # Best-effort lead ingest. If it auto-starts a qualification dialog
+    # (sends the lead the first question), that IS the reply — return
+    # before the recipe / classify branch so the lead doesn't also get an
+    # AI draft on the same inbound message.
     try:
         from roost.extras.lead_nurture.services import leads as leads_svc
         from roost.extras.lead_nurture.services import settings as ln_settings
-        leads_svc.ingest_lead(
+        ingest_result = leads_svc.ingest_lead(
             channel="chatwoot",
             phone=sender_phone,
             name=sender_name if sender_name != sender_phone else "",
@@ -261,6 +264,12 @@ async def _process_inbound(parsed: dict) -> None:
             source="chatwoot",
             qualifying_identifier=sender_phone,
         )
+        if isinstance(ingest_result, dict) and ingest_result.get("qualification_started"):
+            _logger.info(
+                "Chatwoot inbound from %s started qualification — skipping recipe",
+                sender_phone,
+            )
+            return
     except Exception:
         _logger.exception("lead ingest from Chatwoot failed (non-fatal)")
 
