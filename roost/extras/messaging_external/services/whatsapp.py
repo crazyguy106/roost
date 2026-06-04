@@ -22,6 +22,7 @@ from roost.config import (
     WHATSAPP_APP_SECRET,
     WHATSAPP_PHONE_NUMBER_ID,
 )
+from roost.extras.messaging_external.services.text_format import collapse_soft_wraps
 
 logger = logging.getLogger("roost.whatsapp")
 
@@ -87,6 +88,7 @@ def send_text_message(to: str, body: str) -> dict:
     "message_id": <opaque>}`, only the id type changes (Chatwoot numeric id
     vs Meta wamid string). See docs/chatwoot.md.
     """
+    body = collapse_soft_wraps(body)
     from roost.config import CHATWOOT_ENABLED
     if CHATWOOT_ENABLED:
         from roost.extras.messaging_external.services import chatwoot

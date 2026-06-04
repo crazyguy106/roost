@@ -39,6 +39,7 @@ from roost.config import (
     CHATWOOT_URL,
     CHATWOOT_WEBHOOK_SECRET,
 )
+from roost.extras.messaging_external.services.text_format import collapse_soft_wraps
 
 logger = logging.getLogger("roost.chatwoot")
 
@@ -222,6 +223,7 @@ def send_message(
     if base is None:
         return {"error": "Chatwoot not configured"}
 
+    content = collapse_soft_wraps(content)
     url = f"{base}/conversations/{conversation_id}/messages"
     payload = {
         "content": content,

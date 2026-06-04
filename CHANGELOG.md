@@ -13,7 +13,20 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
-## [0.4.1] — 2026-06-04
+## [0.4.2] — 2026-06-04
+
+### Fixed
+- **Outbound messages rendered with awkward mid-sentence line breaks on
+  WhatsApp.** Question packs and cadence templates are authored as YAML
+  `|` block scalars hand-wrapped at ~70 columns; `|` keeps those wrap
+  points as hard newlines, so a qualifying question arrived broken across
+  three lines (and inconsistently across WhatsApp clients). New
+  `messaging_external/services/text_format.py::collapse_soft_wraps` folds
+  soft wraps back into flowing lines at the send boundary
+  (`whatsapp.send_text_message` + `chatwoot.send_message`), while
+  preserving blank-line paragraph breaks, list items, and short
+  intentional breaks like a signature block. Applied to every WhatsApp
+  surface so formatting is consistent regardless of source.
 
 ### Fixed
 - **Returning leads were split into duplicate enrolments and re-asked the
