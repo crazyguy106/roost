@@ -13,6 +13,18 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-06-05
+
+### Changed
+- **Snappier inbound replies.** The fragmented-message debouncer waited 20s
+  of silence before processing an inbound message (4s fast-path for
+  messages ending in `.?!`), which felt like a non-response on a single
+  message. Lowered the shipped defaults to **6s debounce / 2s fast-path /
+  40s max-wait** (`roost-config/settings.yaml` + the `_DEFAULTS` fallback in
+  `lead_nurture/services/settings.py`). Still batches genuine multi-message
+  bursts, just far more responsively. Tune per-instance in
+  `roost-config/settings.yaml` under `fragmented_messages`.
+
 ## [0.4.2] — 2026-06-04
 
 ### Fixed
