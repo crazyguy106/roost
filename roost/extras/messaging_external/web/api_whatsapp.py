@@ -213,6 +213,21 @@ async def _process_inbound(msg: dict) -> None:
             _logger.exception("WhatsApp HELP reply send failed (non-fatal)")
         return
 
+    # Automation gate — pause switch + recency window. STOP/HELP above
+    # always run; everything below (qualify / continue / draft) is skipped
+    # when gated, so the message simply waits for a human.
+    try:
+        from roost.extras.lead_nurture.services.gating import automation_gate
+        gate = automation_gate(phone=sender_phone)
+    except Exception:
+        gate = {"proceed": True, "reason": "ok"}
+    if not gate.get("proceed"):
+        _logger.info(
+            "WhatsApp inbound from %s gated (%s) — leaving for a human",
+            sender_phone, gate.get("reason"),
+        )
+        return
+
     # Qualification intercept: if this phone has an in-progress qualifying
     # session, treat the reply as an answer and stop here. The recipe
     # pipeline (auto-replies, drafts) would otherwise step on the

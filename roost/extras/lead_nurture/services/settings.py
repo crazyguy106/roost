@@ -33,6 +33,15 @@ _DEFAULTS: dict[str, Any] = {
         "terminal_punctuation": [".", "?", "!"],
     },
     "default_vertical": "financial_advisor",
+    # Global kill switch: when true, inbound messages are logged but no
+    # automation runs (no auto-qualify, no AI drafts, no cadence sends) —
+    # everything waits for a human. Flip live; no restart needed.
+    "automations_paused": False,
+    # Recency gate: if a returning contact's prior activity is older than
+    # this many hours, don't auto-engage them (their message lands in the
+    # inbox for a human instead). 0 disables the gate. A brand-new contact
+    # is never dormant.
+    "auto_engage_window_hours": 24,
     "debug": False,
 }
 

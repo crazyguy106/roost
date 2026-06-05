@@ -50,6 +50,26 @@ fragmented_messages:
 #   generic             — catch-all
 default_vertical: financial_advisor
 
+# ── Automation controls ──────────────────────────────────────────────
+# Global kill switch (baked default). When true, inbound messages are
+# still logged (and land in your Chatwoot inbox), but Roost runs NO
+# automation — no auto-qualify, no AI-draft recipes, no cadence sends.
+#
+# For a LIVE pause without a rebuild, drop a sentinel file in the
+# bind-mounted data dir instead of editing this file:
+#     touch data/automations_paused     # pause now
+#     rm    data/automations_paused     # resume
+# Either source (this flag OR the sentinel) pauses automation.
+automations_paused: false
+
+# Recency gate. If a *returning* contact's last activity was longer ago
+# than this many hours, Roost won't auto-engage them — their message lands
+# in the inbox for a human instead of auto-continuing the questionnaire or
+# drafting a reply. A brand-new contact is never "dormant". Set to 0 to
+# disable the gate and auto-engage everyone who's inside the WhatsApp
+# 24h window. (Outbound past 24h is blocked by Meta regardless.)
+auto_engage_window_hours: 24
+
 # ── Debug ────────────────────────────────────────────────────────────
 # Verbose logging for the loaders + debouncer. Useful during demos.
 debug: false

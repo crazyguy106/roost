@@ -428,6 +428,29 @@ def mark_inbound_for_contact(
         conn.close()
 
 
+def last_activity_at(
+    *, phone: str = "", email: str = "", telegram_chat_id: str = "",
+) -> str | None:
+    """Most recent ``last_inbound_at`` across this contact's live
+    (active/paused) enrolments, or None if the contact has no live
+    enrolment / has never engaged. Used by the recency gate to decide
+    whether a returning contact has gone dormant.
+    """
+    if not (phone or email or telegram_chat_id):
+        return None
+    where, contact_params = _contact_clauses(phone, email, telegram_chat_id)
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            f"""SELECT MAX(last_inbound_at) FROM nurture_enrollments
+                 WHERE ({where}) AND status IN ('active','paused')""",
+            contact_params,
+        ).fetchone()
+        return row[0] if row and row[0] else None
+    finally:
+        conn.close()
+
+
 # ── CRM stage-change router ────────────────────────────────────────────
 
 # Stages that mean "stop nurturing — outcome reached"

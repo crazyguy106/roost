@@ -13,6 +13,26 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-06-05
+
+### Added
+- **Automation controls — a global pause switch and a per-contact recency
+  gate.** Both gate inbound auto-engagement in `api_chatwoot` /
+  `api_whatsapp` right after the STOP/HELP intercepts (which always run):
+  - **Pause switch.** When on, inbound is still logged (and lands in the
+    Chatwoot inbox) but Roost runs *no* automation — no auto-qualify, no
+    AI-draft recipes, no cadence sends. Two sources: the baked
+    `automations_paused` setting, or a **live sentinel file**
+    `data/automations_paused` (`touch` to pause, remove to resume — no
+    restart/rebuild, since `data/` is bind-mounted).
+  - **Recency gate.** `auto_engage_window_hours` (default 24, 0 = off): a
+    *returning* contact whose prior activity is older than the window is
+    treated as dormant and not auto-engaged — their message waits in the
+    inbox for a human instead of auto-continuing the questionnaire or
+    drafting a reply. A brand-new contact is never dormant.
+  - New `lead_nurture/services/gating.py::automation_gate` +
+    `cadences/store.py::last_activity_at`.
+
 ## [0.4.4] — 2026-06-05
 
 ### Changed
