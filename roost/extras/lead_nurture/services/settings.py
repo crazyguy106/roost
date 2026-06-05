@@ -27,7 +27,7 @@ SETTINGS_FILE = PROJECT_ROOT / "roost-config" / "settings.yaml"
 _DEFAULTS: dict[str, Any] = {
     "fragmented_messages": {
         "enabled": True,
-        "debounce_seconds": 6,
+        "debounce_seconds": 4,
         "early_release_seconds": 2,
         "max_wait_seconds": 40,
         "terminal_punctuation": [".", "?", "!"],

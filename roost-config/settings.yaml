@@ -34,7 +34,7 @@
 
 fragmented_messages:
   enabled: true                    # set false to process every fragment immediately
-  debounce_seconds: 6              # silence required before flushing (default 6)
+  debounce_seconds: 4              # silence required before flushing (default 4)
   early_release_seconds: 2         # if message ends in . ? !  release after this much silence
   max_wait_seconds: 40             # never wait longer than this from first fragment
   terminal_punctuation: [".", "?", "!"]   # characters that trigger the fast-path

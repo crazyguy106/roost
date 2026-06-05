@@ -13,6 +13,13 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-06-05
+
+### Changed
+- **Debounce lowered further to 4s** (`fragmented_messages.debounce_seconds`
+  6 → 4; fast-path 2s and 40s max-wait unchanged) for a more immediate
+  reply on a single inbound message.
+
 ## [0.4.3] — 2026-06-05
 
 ### Changed
