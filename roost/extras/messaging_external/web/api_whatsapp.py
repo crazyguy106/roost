@@ -226,6 +226,17 @@ async def _process_inbound(msg: dict) -> None:
             "WhatsApp inbound from %s gated (%s) — leaving for a human",
             sender_phone, gate.get("reason"),
         )
+        try:
+            from roost.extras.messaging_external.services.operator_notify import (
+                notify_gated,
+            )
+            await notify_gated(
+                channel="whatsapp",
+                who=(sender or sender_phone),
+                text=text, gate=gate,
+            )
+        except Exception:
+            _logger.exception("gated operator notify failed (non-fatal)")
         return
 
     # Qualification intercept: if this phone has an in-progress qualifying

@@ -235,6 +235,17 @@ async def _process_inbound(parsed: dict) -> None:
             "Chatwoot inbound from %s gated (%s) — leaving for a human",
             sender_phone, gate.get("reason"),
         )
+        try:
+            from roost.extras.messaging_external.services.operator_notify import (
+                notify_gated,
+            )
+            await notify_gated(
+                channel="chatwoot",
+                who=(sender_name or sender_phone),
+                text=text, gate=gate,
+            )
+        except Exception:
+            _logger.exception("gated operator notify failed (non-fatal)")
         return
 
     # Qualification intercept — same pattern as api_whatsapp.

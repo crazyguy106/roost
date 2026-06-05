@@ -13,6 +13,17 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-06-05
+
+### Added
+- **Telegram heads-up when an inbound message is gated.** Completing the
+  v0.5.0 automation controls: when the gate pauses or dormancy-skips an
+  inbound, Roost now pings the operator on Telegram
+  (`messaging_external/services/operator_notify.py`) so they know to handle
+  it in Chatwoot — e.g. `💤 Chatwoot lead resurfaced after 30.0h dormant`
+  or `⏸ Automations paused`, with the contact and message preview.
+  Best-effort; no-ops when Telegram isn't configured.
+
 ## [0.5.0] — 2026-06-05
 
 ### Added
