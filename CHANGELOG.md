@@ -13,6 +13,26 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-05
+
+### Changed
+- **Inbound AI-drafted replies are now held by Guardian, not the recipe
+  queue.** When a `chatwoot_inbound` / `whatsapp_inbound` recipe drafts a
+  reply, the *send* now routes through `guardian_gate("send_client_reply")`
+  — a new Guardian rule (`_check_client_message` → NEEDS_APPROVAL) parks it
+  as a real **`guardian_drafts`** row and pings the adviser to
+  **Approve/Reject in Telegram** (`/gdrafts`); only on approval does
+  Guardian's `send_client_reply` executor deliver it on the originating
+  channel. This makes the "Guardian holds AI-drafted client-facing messages
+  for your review" model literal (FA-edition slide 29/30) and unifies the
+  approval surface. With `GUARDIAN_ENABLED=false`, the draft is surfaced for
+  a manual send instead — never auto-sent. The recipe is now just the
+  drafter (set it `read_only`); the older recipe-approval `send-on-approve`
+  path remains for any external_write recipes that still use it.
+
+### Added
+- Guardian `send_client_reply` tool + executor (`services/guardian.py`).
+
 ## [0.5.1] — 2026-06-05
 
 ### Added

@@ -295,6 +295,7 @@ async def _process_inbound(msg: dict) -> None:
         if r.get("trigger_config", "") == "whatsapp_inbound"
     ]
 
+    draft = ""
     if wa_recipes:
         # Run the first matching recipe
         recipe = wa_recipes[0]
@@ -309,11 +310,30 @@ async def _process_inbound(msg: dict) -> None:
                 "message_id": msg.get("message_id", ""),
             },
         )
+        draft = (result or {}).get("draft", "") or ""
 
-        # Notify via Telegram
-        await _notify_telegram(msg, result)
+    if draft and sender_phone:
+        from roost.config import GUARDIAN_ENABLED
+        if GUARDIAN_ENABLED:
+            # Hand the client-facing reply to Guardian: it holds the draft and
+            # pings the adviser to Approve/Reject in Telegram before the
+            # customer sees it. Only on approval does Guardian's executor send.
+            from roost.services.guardian import guardian_gate
+            guardian_gate("send_client_reply", {
+                "channel": "whatsapp",
+                "to": sender_phone,
+                "text": draft,
+                "contact": sender,
+            })
+        else:
+            # No Guardian to hold it — surface the draft for a manual send;
+            # never auto-send an unapproved client message.
+            await _notify_telegram(msg, {
+                "classification": {}, "status": "draft_no_guardian",
+                "draft": draft,
+            })
     else:
-        # No recipe — just classify and notify
+        # No draft — just classify and notify
         classification = await classify_message(message=text, sender=sender)
         await _notify_telegram(msg, {
             "classification": classification,

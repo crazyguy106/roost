@@ -82,6 +82,13 @@ _MONEY_MOVING_TOOLS = {
     "xero_create_invoice",  # only when status != "DRAFT" — checked below
 }
 
+# Agent-drafted client-facing messages. Always held for the adviser to
+# approve before the customer receives them — the "Guardian holds AI-drafted
+# client-facing messages for your review" discipline (FA-edition slide 29/30).
+_CLIENT_MESSAGE_TOOLS = {
+    "send_client_reply",
+}
+
 # Email patterns that suggest mass/spam sending
 _BULK_EMAIL_PATTERNS = [
     re.compile(r"(,\s*){3,}"),  # 4+ comma-separated recipients
@@ -105,6 +112,7 @@ def guardian_check(tool_name: str, tool_args: dict,
     """
     checks = [
         _check_money_movement,
+        _check_client_message,
         _check_delete_without_confirmation,
         _check_bulk_email,
         _check_unknown_recipient,
@@ -142,6 +150,22 @@ def _check_money_movement(name: str, args: dict, user_id: str) -> dict:
         "decision": NEEDS_APPROVAL,
         "reason": f"{name} requires explicit human approval (money-moving write).",
         "rule": "money_movement_draft",
+    }
+
+
+def _check_client_message(name: str, args: dict, user_id: str) -> dict:
+    """Hold an agent-drafted client-facing message for human approval.
+
+    The draft is never sent until the adviser approves it (Telegram
+    `/gdrafts` Approve/Reject, or the web pending-drafts card). This is the
+    structural enforcement of the "every AI draft hands off to you" rule.
+    """
+    if name not in _CLIENT_MESSAGE_TOOLS:
+        return {"decision": ALLOW, "reason": "", "rule": ""}
+    return {
+        "decision": NEEDS_APPROVAL,
+        "reason": "Agent-drafted client message — approve before it's sent.",
+        "rule": "client_message_draft",
     }
 
 
@@ -373,10 +397,24 @@ def _load_executors() -> None:
             type_=args.get("type_", "ACCREC"),
         )
 
+    def _send_client_reply(args: dict) -> dict:
+        """Deliver an approved client reply on its originating channel."""
+        text = args.get("text", "")
+        if args.get("channel") == "chatwoot":
+            from roost.extras.messaging_external.services import chatwoot as cw
+            return cw.send_message(int(args["conversation_id"]), text)
+        # whatsapp (and default) — the adapter delegates to Chatwoot when
+        # CHATWOOT_ENABLED, else hits Meta directly.
+        from roost.extras.messaging_external.services.whatsapp import (
+            send_text_message,
+        )
+        return send_text_message(args["to"], text)
+
     _EXECUTORS.update({
         "stripe_create_refund": _stripe_refund,
         "shopify_cancel_order": _shopify_cancel,
         "xero_create_invoice": _xero_invoice,
+        "send_client_reply": _send_client_reply,
     })
 
 

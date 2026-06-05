@@ -306,6 +306,7 @@ async def _process_inbound(parsed: dict) -> None:
         if r.get("trigger_config", "") == "chatwoot_inbound"
     ]
 
+    draft = ""
     if cw_recipes:
         recipe = cw_recipes[0]
         result = await execute_recipe(
@@ -321,7 +322,29 @@ async def _process_inbound(parsed: dict) -> None:
                 "source_id": parsed.get("source_id", ""),
             },
         )
-        await _notify_telegram(parsed, result)
+        draft = (result or {}).get("draft", "") or ""
+
+    if draft and conversation_id is not None:
+        from roost.config import GUARDIAN_ENABLED
+        if GUARDIAN_ENABLED:
+            # Hand the client-facing reply to Guardian: it holds the draft and
+            # pings the adviser to Approve/Reject in Telegram before the
+            # customer ever sees it. Only on approval does Guardian's executor
+            # send it.
+            from roost.services.guardian import guardian_gate
+            guardian_gate("send_client_reply", {
+                "channel": "chatwoot",
+                "conversation_id": conversation_id,
+                "text": draft,
+                "contact": sender_name or sender_phone,
+            })
+        else:
+            # No Guardian to hold it — surface the draft for a manual send;
+            # never auto-send an unapproved client message.
+            await _notify_telegram(parsed, {
+                "classification": {}, "status": "draft_no_guardian",
+                "draft": draft,
+            })
     else:
         classification = await classify_message(
             message=text, sender=sender_name or sender_phone,
