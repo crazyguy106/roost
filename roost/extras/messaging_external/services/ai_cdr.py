@@ -242,7 +242,12 @@ async def draft_reply(message: str, *, sender: str = "", context: str = "") -> s
             model=GEMINI_MODEL,
             contents=[prompt],
             config=types.GenerateContentConfig(
-                tools=None, temperature=0.5, max_output_tokens=400,
+                tools=None, temperature=0.5,
+                # Generous ceiling: newer Gemini models spend part of this
+                # budget on internal "thinking" tokens, so a low cap truncates
+                # the visible reply mid-sentence. 1024 leaves ample room
+                # (classify_message uses the same).
+                max_output_tokens=1024,
             ),
         )
         return (resp.text or "").strip()

@@ -13,6 +13,14 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-06-07
+
+### Fixed
+- **AI reply truncated mid-sentence.** `draft_reply` capped
+  `max_output_tokens` at 400; newer Gemini models spend part of that budget
+  on internal "thinking" tokens, leaving the visible reply cut off. Raised
+  to 1024 (matching `classify_message`).
+
 ## [0.8.0] — 2026-06-07
 
 ### Changed
