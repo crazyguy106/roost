@@ -288,7 +288,9 @@ async def _process_inbound(msg: dict) -> None:
     except Exception:
         _logger.exception("lead ingest from WhatsApp failed (non-fatal)")
 
-    # Find enabled event-triggered recipes for WhatsApp
+    # Auto-reply is enabled by the presence of an enabled `whatsapp_inbound`
+    # event recipe. The reply itself is a free-form AI draft (not a canned
+    # template), so it's held by Guardian below.
     recipes = list_recipes(trigger_type="event", enabled_only=True)
     wa_recipes = [
         r for r in recipes
@@ -297,20 +299,12 @@ async def _process_inbound(msg: dict) -> None:
 
     draft = ""
     if wa_recipes:
-        # Run the first matching recipe
-        recipe = wa_recipes[0]
-        result = await execute_recipe(
-            recipe_id=recipe["id"],
-            message=text,
-            sender=sender,
-            trigger_data={
-                "source": "whatsapp",
-                "sender": msg.get("sender", ""),
-                "sender_name": sender,
-                "message_id": msg.get("message_id", ""),
-            },
-        )
-        draft = (result or {}).get("draft", "") or ""
+        # Context-pull (Co-Work move 1): read the recent thread, then have
+        # Gemini draft a contextual, MAS-aware reply.
+        from roost.extras.messaging_external.services.ai_cdr import draft_reply
+        from roost.extras.lead_nurture.services.conversation import recent_context
+        ctx = recent_context(channel="whatsapp", identifier=sender_phone)
+        draft = await draft_reply(text, sender=sender, context=ctx)
 
     if draft and sender_phone:
         from roost.config import GUARDIAN_ENABLED

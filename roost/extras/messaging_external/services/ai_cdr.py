@@ -203,6 +203,54 @@ async def classify_message(
     return validated
 
 
+async def draft_reply(message: str, *, sender: str = "", context: str = "") -> str:
+    """Draft a free-form, MAS-aware client reply with Gemini.
+
+    Unlike a canned template, this is novel prose generated per message —
+    which is exactly why the caller holds it in Guardian for the adviser to
+    approve before it reaches the customer (leak / hallucination / injection
+    surface). Returns '' when no API key is set or on any failure, so the
+    caller can fall back to a notify-only path.
+    """
+    from roost.config import GEMINI_API_KEY, GEMINI_MODEL
+    if not GEMINI_API_KEY:
+        return ""
+
+    prompt = (
+        "You are the assistant to a MAS-licensed Singapore financial adviser. "
+        "Draft a reply to the client's WhatsApp message for the adviser to "
+        "review and approve before it is sent.\n\n"
+        f"Client: {sender or 'the client'}\n"
+        f'Their message: "{message}"\n'
+        + (f"\nWhat we already know (recent thread):\n{context}\n" if context else "")
+        + "\nWrite a brief (2-4 sentence), warm, professional reply. Hard rules:\n"
+        "- MAS/FAA compliance: do NOT recommend any specific product, fund or "
+        "policy, and do NOT state specific returns, figures, or guarantees, "
+        "until a proper fact-find is completed.\n"
+        "- If they ask about products, fees, or returns, acknowledge it and "
+        "offer to walk through it on a short call or fact-find rather than "
+        "giving specifics.\n"
+        "- Sound human and warm, never robotic. End with a clear, low-pressure "
+        "next step.\n"
+        "Return ONLY the reply text — no preamble, no surrounding quotes."
+    )
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        resp = await client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                tools=None, temperature=0.5, max_output_tokens=400,
+            ),
+        )
+        return (resp.text or "").strip()
+    except Exception:
+        logger.exception("draft_reply failed")
+        return ""
+
+
 def classify_message_sync(
     message: str,
     sender: str = "",

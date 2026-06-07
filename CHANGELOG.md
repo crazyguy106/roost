@@ -13,6 +13,27 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-07
+
+### Changed
+- **Risk-tiered reply gating — inbound auto-replies are now genuine
+  free-form AI drafts, held by Guardian; canned replies auto-send.** The
+  inbound reply was a filled template (deterministic, no leak risk) yet was
+  still held — theatre. It's now a real contextual reply written by Gemini
+  (`ai_cdr.draft_reply`), MAS/FAA-aware (no product/figure/return claims
+  before a fact-find), after a **context-pull** of the recent thread
+  (`conversation.recent_context`). Because that content is novel each time
+  (leak / hallucination / prompt-injection surface), it's held in Guardian
+  for the adviser to approve. Canned/template replies — the qualification
+  questions — continue to **auto-send** (no per-message hold), since fixed
+  text carries none of that risk. The `chatwoot_inbound` / `whatsapp_inbound`
+  recipe is now just the on-switch for AI replies (its template is no longer
+  used for the reply body).
+
+### Added
+- `ai_cdr.draft_reply` (free-form, MAS-aware reply) and
+  `conversation.recent_context` (compact thread summary for the drafter).
+
 ## [0.7.0] — 2026-06-07
 
 ### Added

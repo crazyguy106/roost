@@ -93,6 +93,25 @@ def get_thread(
     return [dict(r) for r in rows]
 
 
+def recent_context(*, channel: str = "", identifier: str = "", limit: int = 6) -> str:
+    """Compact recent-thread summary to feed an AI drafter (the context-pull
+    move). Returns the last `limit` messages as 'Them:'/'Us:' lines,
+    oldest-first; empty string if there's no history or on any error.
+    """
+    try:
+        thread = get_thread(channel=channel, identifier=identifier, limit=limit * 4)
+    except Exception:
+        return ""
+    lines: list[str] = []
+    for m in thread[-limit:]:
+        body = (m.get("body") or "").strip().replace("\n", " ")
+        if not body:
+            continue
+        who = "Them" if m.get("direction") == "in" else "Us"
+        lines.append(f"{who}: {body[:200]}")
+    return "\n".join(lines)
+
+
 def send_reply(*, enrollment_id: int, text: str) -> dict:
     """Send an operator's hand-typed reply to the lead on their channel,
     logging it to the thread on success.

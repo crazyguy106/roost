@@ -299,7 +299,9 @@ async def _process_inbound(parsed: dict) -> None:
     except Exception:
         _logger.exception("lead ingest from Chatwoot failed (non-fatal)")
 
-    # Recipe pipeline — event-triggered recipes scoped to chatwoot inbound.
+    # Auto-reply is enabled by the presence of an enabled `chatwoot_inbound`
+    # event recipe (the on-switch). The reply itself is a free-form AI draft,
+    # not a canned template — so it's held by Guardian below.
     recipes = list_recipes(trigger_type="event", enabled_only=True)
     cw_recipes = [
         r for r in recipes
@@ -308,21 +310,14 @@ async def _process_inbound(parsed: dict) -> None:
 
     draft = ""
     if cw_recipes:
-        recipe = cw_recipes[0]
-        result = await execute_recipe(
-            recipe_id=recipe["id"],
-            message=text,
-            sender=sender_name or sender_phone,
-            trigger_data={
-                "source": "chatwoot",
-                "sender": sender_phone,
-                "sender_name": sender_name,
-                "conversation_id": conversation_id,
-                "channel": parsed.get("channel", ""),
-                "source_id": parsed.get("source_id", ""),
-            },
+        # Context-pull (Co-Work move 1): read the recent thread, then have
+        # Gemini draft a contextual, MAS-aware reply.
+        from roost.extras.messaging_external.services.ai_cdr import draft_reply
+        from roost.extras.lead_nurture.services.conversation import recent_context
+        ctx = recent_context(channel="chatwoot", identifier=sender_phone)
+        draft = await draft_reply(
+            text, sender=sender_name or sender_phone, context=ctx,
         )
-        draft = (result or {}).get("draft", "") or ""
 
     if draft and conversation_id is not None:
         from roost.config import GUARDIAN_ENABLED
