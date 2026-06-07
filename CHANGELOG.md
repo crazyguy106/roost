@@ -13,6 +13,25 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-07
+
+### Added
+- **Configurable CRM deal-pipeline stages.** New `deal_stages` setting
+  maps Roost's lead lifecycle to your CRM's actual pipeline stage names
+  (`new` / `hot` / `won` / `lost`), defaulting to Attio's standard pipeline
+  (`Lead` / `In Progress` / `Won 🎉` / `Lost`). Roost opens a deal at `new`
+  on first contact and promotes it to `hot` when a message scores hot.
+
+### Fixed
+- **Deal-create no longer sends a non-existent stage.** `ingest_lead`
+  hardcoded the stage `"Hot Lead"`, which isn't in Attio's default pipeline
+  (every hot lead 400'd with `value_not_found`). It now uses the configured
+  `hot` stage.
+- **Returning leads no longer spawn duplicate deals.** `ingest_lead` now
+  checks for an existing deal on the contact (`list_deals(person_id=…)`)
+  and reuses it — promoting it to the hot stage if the new message is hot —
+  instead of opening a fresh deal on every inbound.
+
 ## [0.6.0] — 2026-06-05
 
 ### Changed

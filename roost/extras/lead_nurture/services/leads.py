@@ -352,12 +352,23 @@ def ingest_lead(
             errors.append(f"CRM person upsert failed: {e}")
             logger.exception("CRM person upsert failed for %s/%s", email, phone)
 
+    # CRM deal-pipeline stage names (must match the workspace's Deals
+    # pipeline — Attio default is Lead / In Progress / Won / Lost).
+    from roost.extras.lead_nurture.services import settings as _ln_settings
+    _stages = _ln_settings.get("deal_stages", {})
+    if not isinstance(_stages, dict):
+        _stages = {}
+    new_stage = _stages.get("new", "Lead")
+    hot_stage = _stages.get("hot", "In Progress")
+    if deal_stage == "Lead":  # caller didn't override the default
+        deal_stage = new_stage
+
     # 3. AI CDR on the inbound text, if any. Runs BEFORE deal-create so the
-    # hot-lead branch can override deal_stage to "Hot Lead" before the deal
-    # row is written. Extracted fields (property_interest, preferred_area,
-    # budget, etc.) are also merged into the cadence `fields` for template
-    # interpolation.
+    # hot-lead branch can override the deal stage before the deal row is
+    # written. Extracted fields (property_interest, budget, etc.) are also
+    # merged into the cadence `fields` for template interpolation.
     classification = _classify_if_text(message_text)
+    is_hot = bool(classification and (classification.get("urgency") or "").lower() == "hot")
     if classification:
         extracted = classification.get("extracted_fields") or {}
         if isinstance(extracted, dict):
@@ -365,10 +376,10 @@ def ingest_lead(
                 if v in ("", None):
                     continue
                 fields.setdefault(k, v)
-        # Hot-lead branch: bump deal stage. Telegram + email alert fire
-        # after enrollment so the message can include enrollment_id.
-        if (classification.get("urgency") or "").lower() == "hot":
-            deal_stage = "Hot Lead"
+        # Hot-lead branch: promote to the hot stage. Telegram + email alert
+        # fire after enrollment so the message can include enrollment_id.
+        if is_hot:
+            deal_stage = hot_stage
 
     # Persist the classification on the enrollment so the /leads dashboard
     # (and any downstream consumer without Attio access) can see the score.
@@ -378,19 +389,34 @@ def ingest_lead(
         fields.setdefault("_lead_confidence", classification.get("confidence", 0.0))
         fields.setdefault("_lead_reasoning", classification.get("reasoning", ""))
 
-    # 4. Optional deal (now uses hot-branch-overridden stage if applicable)
-    # The `local` provider raises NotImplementedError (it has no deal model);
-    # catch it alongside CrmError so the rest of the pipeline — enrollment,
-    # cadence dispatch, hot-lead alert — still runs without a real CRM.
+    # 4. Optional deal. Dedup: reuse the contact's existing open deal rather
+    # than opening a duplicate every time they message; only create one when
+    # they have none. Promote an existing deal to the hot stage if this
+    # inbound scored hot. The `local` provider raises NotImplementedError
+    # (no deal model); catch it alongside CrmError so the rest of the
+    # pipeline still runs without a real CRM.
     if crm_person_id:
         try:
-            deal = provider.create_deal(
-                name=deal_name or f"Lead: {name or email or phone}",
-                stage=deal_stage,
-                value=deal_value,
-                person_id=crm_person_id,
-            )
-            crm_deal_id = deal.id
+            existing_deals = []
+            try:
+                existing_deals = provider.list_deals(person_id=crm_person_id, limit=1)
+            except (CrmError, NotImplementedError):
+                existing_deals = []
+            if existing_deals:
+                crm_deal_id = existing_deals[0].id
+                if is_hot:
+                    try:
+                        provider.move_deal_stage(crm_deal_id, hot_stage)
+                    except (CrmError, NotImplementedError):
+                        logger.warning("deal stage promote skipped", exc_info=True)
+            else:
+                deal = provider.create_deal(
+                    name=deal_name or f"Lead: {name or email or phone}",
+                    stage=deal_stage,
+                    value=deal_value,
+                    person_id=crm_person_id,
+                )
+                crm_deal_id = deal.id
         except (CrmError, NotImplementedError) as e:
             errors.append(f"CRM deal create failed: {e}")
             logger.warning("CRM deal create skipped: %s", e)

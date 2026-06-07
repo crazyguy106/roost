@@ -70,6 +70,18 @@ automations_paused: false
 # 24h window. (Outbound past 24h is blocked by Meta regardless.)
 auto_engage_window_hours: 24
 
+# ── CRM deal pipeline ────────────────────────────────────────────────
+# Stage names Roost uses when opening / promoting a deal. These MUST match
+# the stages in your CRM's Deals pipeline exactly. Attio's default pipeline
+# is Lead / In Progress / Won 🎉 / Lost — rename these to match if you've
+# customised yours. Roost opens a deal at `new` on first contact and moves
+# it to `hot` when an inbound message scores hot.
+deal_stages:
+  new: "Lead"
+  hot: "In Progress"
+  won: "Won 🎉"
+  lost: "Lost"
+
 # ── Debug ────────────────────────────────────────────────────────────
 # Verbose logging for the loaders + debouncer. Useful during demos.
 debug: false

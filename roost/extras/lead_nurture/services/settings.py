@@ -42,6 +42,16 @@ _DEFAULTS: dict[str, Any] = {
     # inbox for a human instead). 0 disables the gate. A brand-new contact
     # is never dormant.
     "auto_engage_window_hours": 24,
+    # CRM deal-pipeline stage names. These MUST match the stages configured
+    # in your CRM's Deals pipeline (Attio's default pipeline is
+    # Lead / In Progress / Won 🎉 / Lost). Roost opens a deal at `new` on
+    # first contact and promotes it to `hot` when a message scores hot.
+    "deal_stages": {
+        "new": "Lead",
+        "hot": "In Progress",
+        "won": "Won 🎉",
+        "lost": "Lost",
+    },
     "debug": False,
 }
 

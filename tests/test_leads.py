@@ -56,6 +56,14 @@ class FakeProvider:
                            "title": title, "content": content})
         return {"ok": True}
 
+    def list_deals(self, *, person_id=None, stage=None, limit=50):
+        return []  # no existing deal → ingest opens a fresh one
+
+    def move_deal_stage(self, deal_id, stage):
+        self.stage_moves = getattr(self, "stage_moves", [])
+        self.stage_moves.append((deal_id, stage))
+        return {"ok": True}
+
 
 @pytest.fixture
 def clean_cadence_tables():
