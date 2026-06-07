@@ -13,6 +13,20 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-06-07
+
+### Added
+- **Voice/meeting memo → CRM write-back.** A new
+  `extras/crm/services/meeting_memo.py` turns a dictated post-meeting voice
+  memo into a structured note on the client's CRM record: Gemini extracts
+  the client, a summary, and the next-actions, then writes a "Meeting note
+  (voice memo)" with an action checklist to the matched contact
+  (`search_people` → `append_note`). Wired as a **`memo`** voice command on
+  the operator Telegram bot (`bot/handlers/voice_handler.py`) — the adviser
+  dictates "memo: just met Marcus…" and Roost transcribes
+  (`meeting_notes_service`), extracts, and logs it to Attio. This is the
+  operator-side "voice memo → next-actions → CRM updated" flow.
+
 ## [0.8.1] — 2026-06-07
 
 ### Fixed

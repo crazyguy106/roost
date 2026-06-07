@@ -46,10 +46,14 @@ _PREFIX_MEETING = re.compile(
     r"^(?:\[meeting\]|meeting\s*[:.,;]|meeting\s+notes?\s*[:.,;]?)\s*",
     re.IGNORECASE,
 )
+_PREFIX_MEMO = re.compile(
+    r"^(?:\[memo\]|memo\s*[:.,;]|client\s+memo\s*[:.,;]?)\s*",
+    re.IGNORECASE,
+)
 
 # Layer 2: Levenshtein distance for unknown garbles
-_COMMAND_WORDS = {"task": "task", "journal": "journal", "note": "note", "deck": "deck", "meeting": "meeting"}
-_MAX_EDIT_DISTANCE = {"task": 2, "journal": 3, "note": 2, "deck": 2, "meeting": 3}
+_COMMAND_WORDS = {"task": "task", "journal": "journal", "note": "note", "deck": "deck", "meeting": "meeting", "memo": "memo"}
+_MAX_EDIT_DISTANCE = {"task": 2, "journal": 3, "note": 2, "deck": 2, "meeting": 3, "memo": 2}
 
 
 def _levenshtein(s: str, t: str) -> int:
@@ -81,7 +85,7 @@ def _detect_voice_command(text: str) -> tuple[str | None, str]:
     word(s) for garbles we haven't seen before.
     """
     # Fast path: regex
-    for cmd, pattern in [("task", _PREFIX_TASK), ("journal", _PREFIX_JOURNAL), ("note", _PREFIX_NOTE), ("deck", _PREFIX_DECK), ("meeting", _PREFIX_MEETING)]:
+    for cmd, pattern in [("task", _PREFIX_TASK), ("journal", _PREFIX_JOURNAL), ("note", _PREFIX_NOTE), ("deck", _PREFIX_DECK), ("meeting", _PREFIX_MEETING), ("memo", _PREFIX_MEMO)]:
         m = pattern.match(text)
         if m:
             content = text[m.end():].strip() or text
@@ -246,6 +250,31 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status_msg.edit_text(f"Deck generation failed: {deck_err}")
             # Save transcript as note regardless
             note = task_service.create_note(NoteCreate(content=f"[deck] {text}", tag="voice"))
+            note_id = note.id
+
+        elif command == "memo":
+            # Voice memo from a meeting → extract next-actions → write to the
+            # client's CRM record (the operator-side slide-30 flow).
+            await status_msg.edit_text("Logging meeting memo to the CRM...")
+            try:
+                from roost.extras.crm.services.meeting_memo import log_to_crm
+                res = log_to_crm(content)
+                if res.get("ok"):
+                    lines = [f"✅ Logged to *{res['client']}* in the CRM.",
+                             "", res.get("summary", "")]
+                    if res.get("actions"):
+                        lines.append("\n*Next actions captured:*")
+                        for a in res["actions"]:
+                            lines.append(f"  ☐ {a}")
+                    await status_msg.edit_text("\n".join(lines), parse_mode="Markdown")
+                else:
+                    await status_msg.edit_text(
+                        f"Couldn't log to a client ({res.get('reason', '?')}) "
+                        "— transcript saved as a note.")
+            except Exception as memo_err:
+                logger.exception("voice memo → CRM failed")
+                await status_msg.edit_text(f"Memo logging failed: {memo_err}")
+            note = task_service.create_note(NoteCreate(content=f"[memo] {text}", tag="voice"))
             note_id = note.id
 
         elif command == "meeting":
