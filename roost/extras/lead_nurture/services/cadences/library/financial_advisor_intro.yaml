@@ -17,7 +17,7 @@ templates:
     body: |
       Hi {{first_name}},
 
-      Thanks for getting in touch. I'm {{advisor_name}} ({{advisor_firm}}).
+      Thanks for getting in touch. I'm {{agent_name}} ({{agent_firm}}).
 
       Before we have a proper conversation, I keep things product-agnostic
       until I understand your situation — so the next step is usually a
@@ -27,7 +27,7 @@ templates:
       reach out (insurance, retirement planning, kids' education, estate),
       feel free to flag it.
 
-      {{advisor_signoff}}
+      {{agent_signoff}}
 
   - name: fa_intro_day3
     sequence_day: 3
@@ -48,7 +48,7 @@ templates:
       You can share as much or as little as you're comfortable with. Anything
       you send is treated as confidential.
 
-      {{advisor_signoff}}
+      {{agent_signoff}}
 
   - name: fa_intro_day7
     sequence_day: 7
@@ -61,22 +61,22 @@ templates:
       Following up — would a 30-minute discovery call work for you in the
       next week or two? No prep required, no obligation.
 
-      My calendar: {{advisor_booking_link}}
+      My calendar: {{agent_booking_link}}
 
-      {{advisor_signoff}}
+      {{agent_signoff}}
 
 steps:
   - day_offset: 0
     minute_offset: 5
     template: fa_intro_day0
-    channel: email
+    channel: whatsapp
   - day_offset: 3
     hour: 10
     tz: Asia/Singapore
     template: fa_intro_day3
-    channel: email
+    channel: whatsapp
   - day_offset: 7
     hour: 10
     tz: Asia/Singapore
     template: fa_intro_day7
-    channel: email
+    channel: whatsapp

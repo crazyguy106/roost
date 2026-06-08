@@ -513,6 +513,47 @@ def _score(answers: dict, questions: list[dict]) -> dict:
 
 # ── Finalise ───────────────────────────────────────────────────────────
 
+# Closing message sent after qualification completes, keyed by vertical then
+# hot/warm/cold. Property keeps its listings/viewing wording; financial_advisor
+# stays product-agnostic (fact-find / discovery call); generic is neutral.
+_CLOSINGS = {
+    "property": {
+        "hot": "Thanks! Your agent will reach out shortly to schedule a viewing.",
+        "warm": "Thanks for sharing — we'll send some matching listings and check "
+                "back in a few days.",
+        "cold": "Thanks for your interest — we'll stay in touch when something "
+                "matches your criteria.",
+    },
+    "financial_advisor": {
+        "hot": "Thanks — I'll be in touch shortly to set up a short, no-obligation "
+               "discovery call. Talk soon.",
+        "warm": "Thanks for sharing. I'll review what you've told me and follow up "
+                "in the next couple of days with some next steps that fit your situation.",
+        "cold": "Thanks for your interest — no rush at all. I'll stay in touch and "
+                "reach out when the timing's right for you.",
+    },
+    "generic": {
+        "hot": "Thanks! Someone from our team will reach out shortly to follow up.",
+        "warm": "Thanks for sharing — we'll review and follow up in the next couple of days.",
+        "cold": "Thanks for your interest — we'll stay in touch and reach out when "
+                "the timing's right.",
+    },
+}
+
+
+def _vertical_for(fields: dict) -> str:
+    slug = (fields.get("_qualify_cadence_slug") or "").lower()
+    if "financial_advisor" in slug or "advisor" in slug:
+        return "financial_advisor"
+    if "property" in slug:
+        return "property"
+    return "generic"
+
+
+def _closing(fields: dict, label: str) -> str:
+    table = _CLOSINGS.get(_vertical_for(fields), _CLOSINGS["generic"])
+    return table.get(label) or _CLOSINGS["generic"][label]
+
 
 def _finalise(
     enrollment: dict,
@@ -557,30 +598,19 @@ def _finalise(
                 )
             except Exception:
                 logger.exception("hot-lead notify from qualification failed")
-        _send_question(
-            channel, identifier,
-            "Thanks! Your agent will reach out shortly to schedule a viewing.",
-        )
+        _send_question(channel, identifier, _closing(fields, "hot"))
         update_enrollment(enrollment_id, fields=fields)
         resume_enrollment(enrollment_id)
         return
 
     if label == "warm":
-        _send_question(
-            channel, identifier,
-            "Thanks for sharing — we'll send some matching listings and check "
-            "back in a few days.",
-        )
+        _send_question(channel, identifier, _closing(fields, "warm"))
         update_enrollment(enrollment_id, fields=fields)
         resume_enrollment(enrollment_id)
         return
 
     # cold
-    _send_question(
-        channel, identifier,
-        "Thanks for your interest — we'll stay in touch when something "
-        "matches your criteria.",
-    )
+    _send_question(channel, identifier, _closing(fields, "cold"))
     fields["_qualify_status"] = "exited_cold"
     update_enrollment(
         enrollment_id,

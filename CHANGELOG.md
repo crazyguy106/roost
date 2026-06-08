@@ -13,6 +13,22 @@ heading so self-hosters know to read before `git pull`.
 
 ## [Unreleased]
 
+### Added
+- **Operator identity via `.env`.** `AGENT_NAME` / `AGENT_FIRM` / `AGENT_SIGNOFF`
+  / `AGENT_BOOKING_LINK` / `AGENT_CEA_NO` now fill lead-nurture cadence templates
+  (`{{agent_name}}` etc.). Precedence: caller fields > settings page > `.env` >
+  defaults. Added to `env-templates/fa.env`.
+
+### Fixed
+- **FA edition de-propertyfied.** The financial-advisor cadence and qualification
+  flow were scaffolded from the property template and leaked property language:
+  - Qualification closing messages are now vertical-aware — financial-advisor
+    stays product-agnostic (fact-find / discovery-call wording) instead of
+    "matching listings" / "schedule a viewing"; property wording is unchanged.
+  - The FA cadence drips (`financial_advisor_intro`) now send over **WhatsApp**
+    instead of email, and the day-0/3/7 templates use the `{{agent_*}}` variables
+    the engine actually fills (were `{{advisor_*}}`, which rendered blank).
+
 ## [0.9.0] — 2026-06-07
 
 ### Added

@@ -143,6 +143,15 @@ AGENTIC_WORKFLOW_ENABLED: bool = os.getenv("AGENTIC_WORKFLOW_ENABLED", "false").
 # Planner model — empty string means "use the executor model from AGENT_PROVIDER".
 AGENTIC_PLANNER_MODEL: str = os.getenv("AGENTIC_PLANNER_MODEL", "")
 
+# Operator identity for lead-nurture cadence templates ({{agent_name}} etc.).
+# Set per-instance in .env so the FA/agent's name fills outbound drips. Settings
+# page values (if any) still take precedence over these env defaults.
+AGENT_NAME: str = os.getenv("AGENT_NAME", "")
+AGENT_FIRM: str = os.getenv("AGENT_FIRM", "")
+AGENT_SIGNOFF: str = os.getenv("AGENT_SIGNOFF", "")
+AGENT_BOOKING_LINK: str = os.getenv("AGENT_BOOKING_LINK", "")
+AGENT_CEA_NO: str = os.getenv("AGENT_CEA_NO", "")  # property-agent only
+
 # Background agent limits
 MAX_BACKGROUND_RUNS: int = int(os.getenv("MAX_BACKGROUND_RUNS", "3"))
 MAX_BACKGROUND_DURATION: int = int(os.getenv("MAX_BACKGROUND_DURATION", "300"))  # seconds

@@ -105,12 +105,26 @@ def _notify_telegram(text: str, *, reply_markup: dict | None = None) -> None:
 # ── Message build + dispatch ───────────────────────────────────────────
 
 
-_AGENT_FIELD_KEYS = ("agent_name", "agent_cea_no", "agent_signoff")
+_AGENT_FIELD_KEYS = (
+    "agent_name", "agent_firm", "agent_signoff", "agent_booking_link", "agent_cea_no",
+)
 _DEFAULT_AGENT_FIELDS = {
     "agent_signoff": "Best regards",
     "property_interest": "your enquiry",
     "preferred_area": "the area you're looking at",
 }
+
+
+def _env_agent_fields() -> dict:
+    """Operator identity from .env (config) — the base layer under settings."""
+    from roost import config as _cfg
+    return {
+        "agent_name": _cfg.AGENT_NAME,
+        "agent_firm": _cfg.AGENT_FIRM,
+        "agent_signoff": _cfg.AGENT_SIGNOFF,
+        "agent_booking_link": _cfg.AGENT_BOOKING_LINK,
+        "agent_cea_no": _cfg.AGENT_CEA_NO,
+    }
 
 
 def _build_message(
@@ -132,17 +146,22 @@ def _build_message(
     if "error" in tmpl:
         raise ValueError(f"template '{template_name}' not found")
 
-    # Pull operator-side identity from settings; caller-supplied fields win.
+    # Operator identity precedence: caller fields > settings page > .env > defaults.
     fields = dict(fields)
+    env_identity = _env_agent_fields()
     try:
         from roost.services.settings import get_setting
         uid = int(user_id) if user_id else None
         for key in _AGENT_FIELD_KEYS:
-            val = get_setting(key, user_id=uid) if uid else get_setting(key)
+            val = (get_setting(key, user_id=uid) if uid else get_setting(key)) \
+                or env_identity.get(key, "")
             if val:
                 fields.setdefault(key, val)
     except Exception:
-        logger.debug("Could not load agent_* settings; using defaults", exc_info=True)
+        logger.debug("Could not load agent_* settings; using .env/defaults", exc_info=True)
+        for key, val in env_identity.items():
+            if val:
+                fields.setdefault(key, val)
     for k, v in _DEFAULT_AGENT_FIELDS.items():
         if not fields.get(k):
             fields[k] = v
