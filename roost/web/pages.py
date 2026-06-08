@@ -719,6 +719,33 @@ def project_remove_access_member(request: Request, project_id: int, member_user_
 
 @router.get("/contacts")
 def contacts_page(request: Request):
+    # When an external CRM is the system of record (e.g. Attio), the People
+    # page reads it live (read-through) instead of the local contacts table —
+    # so it stays in sync with the CRM the lead-flow actually writes to.
+    crm_provider = os.getenv("CRM_PROVIDER", "local").strip().lower()
+    if crm_provider != "local":
+        from types import SimpleNamespace
+        try:
+            from roost.extras.crm.services import get_provider
+            people = get_provider(crm_provider).search_people("", limit=200)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("CRM people fetch failed (%s): %s", crm_provider, exc)
+            people = []
+        shims = [SimpleNamespace(
+            id=p.id,
+            name=p.name or "(unnamed)",
+            email=(p.emails[0] if p.emails else ""),
+            phone=(p.phones[0] if p.phones else ""),
+        ) for p in people]
+        label = f"{crm_provider.capitalize()} CRM"
+        return templates.TemplateResponse("contacts.html", {
+            **_base_context(request),
+            "grouped_contacts": [(label, shims)] if shims else [],
+            "group_entity_ids": {},
+            "entities": [],
+            "crm_source": crm_provider,
+        })
+
     entities = task_service.list_entities()
     contacts = task_service.list_contacts()
 
@@ -744,6 +771,7 @@ def contacts_page(request: Request):
         "grouped_contacts": ordered,
         "group_entity_ids": entity_ids,
         "entities": entities,
+        "crm_source": None,
     })
 
 
