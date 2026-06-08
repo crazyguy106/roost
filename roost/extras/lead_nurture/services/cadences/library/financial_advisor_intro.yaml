@@ -38,7 +38,8 @@ templates:
       Hi {{first_name}},
 
       To make our first conversation useful, it helps if I have a rough
-      picture of:
+      picture of the below — no need to repeat anything you've already
+      shared with me:
 
       1. Household composition (spouse, dependants, ages)
       2. Current insurance coverage (rough sums assured)

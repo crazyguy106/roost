@@ -18,6 +18,13 @@ heading so self-hosters know to read before `git pull`.
   / `AGENT_BOOKING_LINK` / `AGENT_CEA_NO` now fill lead-nurture cadence templates
   (`{{agent_name}}` etc.). Precedence: caller fields > settings page > `.env` >
   defaults. Added to `env-templates/fa.env`.
+- **`DEFAULT_VERTICAL` env override.** Set the new-lead vertical
+  (`property` | `financial_advisor` | `generic`) per-instance via `.env`,
+  overriding the baked `settings.yaml` — flip editions without a rebuild.
+
+### Changed
+- Lead-nurture sidebar group renamed **"Financial Advisor" → "Leads"** — the
+  bundle is vertical-neutral, so the label no longer implies a single vertical.
 
 ### Fixed
 - **FA edition de-propertyfied.** The financial-advisor cadence and qualification
@@ -28,6 +35,11 @@ heading so self-hosters know to read before `git pull`.
   - The FA cadence drips (`financial_advisor_intro`) now send over **WhatsApp**
     instead of email, and the day-0/3/7 templates use the `{{agent_*}}` variables
     the engine actually fills (were `{{advisor_*}}`, which rendered blank).
+  - The day-3 fact-find drip no longer re-asks what the live qualification
+    already captured ("no need to repeat anything you've already shared").
+- **`loader.import_to_db(source="user-config")`** crashed on the
+  `nurture_cadences.source` CHECK (only `library`/`user` allowed); it now maps
+  `user-config` → `user` for the row while keeping overwrite semantics.
 
 ## [0.9.0] — 2026-06-07
 

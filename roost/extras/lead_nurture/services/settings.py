@@ -11,6 +11,7 @@ Hot-reload: ``config_watcher.py`` calls ``reload()`` on mtime change.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -70,13 +71,28 @@ def _deep_merge(defaults: dict, override: dict) -> dict:
     return out
 
 
+_ENV_OVERRIDE_KEYS = {"default_vertical": "DEFAULT_VERTICAL"}
+
+
+def _apply_env_overrides(d: dict) -> dict:
+    """Let specific .env vars override settings.yaml — e.g. DEFAULT_VERTICAL
+    flips a per-instance vertical without editing the baked settings.yaml."""
+    out = dict(d)
+    for skey, env in _ENV_OVERRIDE_KEYS.items():
+        val = os.getenv(env, "").strip()
+        if val:
+            out[skey] = val
+    return out
+
+
 def reload() -> dict:
     """Re-read settings.yaml. Returns the resolved (merged) dict."""
     if not SETTINGS_FILE.exists():
+        base = _apply_env_overrides(_DEFAULTS)
         with _lock:
             _cache.clear()
-            _cache.update(_DEFAULTS)
-        return dict(_DEFAULTS)
+            _cache.update(base)
+        return dict(base)
     try:
         with SETTINGS_FILE.open("r", encoding="utf-8") as f:
             user_cfg = yaml.safe_load(f) or {}
@@ -87,7 +103,7 @@ def reload() -> dict:
         logger.exception("settings.yaml parse failed — using defaults")
         user_cfg = {}
 
-    merged = _deep_merge(_DEFAULTS, user_cfg)
+    merged = _apply_env_overrides(_deep_merge(_DEFAULTS, user_cfg))
     with _lock:
         _cache.clear()
         _cache.update(merged)

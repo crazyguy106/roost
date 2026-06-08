@@ -175,7 +175,9 @@ def import_to_db(path: Path | str, *, user_id: str = "", source: str = "user") -
         vertical=cfg.get("vertical", "generic"),
         steps=cfg["steps"],
         enabled=bool(cfg.get("enabled", True)),
-        source=source,
+        # set_cadence's CHECK allows only 'library'|'user'. "user-config"
+        # selects overwrite mode above but must map to 'user' for the row.
+        source="user" if source == "user-config" else source,
         user_id=user_id,
     )
     cadence["templates_seeded"] = seeded_templates
