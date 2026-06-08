@@ -73,15 +73,22 @@ templates.env.globals["depttools_enabled"] = os.environ.get(
 from roost.config import PROPERTY_AGENT_ENABLED as _PA_ENABLED  # noqa: E402
 templates.env.globals["property_agent_enabled"] = _PA_ENABLED
 
+# Lead-nurture bundle master flag (sidebar "Financial Advisor" group + /leads)
+from roost.config import LEAD_NURTURE_ENABLED as _LN_ENABLED  # noqa: E402
+templates.env.globals["lead_nurture_enabled"] = _LN_ENABLED
+
 
 def _base_context(request: Request) -> dict:
     """Base template context: request + current_user."""
-    from roost.config import PROPERTY_AGENT_ENABLED, AGENTIC_WORKFLOW_ENABLED
+    from roost.config import (
+        PROPERTY_AGENT_ENABLED, AGENTIC_WORKFLOW_ENABLED, LEAD_NURTURE_ENABLED,
+    )
     return {
         "request": request,
         "current_user": getattr(request.state, "current_user", None),
         "property_agent_enabled": PROPERTY_AGENT_ENABLED,
         "agentic_workflow_enabled": AGENTIC_WORKFLOW_ENABLED,
+        "lead_nurture_enabled": LEAD_NURTURE_ENABLED,
     }
 
 
