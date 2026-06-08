@@ -26,13 +26,12 @@ curl -fsS https://roost.ethanseow.com/health     # → {"ok":true}
 #    Username: admin
 #    Password: <from /home/dev/roost/.env on VPS — WEB_PASSWORD>
 
-# 3. Claude Code CLI authenticated inside container?
-ssh root@178.105.175.105 \
-  'cd /home/dev/roost && docker compose exec -u dev roost claude --version'
-#    → 2.1.150 (Claude Code)
-#    If "Please run claude login first" appears, do it:
+# 3. Claude CLI AUTHENTICATED inside container? (--version does NOT prove login!)
+ssh root@178.105.175.105 "cd /home/dev/roost && echo hi | docker compose exec -T -u dev -e HOME=/home/dev roost /home/dev/.local/bin/claude --bare -p --output-format stream-json --input-format text --verbose --permission-mode bypassPermissions 2>&1 | grep -o '\"apiKeySource\":\"[^\"]*\"'"
+#    → "apiKeySource":"subscription"   (if "none" / "Not logged in" → re-login)
+#    Re-login (device-auth in a browser; HOME + the CLAUDE_CLI_BIN binary):
 ssh -t root@178.105.175.105 \
-  'cd /home/dev/roost && docker compose exec -u dev -it roost claude login'
+  'cd /home/dev/roost && docker compose exec -u dev -e HOME=/home/dev -it roost /home/dev/.local/bin/claude login'
 
 # 4. Property demo data correct?
 ssh root@178.105.175.105 'cd /home/dev/roost && docker compose exec -T -u dev roost python -c "
@@ -481,12 +480,25 @@ chown -R 1000:1000 /home/dev/roost/{claude,gemini,codex}-auth
 docker compose restart roost
 ```
 
-### "Agent chat returns 'No AI provider configured'"
-The CLI hasn't been logged in. Inside the container:
+### `/agentic` says "Not logged in" / "No AI provider configured"
+The Claude subscription token has lapsed (it expires/invalidates periodically —
+`apiKeySource: none`, `authentication_failed`). Re-login inside the container.
+**Set `HOME=/home/dev`** (so it writes to the bind-mounted `./claude-auth`) and
+use the binary `CLAUDE_CLI_BIN` points at:
 ```bash
 ssh -t root@178.105.175.105 \
-  'cd /home/dev/roost && docker compose exec -u dev -it roost claude login'
+  'cd /home/dev/roost && docker compose exec -u dev -e HOME=/home/dev -it roost /home/dev/.local/bin/claude login'
 ```
+It prints a **device-auth URL** — open it in a browser, approve, paste the code
+back. (The container is headless, so the browser-redirect login won't work — the
+device-auth code flow is the path.) Verify:
+```bash
+ssh root@178.105.175.105 "cd /home/dev/roost && echo hi | docker compose exec -T -u dev -e HOME=/home/dev roost /home/dev/.local/bin/claude --bare -p --output-format stream-json --input-format text --verbose --permission-mode bypassPermissions 2>&1 | grep -o '\"apiKeySource\":\"[^\"]*\"'"
+# → "apiKeySource":"subscription"  (not "none")
+```
+Note: there are two `claude` binaries in the container (`/usr/bin/claude` and
+`/home/dev/.local/bin/claude`); Roost uses the latter via `CLAUDE_CLI_BIN`, so
+log in with **that** one.
 
 ### "RPA flow hangs forever"
 The chromium sidecar didn't start. Check:
