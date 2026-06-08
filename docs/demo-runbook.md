@@ -82,8 +82,10 @@ Everything in the FA hero flow is **Live** — no flip-ready stand-ins. To bring
 > a web chat at the URL you see, a Telegram bot, and a 270+ tool MCP server
 > for Claude Code. What makes it interesting is two things —
 >
-> **One** — it bills against *your existing* Claude / Gemini / Codex
-> subscription, so there's no separate per-token API bill.
+> **One** — it runs on *your existing* Claude / Gemini / Codex subscription.
+> Headless agent runs draw from your plan's monthly **Agent SDK Credit**
+> (Claude Pro $20 / Max $100–200); no API key, and only heavy use beyond that
+> credit is pay-as-you-go.
 >
 > **Two** — verticals like the Property-Agent toolkit and SME Ops are
 > *bundles*. They turn on or off with a single env flag. The same engine
@@ -353,13 +355,19 @@ Navigate: `/settings` → MCP tab (or the agentic page's tool list)
 
 Show settings → AI Provider tab.
 
-> "The default is `claude_cli` — that means the Claude Code subscription
-> you already pay for. No separate API bill. Same goes for Gemini CLI
-> and Codex. Roost is the *only* platform I'm aware of that wires
-> subscription auth into a multi-channel agent surface."
+> "The default is `claude_cli` — it runs on the Claude subscription you
+> already pay for. Headless agent runs draw from your plan's monthly **Agent
+> SDK Credit** (Pro $20 / Max $100–200, since 2026-06-15), not a per-token API
+> bill — and only heavy use beyond that credit is pay-as-you-go. Same idea for
+> Gemini CLI and Codex. Roost wires subscription auth into a multi-channel
+> agent surface."
 
-> "If you want API-mode for higher concurrency, flip to `claude` or
-> `openai` — same code path, different billing model."
+> "If you want uncapped throughput, flip to `claude` or `openai` API mode —
+> same code path, pay-as-you-go billing."
+
+> **Heads-up:** the subscription token can expire — if `/agentic` says *"Not
+> logged in"*, re-run `claude login --device-auth` in the container (see
+> Troubleshooting). Don't leave this to demo time.
 
 ### C5 — Deployment story (30s)
 
