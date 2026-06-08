@@ -21,6 +21,10 @@ heading so self-hosters know to read before `git pull`.
 - **`DEFAULT_VERTICAL` env override.** Set the new-lead vertical
   (`property` | `financial_advisor` | `generic`) per-instance via `.env`,
   overriding the baked `settings.yaml` — flip editions without a rebuild.
+- **`env-templates/property-agent.env`** — a Property-Agent (SG) edition template
+  alongside `fa.env`: Property-Agent toolkit (IRAS / DNC / CDD / HDB EIP RPA) +
+  lead-nurture + CRM, `DEFAULT_VERTICAL=property`, CEA operator identity. Listed
+  in `env-templates/README.md`.
 
 ### Changed
 - Lead-nurture sidebar group renamed **"Financial Advisor" → "Leads"** — the

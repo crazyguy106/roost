@@ -4,14 +4,14 @@ A tour for showing Roost on `roost.ethanseow.com` to prospects.
 Pick the track that matches the audience; switch mid-demo if the room reacts.
 
 > **Audience options**
-> - **⭐ Track FA — Financial adviser** (the hero flow — *what the current box is wired for*)
-> - **Track A — Singapore property agent** (CEA-registered salesperson) — *bundle disabled, see note*
-> - **Track B — SME owner / operator** (cafe, agency, kiosk reseller) — *bundle disabled, see note*
+> - **⭐ Track A — Singapore property agent** (CEA-registered salesperson — *what the current box is wired for*)
+> - **Track FA — Financial adviser** (solo FA) — *needs FA mode, see note*
+> - **Track B — SME owner / operator** (cafe, agency, kiosk reseller) — *needs SME mode, see note*
 > - **Track C — Generic agent-platform / productivity prospect**
 
 Each track is ~7 minutes. Together with intro + Q&A: ~30 min. **The demo box is
-currently FA-only** — Property-Agent and SME Ops bundles are off, so run **Track FA**
-unless you re-enable them (see the note after Track FA).
+currently in property mode** (`PROPERTY_AGENT_ENABLED=true`, `DEFAULT_VERTICAL=property`),
+so run **Track A**. To switch editions it's `.env`-only, no rebuild — see the note after Track A.
 
 ---
 
@@ -34,15 +34,18 @@ ssh root@178.105.175.105 \
 ssh -t root@178.105.175.105 \
   'cd /home/dev/roost && docker compose exec -u dev -it roost claude login'
 
-# 4. FA demo data correct? (post-reskin: property/SME data removed)
+# 4. Property demo data correct?
 ssh root@178.105.175.105 'cd /home/dev/roost && docker compose exec -T -u dev roost python -c "
-from roost.services import projects, tasks, contacts
-print(f\"Projects: {len(projects.list_projects())}, Tasks: {len(tasks.list_tasks())}, Contacts: {len(contacts.list_contacts())}\")
+from roost.services import projects, tasks
+print(f\"Projects: {len(projects.list_projects())}, Tasks: {len(tasks.list_tasks())}\")
+from roost.extras.property_agent.services import iras_stamp_duty as i
+b=i.calc_bsd(1_800_000); a,r=i.calc_absd(1_800_000,\"sc\",2)
+print(f\"IRAS check — 2nd prop \$1.8M SC: BSD \${b:,} + ABSD \${a:,} ({r})\")
 "'
-#    → Projects: 2, Tasks: 3, Contacts: 0  (local contacts empty by design —
-#      the People page reads live from Attio, see next line)
-#    → Roost → People (/contacts) shows the Attio prospects with a
-#      "Synced live from Attio" badge. /leads should be EMPTY (populates live).
+#    → Projects: 3 (incl. Property Demo — Mei Ling), Tasks: 7
+#    → IRAS check — 2nd prop $1.8M SC: BSD $59,600 + ABSD $360,000 (20%)
+#    → Roost → People (/contacts) shows 4 property prospects ("Synced live from
+#      Attio"). /leads should be EMPTY (populates live).
 
 # 5. Chromium sidecar (for RPA pause demo) healthy?
 curl -fsS -o /dev/null -w "%{http_code}\n" https://roost.ethanseow.com/sidecar
@@ -57,16 +60,16 @@ Check this before each demo. "Live" = real API call returns real data. "Disabled
 
 | Bundle / Surface                       | Status        | Notes                                              |
 |----------------------------------------|---------------|----------------------------------------------------|
+| **IRAS stamp duty calc**               | **Live**      | Pure-Python ABSD/BSD/SSD (post-27-Apr-2023). The headline tool. |
+| **HDB EIP/SPR quota check (RPA)**      | **Live**      | Browser flow + Singpass pause via the chromium sidecar. |
+| PDPC DNC scrub                         | **Narrate**   | `DNC_ENABLED=false` — page renders dry-run; needs an IMDA org account. |
+| CEA CDD / AML screen                   | **Narrate**   | `CDD_ENABLED=false` — dry-run; needs a ComplyAdvantage key. |
 | **WhatsApp inbound (via Chatwoot)**    | **Live**      | `CHATWOOT_ENABLED=true` — real two-way WhatsApp.   |
-| **Lead-nurture pipeline (`/leads`)**   | **Live**      | Auto-qualify + cadences. Empty until a lead lands. |
-| **AI draft reply (Gemini, MAS-aware)** | **Live**      | Free-form replies; canned questions auto-send.     |
-| **Guardian hold → Telegram approve**   | **Live**      | Holds every free-form client reply for approval.   |
-| **Attio CRM (`Roost` workspace)**      | **Live**      | 4 FA prospects + deals + AI lead-scores.           |
-| **Voice-memo → CRM**                   | **Live**      | Telegram `memo:` → meeting note in Attio.          |
+| **Lead-nurture pipeline (`/leads`)**   | **Live**      | Property-buyer auto-qualify + cadence. Empty until a lead lands. |
+| **Guardian hold → Telegram approve**   | **Live**      | Holds every free-form AI reply for approval.       |
+| **Attio CRM + live People sync**       | **Live**      | 4 property prospects + deals + AI lead-scores; `/contacts` reads Attio directly. |
+| Voice-memo → CRM                       | **Live**      | Telegram `memo:` → meeting note in Attio.          |
 | Agentic chat (`/agentic`)              | **Live**      | `AGENT_PROVIDER=claude_cli`, already logged in.    |
-| RPA framework (`/rpa`)                 | **Live**      | YAML library seeded; chromium sidecar healthy.     |
-| **People page → live Attio sync**      | **Live**      | `/contacts` reads Attio directly (read-through), not a copy. |
-| Property-Agent (IRAS / HDB / DNC / CDD)| **Disabled**  | `PROPERTY_AGENT_ENABLED=false` — routes 404.       |
 | SME Ops (Stripe / Shopify / Xero)      | **Disabled**  | `SME_OPS_ENABLED=false` — routes 404.              |
 
 Everything in the FA hero flow is **Live** — no flip-ready stand-ins. To bring a **Disabled** bundle back (e.g. to run the legacy property/SME tracks), flip its flag in `/home/dev/roost/.env` (`PROPERTY_AGENT_ENABLED=true` / `SME_OPS_ENABLED=true`) and rebuild: `docker compose up -d --build roost`.
@@ -90,11 +93,12 @@ Show: `/settings` page — point at the Feature Flags column → "every box you 
 
 ---
 
-## Track FA — Financial Adviser (the hero flow) ⭐ (~7 min)
+## Track FA — Financial Adviser (the hero flow) (~7 min)
 
-**This is the primary track for the current demo box.** Property-Agent and SME Ops are
-disabled; the FA lead-nurturing loop is what's wired end-to-end. Every step below is
-**Live** (see the wire-status table) — no narration stand-ins.
+> **Needs FA mode.** The box is currently in property mode. To run this track, flip
+> `DEFAULT_VERTICAL=financial_advisor` in `.env`, re-seed the FA prospects in Attio,
+> then `docker compose up -d roost`. (No rebuild — it's an `.env` change.) The
+> lead-nurturing loop below is identical; only the vertical's wording differs.
 
 **Persona:** Rachel, a licensed financial adviser running solo. She fields WhatsApp
 enquiries between client meetings and can't babysit a keyboard.
@@ -163,14 +167,18 @@ Marcus's Attio record. Open Marcus in Attio:
 
 ---
 
-> **Note on Tracks A–C below:** they were written for the generic / property / SME demo.
-> On the *current* box those bundles are **off** (`PROPERTY_AGENT_ENABLED=false`,
-> `SME_OPS_ENABLED=false`), so their pages 404 — run **Track FA** above. To demo A or B,
-> re-enable the bundle flag in `.env` and rebuild (`docker compose up -d --build roost`).
+> **Track A below is the live track for the current box.** Tracks B (SME) and C
+> (generic) need their bundles re-enabled (`SME_OPS_ENABLED=true`, …); Track FA above
+> needs `DEFAULT_VERTICAL=financial_advisor`. All are `.env`-only flips
+> (`docker compose up -d roost`) — no rebuild.
 
 ---
 
-## Track A — Singapore property agent (~7 min)
+## Track A — Singapore property agent (the hero track) ⭐ (~7 min)
+
+**This is the primary track for the current demo box** (`PROPERTY_AGENT_ENABLED=true`,
+`DEFAULT_VERTICAL=property`). The toolkit (IRAS calc + HDB EIP RPA) is live; DNC + CDD
+run in dry-run (narrate). See the wire-status table above.
 
 **Persona:** Mei Ling Tan, CEA-registered salesperson, mid-career.
 **Premise:** She has 12 cold leads from a roadshow and a buyer asking about ABSD.

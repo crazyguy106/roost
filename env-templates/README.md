@@ -12,6 +12,18 @@ Drop-in starting configs so you don't have to fill every field in `.env.example`
 | [`ollama-local.env`](ollama-local.env) | **Offline / privacy-first.** No cloud AI calls. | Local Ollama | Telegram |
 | [`demo.env`](demo.env) | Classroom walkthrough — every feature toggled on with placeholder creds. | Gemini | Everything (placeholders) |
 
+### Vertical editions
+
+Pre-configured for one business and fronted by Chatwoot (laptop install via `scripts/install-fa.sh`). All default to the Claude CLI agent and route WhatsApp through a bundled Chatwoot.
+
+| Template | For | Configured for |
+|---|---|---|
+| [`fa.env`](fa.env) | Solo financial adviser | lead-nurture + CRM (Attio) + WhatsApp/Chatwoot; `DEFAULT_VERTICAL=financial_advisor` |
+| [`property-agent.env`](property-agent.env) | SG CEA-registered property salesperson | Property-Agent toolkit (IRAS / DNC / CDD / HDB EIP RPA) + lead-nurture + CRM; `DEFAULT_VERTICAL=property` |
+| [`sme-ops.env`](sme-ops.env) | Small/medium business ops | SME Ops bundle (Stripe / Shopify / Xero / Zapier) |
+
+> Editions flip with `DEFAULT_VERTICAL` + the bundle master flags (`PROPERTY_AGENT_ENABLED`, `SME_OPS_ENABLED`, …) — both `.env`-only, no rebuild.
+
 ## How to use
 
 ```bash
