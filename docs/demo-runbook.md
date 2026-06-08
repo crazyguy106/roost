@@ -27,8 +27,11 @@ curl -fsS https://roost.ethanseow.com/health     # → {"ok":true}
 #    Password: <from /home/dev/roost/.env on VPS — WEB_PASSWORD>
 
 # 3. Claude CLI AUTHENTICATED inside container? (--version does NOT prove login!)
-ssh root@178.105.175.105 "cd /home/dev/roost && echo hi | docker compose exec -T -u dev -e HOME=/home/dev roost /home/dev/.local/bin/claude --bare -p --output-format stream-json --input-format text --verbose --permission-mode bypassPermissions 2>&1 | grep -o '\"apiKeySource\":\"[^\"]*\"'"
-#    → "apiKeySource":"subscription"   (if "none" / "Not logged in" → re-login)
+#    Run a one-word agent call. "is_error":false = good. (Do NOT add --bare —
+#    it skips the OAuth read and falsely reports "Not logged in". apiKeySource is
+#    "none" even when logged in on a subscription, so check is_error, not it.)
+ssh root@178.105.175.105 "cd /home/dev/roost && echo 'reply OK' | docker compose exec -T -u dev -e HOME=/home/dev roost /home/dev/.local/bin/claude -p --output-format stream-json --input-format text --verbose --permission-mode bypassPermissions 2>&1 | grep -oE '\"is_error\":(true|false)|Not logged in'"
+#    → "is_error":false      (if "Not logged in" → genuine lapse, re-login below)
 #    Re-login (device-auth in a browser; HOME + the CLAUDE_CLI_BIN binary):
 ssh -t root@178.105.175.105 \
   'cd /home/dev/roost && docker compose exec -u dev -e HOME=/home/dev -it roost /home/dev/.local/bin/claude login'
@@ -481,8 +484,12 @@ docker compose restart roost
 ```
 
 ### `/agentic` says "Not logged in" / "No AI provider configured"
-The Claude subscription token has lapsed (it expires/invalidates periodically —
-`apiKeySource: none`, `authentication_failed`). Re-login inside the container.
+**First rule-out: never invoke with `--bare`.** `--bare` skips the OAuth read and
+falsely reports "Not logged in" even with valid credentials — that's a config
+bug, not a lapsed token. Roost uses plain `-p` (see `agents_claude_cli.py`).
+
+If a real lapse *has* happened (`is_error:true` + "Not logged in" from the plain
+`-p` probe in §0, with `apiKeySource:none`), re-login inside the container.
 **Set `HOME=/home/dev`** (so it writes to the bind-mounted `./claude-auth`) and
 use the binary `CLAUDE_CLI_BIN` points at:
 ```bash
@@ -490,15 +497,12 @@ ssh -t root@178.105.175.105 \
   'cd /home/dev/roost && docker compose exec -u dev -e HOME=/home/dev -it roost /home/dev/.local/bin/claude login'
 ```
 It prints a **device-auth URL** — open it in a browser, approve, paste the code
-back. (The container is headless, so the browser-redirect login won't work — the
-device-auth code flow is the path.) Verify:
-```bash
-ssh root@178.105.175.105 "cd /home/dev/roost && echo hi | docker compose exec -T -u dev -e HOME=/home/dev roost /home/dev/.local/bin/claude --bare -p --output-format stream-json --input-format text --verbose --permission-mode bypassPermissions 2>&1 | grep -o '\"apiKeySource\":\"[^\"]*\"'"
-# → "apiKeySource":"subscription"  (not "none")
-```
-Note: there are two `claude` binaries in the container (`/usr/bin/claude` and
-`/home/dev/.local/bin/claude`); Roost uses the latter via `CLAUDE_CLI_BIN`, so
-log in with **that** one.
+back (the container is headless, so the device-auth code flow is the path).
+Verify with the §0 probe (plain `-p`, **no `--bare`**) → `"is_error":false`.
+Note: `apiKeySource` is `"none"` even when logged in on a subscription — that's
+normal, don't treat it as an error. Two `claude` binaries exist
+(`/usr/bin/claude`, `/home/dev/.local/bin/claude`); Roost uses the latter via
+`CLAUDE_CLI_BIN`, so log in with **that** one.
 
 ### "RPA flow hangs forever"
 The chromium sidecar didn't start. Check:

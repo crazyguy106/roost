@@ -29,9 +29,6 @@ heading so self-hosters know to read before `git pull`.
 ### Changed
 - Lead-nurture sidebar group renamed **"Financial Advisor" → "Leads"** — the
   bundle is vertical-neutral, so the label no longer implies a single vertical.
-- **`claude_cli` provider now invokes `claude --bare -p`** — Anthropic's
-  recommended minimal mode for scripted/headless use (skips hooks/LSP/plugins;
-  Roost's own MCP tools still load via `--mcp-config`). Requires Claude CLI 2.1.x+.
 - **Billing docs corrected for the 2026-06-15 subscription change.** Headless
   `claude -p` / Agent-SDK usage on a Claude subscription now draws from a monthly
   **Agent SDK Credit** (Pro $20 / Max $100–200), then pay-as-you-go — it is *not*

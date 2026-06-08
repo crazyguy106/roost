@@ -215,12 +215,13 @@ class ClaudeCliAgent(BaseSubprocessCliAgent):
         )
 
     def _build_cmd(self, existing_session: str | None) -> tuple[list[str], str | None]:
-        # --bare = Anthropic's recommended minimal mode for scripted/headless use:
-        # skip hooks / LSP / plugins / skill discovery for faster, consistent runs.
-        # Our own MCP tools still load via --mcp-config below. Requires Claude CLI
-        # 2.1.x+ (older versions don't recognise the flag); becoming the -p default.
+        # Do NOT add --bare here. It skips the OAuth/keychain read, which breaks
+        # Claude *subscription* auth (apiKeySource: none -> "Not logged in") even
+        # with valid, unexpired credentials. --bare is only safe with
+        # ANTHROPIC_API_KEY auth; our editions run on the subscription, so plain
+        # -p is required. (Verified empirically 2026-06-08.)
         cmd: list[str] = [
-            self.bin, "--bare", "-p",
+            self.bin, "-p",
             "--output-format", "stream-json",
             "--input-format", "text",
             "--verbose",
