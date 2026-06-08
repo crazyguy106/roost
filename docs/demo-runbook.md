@@ -1,14 +1,17 @@
 # Roost — Live Demo Runbook
 
-A three-track tour for showing Roost on `roost.ethanseow.com` to prospects.
+A tour for showing Roost on `roost.ethanseow.com` to prospects.
 Pick the track that matches the audience; switch mid-demo if the room reacts.
 
 > **Audience options**
-> - **Track A — Singapore property agent** (CEA-registered salesperson)
-> - **Track B — SME owner / operator** (cafe, agency, kiosk reseller)
+> - **⭐ Track FA — Financial adviser** (the hero flow — *what the current box is wired for*)
+> - **Track A — Singapore property agent** (CEA-registered salesperson) — *bundle disabled, see note*
+> - **Track B — SME owner / operator** (cafe, agency, kiosk reseller) — *bundle disabled, see note*
 > - **Track C — Generic agent-platform / productivity prospect**
 
-Each track is ~7 minutes. Together with intro + Q&A: ~30 min.
+Each track is ~7 minutes. Together with intro + Q&A: ~30 min. **The demo box is
+currently FA-only** — Property-Agent and SME Ops bundles are off, so run **Track FA**
+unless you re-enable them (see the note after Track FA).
 
 ---
 
@@ -31,12 +34,15 @@ ssh root@178.105.175.105 \
 ssh -t root@178.105.175.105 \
   'cd /home/dev/roost && docker compose exec -u dev -it roost claude login'
 
-# 4. Demo data seeded?
+# 4. FA demo data correct? (post-reskin: property/SME data removed)
 ssh root@178.105.175.105 'cd /home/dev/roost && docker compose exec -T -u dev roost python -c "
 from roost.services import projects, tasks, contacts
 print(f\"Projects: {len(projects.list_projects())}, Tasks: {len(tasks.list_tasks())}, Contacts: {len(contacts.list_contacts())}\")
 "'
-#    → Projects: 3, Tasks: 11, Contacts: 5
+#    → Projects: 2, Tasks: 3, Contacts: 0  (local contacts empty by design —
+#      the People page reads live from Attio, see next line)
+#    → Roost → People (/contacts) shows the Attio prospects with a
+#      "Synced live from Attio" badge. /leads should be EMPTY (populates live).
 
 # 5. Chromium sidecar (for RPA pause demo) healthy?
 curl -fsS -o /dev/null -w "%{http_code}\n" https://roost.ethanseow.com/sidecar
@@ -45,27 +51,25 @@ curl -fsS -o /dev/null -w "%{http_code}\n" https://roost.ethanseow.com/sidecar
 
 If any step fails, see **§Troubleshooting** below.
 
-### Wire status — what's live vs. narrate-only
+### Wire status — what's live vs. disabled
 
-Check this before each demo. "Live" = real API call returns real data. "Narrate" = page renders the UI but the underlying call is gated; describe the flow verbally.
+Check this before each demo. "Live" = real API call returns real data. "Disabled" = bundle flag off; routes 404 (re-enable + rebuild to use).
 
-| Bundle / Surface           | Status                | How to flip live                                   |
-|----------------------------|-----------------------|----------------------------------------------------|
-| Local CRM (contacts/orgs)  | **Live** (seeded)     | Already on. 5 contacts × 2 orgs in the local DB.   |
-| Property-Agent IRAS calc   | **Live**              | Pure-Python. No external dep.                      |
-| Property-Agent HDB EIP RPA | **Live**              | Browser flow via chromium sidecar.                 |
-| Property-Agent DNC scrub   | **Narrate**           | Requires IMDA registration — keep off for demo.    |
-| Property-Agent CDD screen  | **Narrate**           | Requires ComplyAdvantage key — keep off for demo.  |
-| Lead Nurture pipeline      | **Live** (in-platform)| Already on. Webhook ingest + cadence drafts.       |
-| Guardian draft queue       | **Live**              | Already on. Wraps any money-moving tool call.      |
-| RPA framework              | **Live**              | YAML library seeded. Sidecar healthy.              |
-| Agentic chat (`/agentic`)  | **Live** *after `claude login`* | `docker compose exec -u dev -it roost claude login` |
-| Attio CRM                  | **Narrate** *(flip-ready)* | Get key → fill `integrations.env.template` → run `./apply-integrations.sh` |
-| Stripe (test mode)         | **Narrate** *(flip-ready)* | Same as above. Test-mode key only — no card needed.|
-| WhatsApp Cloud             | **Narrate** *(flip-ready)* | Same as above. Refresh Meta access token before demo (24h validity). |
-| Shopify / Xero / WeChat    | **Narrate**           | Page renders unconfigured; not in this demo's scope. |
+| Bundle / Surface                       | Status        | Notes                                              |
+|----------------------------------------|---------------|----------------------------------------------------|
+| **WhatsApp inbound (via Chatwoot)**    | **Live**      | `CHATWOOT_ENABLED=true` — real two-way WhatsApp.   |
+| **Lead-nurture pipeline (`/leads`)**   | **Live**      | Auto-qualify + cadences. Empty until a lead lands. |
+| **AI draft reply (Gemini, MAS-aware)** | **Live**      | Free-form replies; canned questions auto-send.     |
+| **Guardian hold → Telegram approve**   | **Live**      | Holds every free-form client reply for approval.   |
+| **Attio CRM (`Roost` workspace)**      | **Live**      | 4 FA prospects + deals + AI lead-scores.           |
+| **Voice-memo → CRM**                   | **Live**      | Telegram `memo:` → meeting note in Attio.          |
+| Agentic chat (`/agentic`)              | **Live**      | `AGENT_PROVIDER=claude_cli`, already logged in.    |
+| RPA framework (`/rpa`)                 | **Live**      | YAML library seeded; chromium sidecar healthy.     |
+| **People page → live Attio sync**      | **Live**      | `/contacts` reads Attio directly (read-through), not a copy. |
+| Property-Agent (IRAS / HDB / DNC / CDD)| **Disabled**  | `PROPERTY_AGENT_ENABLED=false` — routes 404.       |
+| SME Ops (Stripe / Shopify / Xero)      | **Disabled**  | `SME_OPS_ENABLED=false` — routes 404.              |
 
-To flip a "flip-ready" row live: SSH to the VPS, edit `/home/dev/roost/integrations.env.template`, run `./apply-integrations.sh` from that directory. Script auto-restarts roost and runs a health check.
+Everything in the FA hero flow is **Live** — no flip-ready stand-ins. To bring a **Disabled** bundle back (e.g. to run the legacy property/SME tracks), flip its flag in `/home/dev/roost/.env` (`PROPERTY_AGENT_ENABLED=true` / `SME_OPS_ENABLED=true`) and rebuild: `docker compose up -d --build roost`.
 
 ---
 
@@ -83,6 +87,86 @@ To flip a "flip-ready" row live: SSH to the VPS, edit `/home/dev/roost/integrati
 > can be configured for any team."
 
 Show: `/settings` page — point at the Feature Flags column → "every box you see is a bundle that can be flipped on or off."
+
+---
+
+## Track FA — Financial Adviser (the hero flow) ⭐ (~7 min)
+
+**This is the primary track for the current demo box.** Property-Agent and SME Ops are
+disabled; the FA lead-nurturing loop is what's wired end-to-end. Every step below is
+**Live** (see the wire-status table) — no narration stand-ins.
+
+**Persona:** Rachel, a licensed financial adviser running solo. She fields WhatsApp
+enquiries between client meetings and can't babysit a keyboard.
+**Premise:** A prospect messages on WhatsApp. Rachel wants to qualify them, reply
+*compliantly*, and have it land in her CRM — hands-free, but with her in control.
+
+### FA-prep — day-of (1 min)
+- `/leads` is **empty** — it fills live, don't pre-seed.
+- Your **operator Telegram** app is open (this is where approvals land — clients never see it).
+- The **Attio "Roost"** workspace is open in a second tab.
+- Automations are **not paused**:
+  `ssh root@178.105.175.105 'rm -f /home/dev/roost/data/automations_paused'`
+- Your demo phone is a **whitelisted WhatsApp recipient** (the Meta test number only
+  messages numbers you've pre-added in the app dashboard).
+
+### FA1 — The empty pipeline (30s)
+Sidebar → **Financial Advisor → Lead Pipeline** (`/leads`).
+> "This is my live pipeline. Empty right now — watch it fill. I won't type a thing."
+
+### FA2 — A lead messages on WhatsApp (1.5 min)
+From your phone, WhatsApp the business line:
+> *"Hi, saw your post on retirement planning. I'm 45 with no real plan yet — can you help?"*
+
+It lands in Chatwoot; Roost picks it up. Refresh `/leads`:
+> "There it is. Roost created the lead and it's already qualifying — zero data entry."
+
+### FA3 — Compliant AI draft, held by Guardian (2 min) — *the hero beat*
+Roost drafts a reply with Gemini; your **Telegram** pings with **Approve / Reject**.
+Read the draft aloud, then:
+> "Notice what it does *not* say — no product names, no return figures, no advice.
+> MAS/FAA rules say you don't recommend before a fact-find, and the model respects
+> that: it asks for a short call instead."
+>
+> "And it never reached my client. **Guardian holds every free-form reply** until I
+> approve. That's the line between a demo and something I'd trust with my licence."
+
+Tap **Approve** → it goes out on WhatsApp. Show it arrive on your phone.
+
+### FA4 — Already in my CRM — synced live (1.5 min)
+In Roost, open **People** (sidebar `/contacts`) and refresh.
+> "There's my new lead. See the badge — **Synced live from Attio**. This isn't a local
+> copy or an import; Roost is reading my CRM directly. The lead landed here with zero
+> data entry on my part."
+
+Then switch to the **Attio "Roost"** tab for the deal + score:
+> "Same record in Attio — a deal in the pipeline and an **AI lead-score**: intent,
+> urgency, confidence. Roost and my CRM are one system, kept in sync."
+
+### FA5 — Voice-memo → CRM (1.5 min)
+After a meeting, send the Telegram bot a **voice memo**:
+> *"memo: met Marcus Tan, wants to proceed with the retirement plan, send the proposal by Friday."*
+
+Roost transcribes it, pulls out the action items, and appends a **meeting note** to
+Marcus's Attio record. Open Marcus in Attio:
+> "Every meeting logged to the right client with the follow-ups — by talking, not typing."
+
+### FA6 — The safety rails (30s)
+> "Two controls make this safe to leave running: a **global pause** — one switch kills
+> all automation if I'm away — and a **recency gate** so it won't cold-message someone
+> who went quiet weeks ago. Anything client- or money-facing goes through Guardian."
+
+### FA7 — One-liner takeaway (30s)
+> "Roost turns your WhatsApp into a qualified, compliant, CRM-synced pipeline — and you
+> approve everything from one Telegram chat. The whole job, automated up to the last
+> safe step."
+
+---
+
+> **Note on Tracks A–C below:** they were written for the generic / property / SME demo.
+> On the *current* box those bundles are **off** (`PROPERTY_AGENT_ENABLED=false`,
+> `SME_OPS_ENABLED=false`), so their pages 404 — run **Track FA** above. To demo A or B,
+> re-enable the bundle flag in `.env` and rebuild (`docker compose up -d --build roost`).
 
 ---
 
