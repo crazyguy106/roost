@@ -141,3 +141,59 @@ tests/test_rpa_library.py       # extended — select_option, await_user_session
 ```
 
 Run all: `python3 -m pytest -q`.
+
+## Regulatory requirements
+
+A Singapore property salesperson sits at the intersection of **four regulators**,
+and each toolkit component maps to one named obligation they can be **personally**
+penalised for getting wrong. The agent themselves is licensed by the **Council for
+Estate Agencies (CEA)** under the **Estate Agents Act 2010**; the other three regimes
+are obligations they must navigate and advise on.
+
+*Verified against official sources 2026-06-09; figures change — confirm against the
+source links before relying on them client-side.*
+
+### Stamp Duty → IRAS (Stamp Duties Act)
+The buyer's/seller's tax obligation; the agent's duty is accurate advice.
+- **BSD** — top marginal **6%** residential, 5% non-residential (since Feb 2023).
+- **ABSD** — by profile, held since 27 Apr 2023 (no change in Budget 2026):
+  SC **0 / 20 / 30 %** (1st/2nd/3rd+), PR **5 / 30 / 35 %**, Foreigner **60 %**,
+  Entity **65 %**.
+- **SSD** — payable on residential sold within the holding period, tiered by years
+  held (holding period + rates were tightened in 2025 — check IRAS for current).
+- **Deadline:** due **within 14 days** of signing (30 if executed overseas).
+
+### AML/CFT Customer Due Diligence → CEA *(the agent's own duty)*
+FATF-aligned **Estate Agents (PMLPFTF) Regulations 2021**, enhanced **1 Jul 2025**.
+- **CDD must be completed *before* the client signs any agreement** — identify +
+  verify (NRIC/passport via a reliable independent source), obtain **written
+  acknowledgement** the info is accurate, and screen risk (sanctions / PEP / adverse
+  media).
+- **UCPDD** — if the counterparty is unrepresented, due-diligence them too (all
+  sale/purchase + rental, except HDB rentals).
+- Agencies keep risk-based **IPPCs**, training, and **5-year** record retention.
+
+### Do-Not-Call → PDPC (PDPA, Part IX)
+- Check the **DNC register before any marketing message** to a SG number; a check is
+  valid **30 days**. Exemptions: clear & unambiguous consent, ongoing relationship,
+  purely transactional / market-research messages.
+- **Penalty:** up to **S$1,000,000 per breach** (or 10% of SG turnover if > S$10M) —
+  an agent can be **personally** liable.
+
+### Ethnic Integration Policy + SPR Quota → HDB (Housing & Development Act)
+For HDB **resale** flats, the sale must fit the quotas; check eligibility *before*
+marketing to a buyer.
+- **EIP limits** (block / neighbourhood): Chinese **84 / 78 %**, Malay **22 / 16 %**,
+  Indian & Others **12 / 10 %**.
+- **SPR quota:** **8 % block / 5 % neighbourhood** (non-Malaysian SPR households;
+  Malaysians excluded).
+- You qualify if within the limit **or** same ethnic group/citizenship as the seller.
+  Quotas update on the **1st of each month** — only a same-day check is reliable
+  (hence the RPA flow).
+
+**Sources:** [IRAS ABSD](https://www.iras.gov.sg/taxes/stamp-duty/for-property/buying-or-acquiring-property/additional-buyer's-stamp-duty-(absd)) ·
+[IRAS BSD](https://www.iras.gov.sg/taxes/stamp-duty/for-property/buying-or-acquiring-property/buyer's-stamp-duty-(bsd)) ·
+[CEA AML/CFT](https://www.cea.gov.sg/regulatory-matters/preventing-money-laundering-proliferation-financing-and-terrorism-financing/) ·
+[CEA CDD guide](https://www.cea.gov.sg/about-cea/newsroom-publications/ceanergy-blog/customer-due-diligence--what-salespersons-need-to-know-about-preventing-money-laundering-and-financing-of-terrorism/) ·
+[PDPC DNC](https://www.pdpc.gov.sg/overview-of-pdpa/do-not-call-registry/business-owner/do-not-call-registry-and-your-business) ·
+[HDB EIP/SPR](https://www.hdb.gov.sg/residential/buying-a-flat/buying-procedure-for-resale-flats/plan-source-and-contract/planning-considerations/eip-spr-quota)
