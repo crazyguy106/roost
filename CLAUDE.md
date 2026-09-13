@@ -10,10 +10,12 @@
 > worked — but a change here ships nowhere, and a new feature here is almost certainly meant for a
 > live system instead.
 >
-> ⚠ **One live dependency still points at this repo:** the Kingston x C4AIL FA workshop
-> (`programmes/roost-fa-1day/`) has historically installed Roost, and §4 of its `CLAUDE.md` cites
-> these docs as the source of truth for its labs. That workshop is being re-pointed at a different
-> platform — **do not use this repo to answer a question about what the workshop teaches.**
+> ⚠ **The one dependency that pointed here is now closed.** The Kingston x C4AIL FA workshop
+> (`programmes/roost-fa-1day/`) installed Roost and §4 of its `CLAUDE.md` cited these docs as the
+> source of truth for its labs. **That workshop was superseded on 2026-09-13** — an
+> install-and-operate day has nothing to install — and the canonical FA course is now
+> `programmes/phillipcapital-fa-ai-workflow/`, built on Claude Cowork with no install.
+> **Do not use this repo to answer a question about what any workshop teaches.**
 >
 > The IP is retained and the repo is kept deliberately. Design summary:
 > [`docs/HOW-ROOST-WORKS-logic.md`](docs/HOW-ROOST-WORKS-logic.md).
