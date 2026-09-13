@@ -1,5 +1,23 @@
 # Roost — Claude Instructions
 
+> # ⚠ RETIRED — 2026-07-15. Do not build here.
+>
+> **Roost is not a live product and nothing in this repo is deployed.** It was deprecated for
+> **Elgo**; the stack was torn down on 2026-07-15 and the box repurposed as `dark-factory`.
+>
+> **If you were sent here to change something, stop and check why.** The conventions below are
+> accurate about the code as it stood in June 2026, and they are a useful record of how the engine
+> worked — but a change here ships nowhere, and a new feature here is almost certainly meant for a
+> live system instead.
+>
+> ⚠ **One live dependency still points at this repo:** the Kingston x C4AIL FA workshop
+> (`programmes/roost-fa-1day/`) has historically installed Roost, and §4 of its `CLAUDE.md` cites
+> these docs as the source of truth for its labs. That workshop is being re-pointed at a different
+> platform — **do not use this repo to answer a question about what the workshop teaches.**
+>
+> The IP is retained and the repo is kept deliberately. Design summary:
+> [`docs/HOW-ROOST-WORKS-logic.md`](docs/HOW-ROOST-WORKS-logic.md).
+
 Persistent agent workspace exposing 300+ MCP tools to Claude Code (see [`docs/mcp-inventory.md`](docs/mcp-inventory.md) for the canonical generated list), plus a web UI and Telegram bot. This file is the project-level pointer; see `docs/` for deep dives.
 
 Roost is **domain-agnostic**. Vertical bundles (currently: **Property-Agent** for SG salespersons, **SME Ops** for small/medium businesses) are services + RPA library files + MCP tool modules layered on top of the same engine — they're examples of what the platform can be configured into, not core to it.

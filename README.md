@@ -1,5 +1,21 @@
 # Roost
 
+> # ⚠ RETIRED — 2026-07-15
+>
+> **Roost is no longer a live product.** It was deprecated in favour of **Elgo**. The hosted stack
+> was torn down on 2026-07-15 (7 containers and volumes removed, ~22GB reclaimed), the
+> `roost.ethanseow.com` and `chat.roost.ethanseow.com` DNS records were deleted, and the box was
+> repurposed as `dark-factory`. **Nothing below is running anywhere.**
+>
+> **The code and IP are retained** as a Verixiom asset — this repo is kept deliberately, not
+> abandoned. The last commit (`8ec7390`, 2026-06-28) is a knowledge-capture of the core subsystem
+> logic, [`docs/HOW-ROOST-WORKS-logic.md`](docs/HOW-ROOST-WORKS-logic.md), *"written ahead of
+> retiring Roost so the IP survives."* Read that first if you are here for the design.
+>
+> ⚠ **Everything from this line down is written in the present tense and describes the product as it
+> stood in June 2026.** It is preserved as a record, not as instructions. Salvaged runtime config
+> (`.env`, auth dirs, Caddyfile) is at `~/backups/roost-decommission-2026-07-15/`.
+
 [![tests](https://github.com/crazyguy106/roost/actions/workflows/test.yml/badge.svg)](https://github.com/crazyguy106/roost/actions/workflows/test.yml)
 [![mcp-inventory](https://github.com/crazyguy106/roost/actions/workflows/mcp-inventory.yml/badge.svg)](https://github.com/crazyguy106/roost/actions/workflows/mcp-inventory.yml)
 
